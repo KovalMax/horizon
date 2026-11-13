@@ -1,0 +1,11 @@
+.env
+.DS_Store
+.local/
+.env.*.local
+node_modules/
+target/
+dist/
+.dart_tool/
+build/
+*.tsbuildinfo
+.srl

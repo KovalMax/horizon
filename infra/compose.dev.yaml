@@ -1,0 +1,64 @@
+services:
+  traefik:
+    image: traefik:v3.7.17
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --providers.file.filename=/etc/traefik/routes.yml
+    ports:
+      - "127.0.0.1:8081:80"
+      - "127.0.0.1:443:443"
+    volumes:
+      - ./traefik.dev.routes.yml:/etc/traefik/routes.yml:ro
+      - ../.local/certs:/certs:ro
+    depends_on:
+      - web
+      - api
+  db:
+    image: postgres:17.11-trixie
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-horizon}
+      POSTGRES_USER: ${POSTGRES_USER:-horizon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-only-password}
+    volumes:
+      - postgres_trixie_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "127.0.0.1:8025:8025"
+  api:
+    build: ../apps/api
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-horizon}
+      POSTGRES_USER: ${POSTGRES_USER:-horizon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-only-password}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-local-development-only-secret-change-before-deploy}
+      AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER:-horizon-local}
+      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-horizon-api}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-Horizon <no-reply@horizon.localhost>}
+      AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-https://horizon.localhost/auth/complete}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+  web:
+    build: ../apps/web
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+volumes:
+  postgres_trixie_data:

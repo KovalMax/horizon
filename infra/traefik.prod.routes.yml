@@ -1,0 +1,37 @@
+http:
+  routers:
+    api:
+      rule: Host(`horizon.example.com`) && (Path(`/api`) || PathPrefix(`/api/`))
+      entryPoints: [websecure]
+      service: api
+      middlewares: [security-headers, strip-api]
+      tls:
+        certResolver: letsencrypt
+    web:
+      rule: Host(`horizon.example.com`)
+      entryPoints: [websecure]
+      service: web
+      middlewares: [security-headers]
+      tls:
+        certResolver: letsencrypt
+  services:
+    web:
+      loadBalancer:
+        servers:
+          - url: http://web:8080
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:8000
+  middlewares:
+    security-headers:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; upgrade-insecure-requests"
+        contentTypeNosniff: true
+        customFrameOptionsValue: DENY
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: "camera=(), geolocation=(), microphone=(), payment=()"
+        stsSeconds: 31536000
+    strip-api:
+      stripPrefix:
+        prefixes: [/api]

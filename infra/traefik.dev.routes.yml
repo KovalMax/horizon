@@ -1,0 +1,60 @@
+http:
+  routers:
+    same-origin-api:
+      rule: Host(`horizon.localhost`) && (Path(`/api`) || PathPrefix(`/api/`))
+      entryPoints: [websecure]
+      service: api
+      middlewares: [dev-security-headers, strip-api]
+      tls: {}
+    web:
+      rule: Host(`horizon.localhost`)
+      entryPoints: [websecure]
+      service: web
+      middlewares: [dev-security-headers]
+      tls: {}
+    api:
+      rule: Host(`api.horizon.localhost`)
+      entryPoints: [websecure]
+      service: api
+      middlewares: [dev-security-headers, dev-api-cors]
+      tls: {}
+  services:
+    web:
+      loadBalancer:
+        servers:
+          - url: http://web:3000
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:8000
+  middlewares:
+    dev-api-cors:
+      headers:
+        accessControlAllowOriginList:
+          - https://horizon.localhost
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+        accessControlAllowCredentials: false
+        accessControlMaxAge: 600
+        addVaryHeader: true
+    dev-security-headers:
+      headers:
+        contentTypeNosniff: true
+        customFrameOptionsValue: DENY
+        referrerPolicy: strict-origin-when-cross-origin
+        permissionsPolicy: "camera=(), geolocation=(), microphone=(), payment=()"
+    strip-api:
+      stripPrefix:
+        prefixes: [/api]
+tls:
+  certificates:
+    - certFile: /certs/horizon.pem
+      keyFile: /certs/horizon-key.pem

@@ -1,0 +1,13 @@
+# Production API runtime image. Scan and validate the exact build before deployment.
+FROM rust:1.99.1-slim AS build
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY migrations ./migrations
+RUN cargo build --release --locked
+
+FROM gcr.io/distroless/cc-debian13:nonroot
+WORKDIR /app
+COPY --from=build /app/target/release/horizon-api /app/horizon-api
+EXPOSE 8000
+ENTRYPOINT ["/app/horizon-api"]

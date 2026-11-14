@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::models::CalendarEvent;
+use super::models::{CalendarEvent, EventOccurrence};
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 pub struct EventResponse {
@@ -19,6 +19,12 @@ pub struct EventResponse {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub recurrence: Option<String>,
+    pub recurrence_ends_on: Option<String>,
+    /// Local scheduled date for an expanded occurrence; absent on series CRUD responses.
+    pub occurrence_date: Option<String>,
+    /// Stable composite occurrence identity (`series UUID:scheduled local date`).
+    pub occurrence_id: Option<String>,
+    pub is_override: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -42,6 +48,28 @@ impl From<CalendarEvent> for EventResponse {
             location: event.location,
             notes: event.notes,
             recurrence: event.recurrence,
+            recurrence_ends_on: event.recurrence_ends_on.map(|date| date.to_string()),
+            occurrence_date: None,
+            occurrence_id: None,
+            is_override: false,
         }
+    }
+}
+
+impl From<EventOccurrence> for EventResponse {
+    fn from(occurrence: EventOccurrence) -> Self {
+        let event_id = occurrence.event.id;
+        let mut response = EventResponse::from(occurrence.event);
+        response.title = occurrence.title;
+        response.starts_at = occurrence.starts_at.to_rfc3339();
+        response.ends_at = occurrence.ends_at.map(|value| value.to_rfc3339());
+        response.time_zone = occurrence.time_zone;
+        response.all_day = occurrence.all_day;
+        response.location = occurrence.location;
+        response.notes = occurrence.notes;
+        response.occurrence_date = Some(occurrence.occurrence_date.to_string());
+        response.occurrence_id = Some(format!("{}:{}", event_id, occurrence.occurrence_date));
+        response.is_override = occurrence.is_override;
+        response
     }
 }

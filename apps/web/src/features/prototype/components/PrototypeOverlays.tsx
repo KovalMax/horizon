@@ -3,6 +3,32 @@ import type { PrototypeAppState } from "../usePrototypeApp";
 import { AppLink, Button, Icon } from "../../../shared/ui";
 import { SpaceSwitcher } from "./SpaceSwitcher";
 
+const eventTimeValidationMessage = "The end time must be after the start time.";
+
+function clearCorrectedEventTimeError(
+  event: React.ChangeEvent<HTMLInputElement>,
+  appState: PrototypeAppState,
+) {
+  if (appState.eventError !== eventTimeValidationMessage) return;
+  const form = event.currentTarget.form;
+  if (!form) return;
+  const values = new FormData(form);
+  if (values.get("allDay") === "on") {
+    appState.setEventError("");
+    return;
+  }
+  const starts = String(values.get("time") || "");
+  const ends = String(values.get("end") || "");
+  if (
+    starts &&
+    ends &&
+    new Date(`2000-01-01T${ends}`).getTime() >
+      new Date(`2000-01-01T${starts}`).getTime()
+  ) {
+    appState.setEventError("");
+  }
+}
+
 function taskDateAtOffset(offset: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offset);
@@ -87,7 +113,9 @@ export function PrototypeOverlays({
               <h2>
                 {modal === "event"
                   ? editingEvent
-                    ? "Edit event"
+                    ? appState.eventEditScope === "occurrence"
+                      ? "Edit occurrence"
+                      : "Edit event"
                     : "New event"
                   : modal === "task"
                     ? appState.editingTask
@@ -166,6 +194,9 @@ export function PrototypeOverlays({
                         name="time"
                         type="time"
                         defaultValue={editingEvent?.time ?? "18:00"}
+                        onChange={(event) =>
+                          clearCorrectedEventTimeError(event, appState)
+                        }
                       />
                     </label>
                     <label className="form-field">
@@ -174,6 +205,9 @@ export function PrototypeOverlays({
                         name="end"
                         type="time"
                         defaultValue={editingEvent?.end ?? "19:00"}
+                        onChange={(event) =>
+                          clearCorrectedEventTimeError(event, appState)
+                        }
                       />
                     </label>
                   </div>
@@ -188,24 +222,40 @@ export function PrototypeOverlays({
                         defaultValue={editingEvent?.place}
                       />
                     </label>
-                    <label className="form-field">
-                      Repeat
-                      <select
-                        name="repeat"
-                        defaultValue={editingEvent?.repeat ?? ""}
-                      >
-                        <option value="">Does not repeat</option>
-                        <option>Every day</option>
-                        <option>Every week</option>
-                        <option>Every month</option>
-                      </select>
-                    </label>
+                    {appState.eventEditScope !== "occurrence" && (
+                      <label className="form-field">
+                        Repeat
+                        <select
+                          name="repeat"
+                          defaultValue={editingEvent?.repeat ?? ""}
+                        >
+                          <option value="">Does not repeat</option>
+                          <option>Every day</option>
+                          <option>Every week</option>
+                          <option>Every month</option>
+                        </select>
+                      </label>
+                    )}
+                    {appState.eventEditScope !== "occurrence" && (
+                      <label className="form-field">
+                        Repeat through (optional)
+                        <input
+                          name="recurrenceEndsOn"
+                          type="date"
+                          defaultValue={editingEvent?.recurrenceEndsOn}
+                        />
+                        <small>Leave blank to repeat indefinitely.</small>
+                      </label>
+                    )}
                     <label className="setting-row">
                       <span>All day</span>
                       <input
                         name="allDay"
                         type="checkbox"
                         defaultChecked={editingEvent?.allDay}
+                        onChange={(event) =>
+                          clearCorrectedEventTimeError(event, appState)
+                        }
                       />
                     </label>
                     <label className="form-field">
@@ -293,6 +343,27 @@ export function PrototypeOverlays({
                           )}
                       </label>
                     </div>
+                    <fieldset className="form-field">
+                      <legend>Remind recipient</legend>
+                      {[
+                        { value: 1440, label: "1 day before" },
+                        { value: 60, label: "1 hour before" },
+                      ].map((offset) => (
+                        <label className="setting-row" key={offset.value}>
+                          <span>{offset.label}</span>
+                          <input
+                            type="checkbox"
+                            name="reminderOffset"
+                            value={offset.value}
+                            defaultChecked={(
+                              appState.editingTask?.reminderOffsetsMinutes ?? [
+                                1440, 60,
+                              ]
+                            ).includes(offset.value)}
+                          />
+                        </label>
+                      ))}
+                    </fieldset>
                   </>
                 )}
                 {modal === "place" && (
@@ -346,6 +417,7 @@ export function PrototypeOverlays({
                 Cancel
               </Button>
               <Button
+                type="submit"
                 disabled={
                   creatingSpace || savingEvent || savingTask || savingPlace
                 }
@@ -425,6 +497,45 @@ export function PrototypeOverlays({
                   : ""}
               </p>
             )}
+            {"list" in selected && appState.accessToken && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const offsets = Array.from(
+                    new FormData(event.currentTarget).getAll("myReminder"),
+                    Number,
+                  );
+                  void appState.saveMyTaskReminders(
+                    String(selected.id),
+                    offsets,
+                  );
+                }}
+              >
+                <fieldset className="form-field">
+                  <legend>Your reminders only</legend>
+                  {[
+                    { value: 1440, label: "1 day before" },
+                    { value: 60, label: "1 hour before" },
+                  ].map((offset) => (
+                    <label className="setting-row" key={offset.value}>
+                      <span>{offset.label}</span>
+                      <input
+                        type="checkbox"
+                        name="myReminder"
+                        value={offset.value}
+                        defaultChecked={(
+                          selected.myReminderOffsetsMinutes ??
+                          selected.reminderOffsetsMinutes ?? [1440, 60]
+                        ).includes(offset.value)}
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+                <button className="button primary" type="submit">
+                  Save my reminders
+                </button>
+              </form>
+            )}
             {"zone" in selected &&
               !("list" in selected) &&
               !appState.accessToken && (
@@ -468,16 +579,53 @@ export function PrototypeOverlays({
                     </Button>
                   </>
                 )}
-              {"time" in selected && !("list" in selected) && (
-                <Button variant="outline" onClick={editSelectedEvent}>
-                  Edit
-                </Button>
-              )}
-              {"time" in selected && !("list" in selected) && (
-                <Button variant="outline" onClick={removeSelectedEvent}>
-                  Delete
-                </Button>
-              )}
+              {"time" in selected &&
+              !("list" in selected) &&
+              appState.accessToken &&
+              selected.repeat &&
+              selected.occurrenceDate ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => editSelectedEvent("occurrence")}
+                  >
+                    Edit this occurrence
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => editSelectedEvent("series")}
+                  >
+                    Edit series
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => removeSelectedEvent("occurrence")}
+                  >
+                    Cancel this occurrence
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => removeSelectedEvent("series")}
+                  >
+                    Delete series
+                  </Button>
+                </>
+              ) : "time" in selected && !("list" in selected) ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => editSelectedEvent("series")}
+                  >
+                    Edit event
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => removeSelectedEvent("series")}
+                  >
+                    Delete event
+                  </Button>
+                </>
+              ) : null}
             </div>
             {eventError && <p role="alert">{eventError}</p>}
             {"list" in selected && taskError && <p role="alert">{taskError}</p>}

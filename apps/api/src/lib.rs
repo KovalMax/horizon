@@ -2,9 +2,11 @@ pub mod auth;
 pub mod events;
 pub mod health;
 pub mod members;
+pub mod notifications;
 pub mod pagination;
 pub mod places;
 pub mod spaces;
+pub mod task_reminders;
 pub mod todos;
 
 #[cfg(debug_assertions)]

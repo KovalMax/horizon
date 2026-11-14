@@ -17,3 +17,4 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 utoipa = { version = "5", features = ["actix_extras", "uuid"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+chrono-tz = "0.10.4"

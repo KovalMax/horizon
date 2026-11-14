@@ -1,0 +1,77 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button
+      - main:
+        - generic:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: Saved places
+            - paragraph: Places saved in Maya's Space. Only this Space's places are shown.
+          - generic:
+            - button: Save a place
+        - generic:
+          - group:
+            - button [pressed]: All (1)
+            - button: Services (1)
+          - group:
+            - button [pressed]: List
+            - button: Map
+        - generic:
+          - list:
+            - listitem:
+              - generic:
+                - generic:
+                  - heading [level=2]: Ostbloc climbing gym
+                  - generic: Services
+                - paragraph: Hauptstraße 3, Berlin
+                - generic:
+                  - button: Directions
+                  - button: Remove
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - complementary [aria-hidden]:
+    - link:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic: Edit with
+    - button
+  - dialog "Save a place" [ref=f10e107]:
+    - generic [ref=f10e108]:
+      - heading "Save a place" [level=2] [ref=f10e109]
+      - paragraph [ref=f10e110]: Add it by hand, or paste a Google Maps link and check what we read.
+    - generic [ref=f10e111]:
+      - button "Import a Google Maps link Best effort — you review everything before saving." [active] [ref=f10e112] [cursor=pointer]:
+        - generic [ref=f10e113]:
+          - generic [ref=f10e114]: Import a Google Maps link
+          - generic [ref=f10e115]: Best effort — you review everything before saving.
+      - button "Enter manually Name, category, address and notes." [ref=f10e116] [cursor=pointer]:
+        - generic [ref=f10e117]:
+          - generic [ref=f10e118]: Enter manually
+          - generic [ref=f10e119]: Name, category, address and notes.
+    - button "Close" [ref=f10e120] [cursor=pointer]

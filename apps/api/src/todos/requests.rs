@@ -21,6 +21,9 @@ pub struct CreateTaskRequest {
     pub due_time: Option<String>,
     /// ID of a current Member of the Task's Space; omit or set null to leave unassigned.
     pub assignee_id: Option<uuid::Uuid>,
+    /// Reminder offsets in minutes before the due time: 1440 (1 day) and/or 60 (1 hour).
+    #[serde(default = "default_reminder_offsets")]
+    pub reminder_offsets_minutes: Vec<i32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -33,9 +36,22 @@ pub struct UpdateTaskRequest {
     pub due_time: Option<String>,
     /// ID of a current Member of the Task's Space; omit or set null to leave unassigned.
     pub assignee_id: Option<uuid::Uuid>,
+    /// Reminder offsets in minutes before the due time: 1440 (1 day) and/or 60 (1 hour).
+    #[serde(default = "default_reminder_offsets")]
+    pub reminder_offsets_minutes: Vec<i32>,
+}
+
+fn default_reminder_offsets() -> Vec<i32> {
+    vec![1440, 60]
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 pub struct UpdateTaskCompletionRequest {
     pub done: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+pub struct UpdateTaskReminderPreferenceRequest {
+    /// Private offsets for the authenticated Task recipient: 1440 and/or 60.
+    pub offsets_minutes: Vec<i32>,
 }

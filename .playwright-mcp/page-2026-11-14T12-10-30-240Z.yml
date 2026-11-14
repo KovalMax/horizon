@@ -1,0 +1,31 @@
+- generic [active] [ref=f13e1]:
+  - generic [ref=f13e2]:
+    - banner [ref=f13e3]:
+      - link "Horizon" [ref=f13e4] [cursor=pointer]:
+        - /url: /
+      - generic [ref=f13e7]: Simulated sign-in
+    - main [ref=f13e10]:
+      - generic [ref=f13e11]:
+        - list "Progress" [ref=f13e12]:
+          - listitem [ref=f13e13]:
+            - generic [ref=f13e14]: Email (done or current)
+          - listitem [ref=f13e15]:
+            - generic [ref=f13e16]: Sign-in link (done or current)
+          - listitem [ref=f13e17]:
+            - generic [ref=f13e18]: Your Spaces
+        - heading "Check your inbox" [level=1] [ref=f13e43]
+        - paragraph [ref=f13e44]:
+          - text: We'd send a sign-in link to
+          - strong [ref=f13e45]: maya@example.com
+          - text: . It works once and expires after a short time.
+        - generic [ref=f13e46]:
+          - paragraph [ref=f13e47]: "No email is sent in this prototype. Pretend you opened it:"
+          - button "Open the sign-in link" [ref=f13e48] [cursor=pointer]
+          - button "Open an expired link" [ref=f13e49] [cursor=pointer]
+        - button "Use a different email" [ref=f13e50] [cursor=pointer]
+  - region "Notifications alt+T"
+  - complementary "Edit with Lovable" [ref=f13e27]:
+    - link "Edit with Lovable" [ref=f13e28] [cursor=pointer]:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic [ref=f13e29]: Edit with
+    - button "Dismiss" [ref=f13e36] [cursor=pointer]

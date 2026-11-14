@@ -40,6 +40,12 @@ async fn generated_openapi_document_is_served() {
     assert!(document.contains("/health/live"));
     assert!(document.contains("/health/ready"));
     assert!(document.contains("/auth/magic-links"));
+    assert!(document.contains("/spaces/{space_id}/owner"));
+    assert!(document.contains("/spaces/{space_id}/restore"));
+    assert!(document.contains("/spaces/deleted"));
+    assert!(document.contains("/notifications"));
+    assert!(document.contains("/notifications/preferences"));
+    assert!(document.contains("/notifications/read-all"));
     assert!(document.contains("accessBearer"));
     assert!(document.contains("refreshBearer"));
 }

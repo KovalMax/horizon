@@ -1,0 +1,56 @@
+- generic [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - link "Skip to content" [ref=f10e3] [cursor=pointer]:
+      - /url: "#main"
+    - generic [ref=f10e4]:
+      - banner [ref=f10e5]:
+        - 'button "Switch Space. Current: Maya''s Space" [ref=f10e6]':
+          - generic [ref=f10e11]:
+            - generic [ref=f10e12]: Space
+            - generic [ref=f10e13]: Maya's Space
+        - generic [ref=f10e16]:
+          - link "Notifications, 3 unread" [ref=f10e17] [cursor=pointer]:
+            - /url: /notifications
+            - generic [aria-hidden] [ref=f10e18]: "3"
+          - button "Prototype controls" [ref=f10e19] [cursor=pointer]
+      - main [ref=f10e20]:
+        - generic [ref=f10e21]:
+          - generic [ref=f10e22]:
+            - generic [ref=f10e23]: Maya's Space
+            - heading "Saved places" [level=1] [ref=f10e29]
+            - paragraph [ref=f10e30]: Places saved in Maya's Space. Only this Space's places are shown.
+          - button "Save a place" [ref=f10e32] [cursor=pointer]
+        - generic [ref=f10e33]:
+          - group "Filter by category" [ref=f10e34]:
+            - button "All (1)" [pressed] [ref=f10e35]
+            - button "Services (1)" [ref=f10e36]
+          - group "View" [ref=f10e37]:
+            - button "List" [active] [pressed] [ref=f10e38]
+            - button "Map" [ref=f10e40]
+        - list "Places" [ref=f10e44]:
+          - listitem [ref=f10e45]:
+            - generic [ref=f10e50]:
+              - generic [ref=f10e51]:
+                - heading "Ostbloc climbing gym" [level=2] [ref=f10e52]
+                - generic [ref=f10e53]: Services
+              - paragraph [ref=f10e54]: Hauptstraße 3, Berlin
+              - generic [ref=f10e55]:
+                - button "Directions" [ref=f10e56] [cursor=pointer]
+                - button "Remove Ostbloc climbing gym" [ref=f10e57] [cursor=pointer]: Remove
+    - navigation "Primary" [ref=f10e58]:
+      - generic [ref=f10e59]:
+        - link "All" [ref=f10e60] [cursor=pointer]:
+          - /url: /
+        - link "Calendar" [ref=f10e65] [cursor=pointer]:
+          - /url: /spaces/sp-personal/calendar
+        - link "To-dos" [ref=f10e68] [cursor=pointer]:
+          - /url: /spaces/sp-personal/tasks
+        - link "Places" [ref=f10e72] [cursor=pointer]:
+          - /url: /spaces/sp-personal/places
+        - button "More" [ref=f10e76]
+  - region "Notifications alt+T"
+  - complementary "Edit with Lovable" [ref=f10e78]:
+    - link "Edit with Lovable" [ref=f10e79] [cursor=pointer]:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic [ref=f10e80]: Edit with
+    - button "Dismiss" [ref=f10e87] [cursor=pointer]

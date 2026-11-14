@@ -1,15 +1,16 @@
 use actix_web::{
-    get,
+    delete, get,
     http::{header, StatusCode},
-    post, web, HttpRequest, HttpResponse,
+    patch, post, web, HttpRequest, HttpResponse,
 };
 use uuid::Uuid;
 
 use crate::auth::{AuthApplication, AuthError, Problem};
 
 use super::{
-    requests::CreateSpaceRequest,
-    services::{CreateSpaceError, SpacesApplication},
+    requests::{CreateSpaceRequest, TransferOwnershipRequest},
+    responses::{DeletedSpaceResponse, TransferOwnershipResponse},
+    services::{CreateSpaceError, SpaceLifecycleError, SpacesApplication},
 };
 
 fn bearer_token(request: &HttpRequest) -> Option<&str> {
@@ -85,6 +86,49 @@ fn invalid_name() -> HttpResponse {
         })
 }
 
+fn lifecycle_error(error: SpaceLifecycleError) -> HttpResponse {
+    let (status, title, code) = match error {
+        SpaceLifecycleError::OwnerRequired => (
+            StatusCode::FORBIDDEN,
+            "Only the Space Owner can manage its lifecycle",
+            "owner_required",
+        ),
+        SpaceLifecycleError::TargetNotMember => (
+            StatusCode::BAD_REQUEST,
+            "The new Owner must already be a Member of this Space",
+            "target_not_member",
+        ),
+        SpaceLifecycleError::InvalidTransfer => (
+            StatusCode::BAD_REQUEST,
+            "Choose a different Member as the new Owner",
+            "invalid_ownership_transfer",
+        ),
+        SpaceLifecycleError::PersonalTransferUnsupported => (
+            StatusCode::CONFLICT,
+            "Personal Spaces cannot transfer ownership",
+            "personal_space_transfer_unsupported",
+        ),
+        SpaceLifecycleError::NotFound => (
+            StatusCode::NOT_FOUND,
+            "Space not found or no longer available",
+            "space_not_found",
+        ),
+        SpaceLifecycleError::Unavailable => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Service unavailable",
+            "database_unavailable",
+        ),
+    };
+    HttpResponse::build(status)
+        .content_type("application/problem+json")
+        .json(Problem {
+            r#type: "about:blank",
+            title,
+            status: status.as_u16(),
+            code,
+        })
+}
+
 #[utoipa::path(
     get,
     path = "/spaces",
@@ -138,5 +182,111 @@ pub async fn create_shared_space(
         Ok(space) => HttpResponse::Created().json(space),
         Err(CreateSpaceError::InvalidName) => invalid_name(),
         Err(CreateSpaceError::Unavailable(_)) => unavailable(),
+    }
+}
+
+#[utoipa::path(
+    patch,
+    path = "/spaces/{space_id}/owner",
+    params(("space_id" = Uuid, Path)),
+    request_body = TransferOwnershipRequest,
+    security(("accessBearer" = [])),
+    responses(
+        (status = 200, body = TransferOwnershipResponse),
+        (status = 400, body = Problem),
+        (status = 401, body = Problem),
+        (status = 403, body = Problem),
+        (status = 404, body = Problem),
+        (status = 409, body = Problem)
+    )
+)]
+#[patch("/spaces/{space_id}/owner")]
+pub async fn transfer_space_ownership(
+    request: HttpRequest,
+    path: web::Path<Uuid>,
+    auth: web::Data<AuthApplication>,
+    spaces: web::Data<SpacesApplication>,
+    body: web::Json<TransferOwnershipRequest>,
+) -> HttpResponse {
+    let owner_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match spaces
+        .transfer_ownership(path.into_inner(), owner_id, body.new_owner_id)
+        .await
+    {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(error) => lifecycle_error(error),
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/spaces/{space_id}",
+    params(("space_id" = Uuid, Path)),
+    security(("accessBearer" = [])),
+    responses((status = 200, body = DeletedSpaceResponse), (status = 401, body = Problem), (status = 404, body = Problem))
+)]
+#[delete("/spaces/{space_id}")]
+pub async fn delete_space(
+    request: HttpRequest,
+    path: web::Path<Uuid>,
+    auth: web::Data<AuthApplication>,
+    spaces: web::Data<SpacesApplication>,
+) -> HttpResponse {
+    let owner_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match spaces.delete_space(path.into_inner(), owner_id).await {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(error) => lifecycle_error(error),
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/spaces/deleted",
+    security(("accessBearer" = [])),
+    responses((status = 200, body = [DeletedSpaceResponse]), (status = 401, body = Problem))
+)]
+#[get("/spaces/deleted")]
+pub async fn list_deleted_spaces(
+    request: HttpRequest,
+    auth: web::Data<AuthApplication>,
+    spaces: web::Data<SpacesApplication>,
+) -> HttpResponse {
+    let owner_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match spaces.list_deleted_for_owner(owner_id).await {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(_) => unavailable(),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/spaces/{space_id}/restore",
+    params(("space_id" = Uuid, Path)),
+    security(("accessBearer" = [])),
+    responses((status = 200, body = super::responses::SpaceResponse), (status = 401, body = Problem), (status = 404, body = Problem))
+)]
+#[post("/spaces/{space_id}/restore")]
+pub async fn restore_space(
+    request: HttpRequest,
+    path: web::Path<Uuid>,
+    auth: web::Data<AuthApplication>,
+    spaces: web::Data<SpacesApplication>,
+) -> HttpResponse {
+    let owner_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match spaces.restore_space(path.into_inner(), owner_id).await {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(error) => lifecycle_error(error),
     }
 }

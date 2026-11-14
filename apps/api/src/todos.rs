@@ -6,12 +6,14 @@ mod responses;
 mod services;
 
 pub use controllers::{
-    create_task, create_task_list, delete_task, delete_task_list, list_tasks, update_task,
-    update_task_completion, update_task_list,
+    create_task, create_task_list, delete_task, delete_task_list, list_tasks,
+    update_my_task_reminders, update_task, update_task_completion, update_task_list,
 };
 pub use requests::{
     CreateTaskListRequest, CreateTaskRequest, UpdateTaskCompletionRequest, UpdateTaskListRequest,
-    UpdateTaskRequest,
+    UpdateTaskReminderPreferenceRequest, UpdateTaskRequest,
 };
-pub use responses::{TaskBoardResponse, TaskListResponse, TaskResponse};
+pub use responses::{
+    TaskBoardResponse, TaskListResponse, TaskReminderPreferenceResponse, TaskResponse,
+};
 pub use services::TodosApplication;

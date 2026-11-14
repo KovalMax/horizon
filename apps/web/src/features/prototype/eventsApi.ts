@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../auth/api";
 import type { EventItem } from "./domain";
 
 type ApiCalendarEvent = {
@@ -13,6 +14,10 @@ type ApiCalendarEvent = {
   location: string | null;
   notes: string | null;
   recurrence: "daily" | "weekly" | "monthly" | null;
+  recurrence_ends_on: string | null;
+  occurrence_date: string | null;
+  occurrence_id: string | null;
+  is_override: boolean;
 };
 
 export type CalendarEventInput = {
@@ -24,6 +29,7 @@ export type CalendarEventInput = {
   location: string | null;
   notes: string | null;
   recurrence: "daily" | "weekly" | "monthly" | null;
+  recurrenceEndsOn: string | null;
 };
 
 export class CalendarEventsApiError extends Error {
@@ -85,6 +91,10 @@ function toEvent(event: ApiCalendarEvent): EventItem {
     repeat: event.recurrence
       ? `Every ${event.recurrence === "daily" ? "day" : event.recurrence === "weekly" ? "week" : "month"}`
       : undefined,
+    occurrenceDate: event.occurrence_date ?? undefined,
+    occurrenceId: event.occurrence_id ?? undefined,
+    isOccurrenceOverride: event.is_override,
+    recurrenceEndsOn: event.recurrence_ends_on ?? undefined,
     zone: event.time_zone,
     startDate: date,
     startsAt: event.starts_at,
@@ -108,16 +118,24 @@ function serializeInput(input: CalendarEventInput) {
     location: input.location,
     notes: input.notes,
     recurrence: input.recurrence,
+    recurrence_ends_on: input.recurrenceEndsOn,
   };
 }
 
 export async function listCalendarEvents(
   accessToken: string,
   offset = 0,
+  startDate?: string,
+  endDate?: string,
 ): Promise<{ items: EventItem[]; nextOffset: number | null }> {
-  const response = await fetch(`/api/events?offset=${offset}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const range =
+    startDate && endDate ? `&start_date=${startDate}&end_date=${endDate}` : "";
+  const response = await authenticatedFetch(
+    `/api/events?offset=${offset}${range}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
   if (!response.ok) throw new CalendarEventsApiError(response.status);
   const page = (await response.json()) as ApiEventPage;
   return {
@@ -126,13 +144,46 @@ export async function listCalendarEvents(
   };
 }
 
+export async function updateCalendarOccurrence(
+  accessToken: string,
+  eventId: string,
+  occurrenceDate: string,
+  input: CalendarEventInput,
+): Promise<EventItem> {
+  return readEventsResponse(
+    await authenticatedFetch(
+      `/api/events/${eventId}/occurrences/${occurrenceDate}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(serializeInput(input)),
+      },
+    ),
+  );
+}
+
+export async function cancelCalendarOccurrence(
+  accessToken: string,
+  eventId: string,
+  occurrenceDate: string,
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `/api/events/${eventId}/occurrences/${occurrenceDate}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) throw new CalendarEventsApiError(response.status);
+}
+
 export async function createCalendarEvent(
   accessToken: string,
   spaceId: string,
   input: CalendarEventInput,
 ): Promise<EventItem> {
   return readEventsResponse(
-    await fetch(`/api/spaces/${spaceId}/events`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/events`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -149,7 +200,7 @@ export async function updateCalendarEvent(
   input: CalendarEventInput,
 ): Promise<EventItem> {
   return readEventsResponse(
-    await fetch(`/api/events/${eventId}`, {
+    await authenticatedFetch(`/api/events/${eventId}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -164,7 +215,7 @@ export async function deleteCalendarEvent(
   accessToken: string,
   eventId: string,
 ): Promise<void> {
-  const response = await fetch(`/api/events/${eventId}`, {
+  const response = await authenticatedFetch(`/api/events/${eventId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });

@@ -36,7 +36,15 @@ export function PrototypeShell({
     goSpace,
   } = appState;
   if (path === "/welcome" || path === "/auth/complete") {
-    return <AuthScreen path={path} auth={authState} navigate={go} />;
+    return (
+      <AuthScreen
+        path={path}
+        auth={authState}
+        navigate={go}
+        joinRequests={appState.myJoinRequests}
+        requestJoinAccess={appState.requestJoinAccess}
+      />
+    );
   }
   const sidebar = (
     <aside className="sidebar">

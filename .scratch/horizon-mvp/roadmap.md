@@ -10,11 +10,11 @@ This roadmap reconciles the current implementation with `.scratch/horizon-mvp/sp
 | --- | --- | --- |
 | Foundation | **Implemented locally; external verification pending.** | React/TypeScript, Rust/Actix, PostgreSQL, Compose, migrations, readiness, CI config, and containerized checks exist. GitHub-hosted CI has not been verified against the user's repository. Foundation issue statuses are stale. Production hosting/operations are not done. |
 | Authentication | **Core flow implemented; launch details pending.** | Magic-link request/redeem, account lookup, access/refresh lifecycle, sign-out, Mailpit, and frontend workflow are present. Browser/Mailpit end-to-end verification and a production mail provider are pending. Session listing/revoke-all is explicitly deferred. |
-| Spaces and membership | **Basic path implemented.** | Personal Space creation, listing, shared Space creation, Member directory, and email invitation acceptance as Viewer exist. Role changes, removing Members, invitation revocation, join links/approval requests, ownership transfer, and Space deletion/recovery are missing. Personal-Space sharing warning needs verification. |
+| Spaces and membership | **Membership and ownership/deletion lifecycle implemented.** | Personal/shared Space creation, Member directory, invitations, role changes/removal/revocation, join links/requests, shared-Space ownership transfer, and seven-day soft-delete/restore/purge are covered locally. Personal-Space sharing warning needs browser verification. |
 | Calendar | **Basic persistence and CRUD implemented.** | Space-scoped event create/read/update/delete, timezone metadata, and recurrence metadata exist. Recurrence is not a series/occurrence experience; local-time display and DST behavior need product and browser verification. |
-| To-dos | **Basic persistence, assignment, and management implemented.** | Owners/Editors can create, update, move, assign, complete, and delete Tasks; rename/delete Lists. Viewers remain read-only. Reminders and delivery remain deferred. |
+| To-dos | **Persistence, assignment, management, and due reminders implemented locally.** | Owners/Editors can create, update, move, assign, complete, and delete Tasks; rename/delete Lists. Viewers remain read-only. Reminder delivery uses the durable worker and configured SMTP; production email verification remains pending. |
 | Saved Places | **Manual persistence implemented.** | Name, built-in category, address, and note can be saved and read. Map-provider integration/directions, contact fields, custom categories, and Maps-link import are deferred. Verify that signed-in data has a real map experience rather than prototype-only map presentation. |
-| Notifications | **Prototype only.** | Screens/preferences are not backed by durable notifications or delivery. Assignment, due reminders, event changes, membership changes, join requests, and channel preferences remain to implement. |
+| Notifications | **Durable in-app foundation and due-reminder delivery implemented locally.** | Persisted inbox, read-state APIs, assignment/membership/event/join-request notifications, per-event channel preferences, per-Space mute, due-reminder email, and 90-day cleanup are implemented. Production email verification remains pending. |
 | Bounded reads | **Implemented and validated locally.** | Events, Tasks, Lists, and Places have bounded offset pages and visible load-more controls. Page behavior is covered by PostgreSQL tests. |
 | SQL review | **Applied and covered by the current check.** | Invitation lifecycle/re-invitation and index/query alignment fixes are in the uncommitted work. |
 | Design, accessibility, and browser QA | **Not yet demonstrated as complete.** | The MVP spec calls for a design brief/system, responsive layouts, accessibility checks, and browser-level journeys. Existing React workflow tests are useful but do not replace those checks. |
@@ -64,6 +64,8 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 
 ### 3. Define and implement Calendar recurrence
 
+**Status: Complete.**
+
 **Outcome:** Recurring events behave predictably across time zones and daylight-saving transitions, not merely carry a recurrence label.
 
 - First publish a feature-level recurrence contract: which weekdays/month-days are supported, end conditions, all-day behavior, timezone anchoring, DST gaps/overlaps, and edits/cancellations for one occurrence versus the series.
@@ -73,18 +75,20 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 
 **Depends on:** Product decisions in slice 0. This is a larger domain slice; split the recurrence contract from implementation if review reveals significant edge cases.
 
-### 4. Membership administration basics
+### 4. Membership administration basics — complete
 
 **Outcome:** Owners can keep current Space access accurate.
 
-- Change a Member between Viewer and Editor; remove a Member; prevent invalid removal of the sole Owner; show the updated Member list and access immediately.
-- Let Owners revoke pending invitations and safely re-invite an expired/revoked address; document expiry and duplicate behavior.
-- Enforce Owner-only operations at the API, with role-change/removal/revocation and cross-Space tests.
-- Verify the explicit warning before sharing a personal Space and ensure it appears before new Members can see existing content.
+- Owners can change non-Owner Members between Viewer and Editor, remove non-Owner Members, and revoke pending invitations. Owner changes/removals are blocked until ownership transfer is implemented.
+- Revoked/expired invitations are terminal and their addresses can be safely re-invited; pending duplicates conflict.
+- Personal Space Owners receive a warning before the first invitation from that browser, before new Members can see existing content.
+- Owner-only operations and PostgreSQL authorization/lifecycle behavior are covered by API tests; the signed-in UI reflects successful changes immediately.
 
 **Depends on:** Existing membership and invitation model. Ownership transfer is intentionally separate because it has different lifecycle/confirmation risks.
 
 ### 5. Join links and approval requests
+
+**Status: Complete.**
 
 **Outcome:** A signed-in non-member can request access through a controlled link, and an Owner can approve or decline the identified requester.
 
@@ -92,9 +96,13 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 - Add durable link/request state and Owner review/decision UI; acceptance must add the account as the specified role only after approval.
 - Test expired/revoked links, repeated requests, decisions, race conditions, and non-member isolation.
 
+**Implemented:** Reusable Viewer/Editor links with optional expiry and revocation; authenticated requests; one pending request per account/Space; Owner approval/decline; requester-visible status history; notification delivery remains in slice 7.
+
 **Depends on:** Slice 4 membership administration and slice 7 notification foundation for user-facing request/decision updates (or ship a basic status page first and add notifications later).
 
 ### 6. Space ownership and deletion lifecycle
+
+**Status: Complete.**
 
 **Outcome:** Owners can transfer or end a Space without orphaning access or accidentally destroying recoverable data.
 
@@ -103,9 +111,13 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 - Invalidate pending invitations/links on deletion; restore content and existing roles but do not reactivate old access grants, per MVP policy.
 - Test sole-owner invariants, seven-day boundary with a controlled clock, restoration, expiry cleanup, and authorization.
 
+**Implemented:** Shared-Space transfer to an existing Member (outgoing Owner becomes Editor); personal-Space transfer is blocked. Owners can soft-delete either Space type; only the deleting Owner can restore within seven days. Memberships are snapshotted and removed during deletion, invitations/links are revoked, pending requests remain pending, and an hourly API task purges expired Spaces.
+
 **Depends on:** Slice 4 and the lifecycle policy in slice 0. Treat destructive and scheduled cleanup behavior as a separately reviewed slice.
 
 ### 7. Durable notification foundation and preferences
+
+**Status: Complete.**
 
 **Outcome:** Notification events and user choices have real persistence and a visible in-app inbox before email reminders are enabled.
 
@@ -114,9 +126,13 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 - Add notifications for Task assignment and membership changes first; then add event changes and join-request outcomes as their workflows land.
 - Test recipient selection, actor exclusion, mute/preferences, duplicate prevention, read state, pagination, and cross-Space isolation.
 
+**Implemented:** Notifications are written transactionally with Task assignment changes, membership role/removal changes, calendar event changes, join requests, and join-request decisions. The actor is suppressed; recipient rules, independent read state, 90-day retention, mute-without-backfill, and default channel choices are documented in `.scratch/horizon-mvp/issues/07-notifications.md`. Authenticated paginated inbox/read APIs and settings APIs are live; email delivery and due reminders remain out of scope.
+
 **Depends on:** Slice 1 for assignments; slice 4/5 for membership event types. Keep email transport out until reliable in-app behavior and provider choice are established.
 
 ### 8. Task reminders and email delivery
+
+**Status: Complete locally; production email verification remains pending.**
 
 **Outcome:** Assignees (or the creator for an unassigned Task) receive configured reminders at the intended local time.
 
@@ -124,6 +140,8 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 - Build the scheduling/delivery boundary and operational visibility; choose the production email provider and define failure/retry policy before enabling external sends.
 - Let assignees adjust their own reminder without mutating another Member's preference. Respect notification channels and Space mute as specified.
 - Verify scheduling with a controlled clock and fake sender; test retries, DST, stale jobs, duplicate delivery, and opt-out behavior.
+
+**Implemented:** Shared 1-day/1-hour offsets, per-recipient private overrides, local timezone/default reminder time, DST gap/overlap resolution, durable job reconciliation and atomic claiming, SMTP/in-app delivery, exponential retry with an eight-attempt limit, stale-claim recovery, mute/channel suppression, and lifecycle cancellation/reactivation. PostgreSQL integration coverage verifies transient retry/idempotent delivery, completion/reopen, no-backfill, mute suppression, and private override authorization/isolation; timezone gap/overlap behavior has deterministic unit coverage. `sh scripts/check.sh` passes locally. Real SMTP/browser journeys and production email operations are not verified.
 
 **Depends on:** Slices 1, 2, and 7; production email decision from slice 0. Do not add a scheduler/cache service without a documented operational need and failure model.
 
@@ -175,7 +193,7 @@ Slices are deliberately vertical: each should include the data/API boundary, vis
 
 1. Reconcile spec/status drift and review design/decisions (slice 0; keep it time-boxed).
 2. Specify Calendar recurrence while implementing the independent membership administration baseline (slices 3 and 4 can proceed in parallel after the recurrence contract is approved).
-3. Build durable in-app notifications and preferences (slice 7), then join requests (slice 5) and scheduled reminders/email (slice 8) as their dependencies permit.
+3. Build durable in-app notifications and preferences (slice 7), now that assignments, membership changes, and join-request outcomes are available; keep scheduled reminders/email (slice 8) behind that foundation.
 4. Complete Space lifecycle (slice 6) and Places provider/import slices (9–10) based on beta priority and provider decisions.
 5. Run browser acceptance (slice 11) continuously and close operational gates (slice 12) before the private beta.
 

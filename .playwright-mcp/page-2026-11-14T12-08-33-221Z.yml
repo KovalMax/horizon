@@ -1,0 +1,909 @@
+- generic:
+  - generic:
+    - link [aria-hidden]:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner [aria-hidden]:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button
+      - main:
+        - generic [aria-hidden]:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: Calendar
+            - paragraph:
+              - generic: Times shown in your time · Berlin (CET)
+          - generic:
+            - button: New event
+        - generic:
+          - generic:
+            - generic:
+              - generic [aria-hidden]:
+                - button: November 2026
+                - generic:
+                  - button: Today
+                  - button
+                  - button
+              - generic [aria-hidden]:
+                - list:
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "31"
+                  - listitem:
+                    - generic [aria-hidden]: Nov
+                    - button:
+                      - generic: Sun
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "15"
+                  - listitem:
+                    - button [pressed]:
+                      - generic: Mon
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "28"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "29"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "30"
+                  - listitem:
+                    - generic [aria-hidden]: Dec
+                    - button:
+                      - generic: Tue
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "15"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "28"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "29"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "30"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "31"
+                  - listitem:
+                    - generic [aria-hidden]: Jan
+                    - button:
+                      - generic: Fri
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "15"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "28"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "29"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "30"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "31"
+                  - listitem:
+                    - generic [aria-hidden]: Feb
+                    - button:
+                      - generic: Mon
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "15"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "28"
+                  - listitem:
+                    - generic [aria-hidden]: Mar
+                    - button:
+                      - generic: Mon
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "15"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "28"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "29"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "30"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "31"
+                  - listitem:
+                    - generic [aria-hidden]: Apr
+                    - button:
+                      - generic: Thu
+                      - generic: "1"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "2"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "3"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "4"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "5"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "6"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "7"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "8"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "9"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "10"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "11"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "12"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "13"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "14"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "15"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "16"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "17"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "18"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "19"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "20"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "21"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "22"
+                  - listitem:
+                    - button:
+                      - generic: Fri
+                      - generic: "23"
+                  - listitem:
+                    - button:
+                      - generic: Sat
+                      - generic: "24"
+                  - listitem:
+                    - button:
+                      - generic: Sun
+                      - generic: "25"
+                  - listitem:
+                    - button:
+                      - generic: Mon
+                      - generic: "26"
+                  - listitem:
+                    - button:
+                      - generic: Tue
+                      - generic: "27"
+                  - listitem:
+                    - button:
+                      - generic: Wed
+                      - generic: "28"
+                  - listitem:
+                    - button:
+                      - generic: Thu
+                      - generic: "29"
+              - region "Monday · 16 November":
+                - generic:
+                  - generic:
+                    - heading "Monday · 16 November" [level=2]:
+                      - text: Monday
+                      - generic: · 16 November
+                    - paragraph: 1 event
+                  - button "Previous day"
+                  - button "Next day"
+                - generic:
+                  - button "10:30 11:15 Dentist check-up Zahnarztpraxis Mitte, Torstraße 88":
+                    - generic:
+                      - generic: 10:30
+                      - generic: 11:15
+                    - generic:
+                      - generic: Dentist check-up
+                      - generic: Zahnarztpraxis Mitte, Torstraße 88
+                - button "Add another on Mon 16 Nov"
+            - region [aria-hidden]:
+              - heading [level=2]:
+                - text: Coming up
+                - generic: after Mon 16 Nov
+              - generic:
+                - generic:
+                  - button:
+                    - text: Thu 19 Nov
+                    - generic: View day
+                  - generic:
+                    - button:
+                      - generic: All day
+                      - generic: Renew passport — appointment window opens
+                - generic:
+                  - button:
+                    - text: Sat 21 Nov
+                    - generic: View day
+                  - generic:
+                    - button:
+                      - generic:
+                        - generic: 18:30
+                        - generic: 19:30
+                      - generic:
+                        - generic: Yoga class
+                        - generic:
+                          - generic: Studio Hof, Kastanienallee 12
+                          - generic: Every week
+                - generic:
+                  - button:
+                    - text: Sat 28 Nov
+                    - generic: View day
+                  - generic:
+                    - button:
+                      - generic:
+                        - generic: 18:30
+                        - generic: 19:30
+                      - generic:
+                        - generic: Yoga class
+                        - generic:
+                          - generic: Studio Hof, Kastanienallee 12
+                          - generic: Every week
+                - generic:
+                  - button:
+                    - text: Sat 5 Dec
+                    - generic: View day
+                  - generic:
+                    - button:
+                      - generic:
+                        - generic: 18:30
+                        - generic: 19:30
+                      - generic:
+                        - generic: Yoga class
+                        - generic:
+                          - generic: Studio Hof, Kastanienallee 12
+                          - generic: Every week
+    - navigation [aria-hidden]:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - complementary [aria-hidden]:
+    - link:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic: Edit with
+    - button
+  - dialog "New event" [ref=f8e1124]:
+    - generic [ref=f8e1125]:
+      - heading "New event" [level=2] [ref=f8e1127]
+      - generic [ref=f8e1128]:
+        - generic [ref=f8e1129]: Space
+        - combobox "Space" [ref=f8e1130] [cursor=pointer]:
+          - generic: Maya's Space
+        - combobox [aria-hidden] [ref=f8e1133]
+      - generic [ref=f8e1134]:
+        - generic [ref=f8e1135]: Title
+        - textbox "Title" [ref=f8e1136]:
+          - /placeholder: e.g. Parents' evening
+          - text: QA temporary event
+      - generic [ref=f8e1137]:
+        - text: All-day event
+        - switch "All-day event" [ref=f8e1138] [cursor=pointer]
+        - checkbox [aria-hidden]
+      - generic [ref=f8e1139]:
+        - generic [ref=f8e1140]:
+          - generic [ref=f8e1141]: Date
+          - textbox "Date" [ref=f8e1142]: 2026-11-16
+        - generic [ref=f8e1143]:
+          - generic [ref=f8e1144]: Starts
+          - textbox "Starts" [ref=f8e1145]: 19:00
+        - generic [ref=f8e1146]:
+          - generic [ref=f8e1147]: Ends
+          - textbox "Ends" [invalid] [ref=f8e1148]: 18:00
+      - paragraph [ref=f8e1175]: End time must be after the start time.
+      - generic [ref=f8e1149]:
+        - generic [ref=f8e1150]: Event timezone
+        - combobox "Event timezone" [ref=f8e1151] [cursor=pointer]:
+          - generic: Berlin (CET)
+        - combobox [aria-hidden] [ref=f8e1154]
+      - generic [ref=f8e1155]:
+        - generic [ref=f8e1156]: Repeats
+        - combobox "Repeats" [ref=f8e1157] [cursor=pointer]:
+          - generic: Does not repeat
+        - combobox [aria-hidden] [ref=f8e1160]
+      - generic [ref=f8e1161]:
+        - generic [ref=f8e1162]: Location (optional)
+        - textbox "Location (optional)" [ref=f8e1163]:
+          - /placeholder: Address or place name
+      - generic [ref=f8e1164]:
+        - generic [ref=f8e1165]: Notes (optional)
+        - textbox "Notes (optional)" [ref=f8e1166]
+      - generic [ref=f8e1167]:
+        - button "Cancel" [ref=f8e1168] [cursor=pointer]
+        - button "Add event" [active] [ref=f8e1169] [cursor=pointer]
+    - button "Close" [ref=f8e1170] [cursor=pointer]

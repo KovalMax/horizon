@@ -27,42 +27,46 @@ function buildPageHelpers(
   ) => <PageHeader title={title} description={description} action={action} />;
   const spaceCards = (
     <section aria-label="Your Spaces" className="space-cards">
-      {activeSpaces.map((item) => (
-        <AppLink
-          key={item.id}
-          to={`/spaces/${item.id}/calendar`}
-          onNavigate={state.go}
-          className={`space-card ${item.tone}`}
-        >
-          <div className="space-card-head">
-            <SpaceGlyph space={item} />
-            <div>
-              <b>{item.name}</b>
-              <small>
-                {item.role} ·{" "}
-                {item.members + (item.id === "home" && state.approved ? 1 : 0)}{" "}
-                {item.members +
-                  (item.id === "home" && state.approved ? 1 : 0) ===
-                1
-                  ? "member"
-                  : "members"}
-              </small>
+      {activeSpaces.map((item) => {
+        const eventCount = state.events.filter(
+          (event) => event.space === item.id,
+        ).length;
+        const openTodoCount = state.tasks.filter(
+          (task) => task.space === item.id && !task.done,
+        ).length;
+        return (
+          <AppLink
+            key={item.id}
+            to={`/spaces/${item.id}/calendar`}
+            onNavigate={state.go}
+            className={`space-card ${item.tone}`}
+          >
+            <div className="space-card-head">
+              <SpaceGlyph space={item} />
+              <div>
+                <b>{item.name}</b>
+                <small>
+                  {item.role} ·{" "}
+                  {item.members +
+                    (item.id === "home" && state.approved ? 1 : 0)}{" "}
+                  {item.members +
+                    (item.id === "home" && state.approved ? 1 : 0) ===
+                  1
+                    ? "member"
+                    : "members"}
+                </small>
+              </div>
             </div>
-          </div>
-          <p>
-            {state.events.filter((event) => event.space === item.id).length}{" "}
-            events in 2 weeks ·{" "}
-            {
-              state.tasks.filter((task) => task.space === item.id && !task.done)
-                .length
-            }{" "}
-            open To-dos
-          </p>
-          <strong>
-            Open Space <Icon name="arrow" size={16} />
-          </strong>
-        </AppLink>
-      ))}
+            <p>
+              {eventCount} {eventCount === 1 ? "event" : "events"} in 2 weeks ·{" "}
+              {openTodoCount} open {openTodoCount === 1 ? "To-do" : "To-dos"}
+            </p>
+            <strong>
+              Open Space <Icon name="arrow" size={16} />
+            </strong>
+          </AppLink>
+        );
+      })}
     </section>
   );
   const taskRow: PageHelpers["taskRow"] = (task, withSpace = false) => (
@@ -80,7 +84,7 @@ function buildPageHelpers(
   );
   const eventRow: PageHelpers["eventRow"] = (event, withSpace = false) => (
     <EventRow
-      key={`event-${event.id}`}
+      key={`event-${event.id}-${event.occurrenceDate ?? "single"}`}
       event={event}
       withSpace={withSpace}
       onSelect={state.setSelected}

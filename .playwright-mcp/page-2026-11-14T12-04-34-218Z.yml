@@ -1,0 +1,154 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button [expanded]:
+          - generic:
+            - generic: Showing
+            - generic: All Spaces
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "2"
+          - button
+      - main:
+        - generic:
+          - generic:
+            - heading [level=1]: Notifications
+            - paragraph: In-app notifications from all your Spaces. Push notifications aren't available on the web.
+          - generic:
+            - button: Mark all read
+        - generic:
+          - region:
+            - heading [level=2]: New
+            - list:
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Due reminders
+                    - generic [aria-hidden]: ·
+                    - generic: 2 h ago
+                    - generic: ● New
+                  - paragraph: "Due today: Pick up dry cleaning"
+                  - paragraph: Due at 17:00. Reminder time was set on the Task (16:00).
+                  - generic:
+                    - generic: Linden Street Home
+                    - link:
+                      - /url: /spaces/sp-home/tasks
+                      - text: Open
+                    - button: Mark read
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Assigned to you
+                    - generic [aria-hidden]: ·
+                    - generic: 5 h ago
+                    - generic: ● New
+                  - paragraph: Jonas assigned you a Task
+                  - paragraph: “Renew home insurance” in Home admin, due in 6 days.
+                  - generic:
+                    - generic: Linden Street Home
+                    - link:
+                      - /url: /spaces/sp-home/tasks
+                      - text: Open
+                    - button: Mark read
+          - region:
+            - heading [level=2]: Earlier
+            - list:
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Join requests
+                    - generic [aria-hidden]: ·
+                    - generic: 45 min ago
+                  - paragraph: Tomás Rivera asked to join
+                  - paragraph: tomas.rivera@example.com used the Viewer link LINDEN-7Q4X. Approve or decline in Members.
+                  - generic:
+                    - generic: Linden Street Home
+                    - link:
+                      - /url: /spaces/sp-home/members
+                      - text: Open
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Event changes
+                    - generic [aria-hidden]: ·
+                    - generic: 9 h ago
+                  - paragraph: Priya moved one Trip planning call
+                  - paragraph: "Only the call on 2026-11-22 changed: now 19:30–20:15 London time (20:30 your time). Other weeks are unchanged."
+                  - generic:
+                    - generic: Lisbon long weekend
+                    - link:
+                      - /url: /spaces/sp-trip/calendar
+                      - text: Open
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Membership changes
+                    - generic [aria-hidden]: ·
+                    - generic: 1 d ago
+                  - paragraph: Ana Costa joined as Viewer
+                  - paragraph: Priya approved Ana's request to join Lisbon long weekend.
+                  - generic:
+                    - generic: Lisbon long weekend
+                    - link:
+                      - /url: /spaces/sp-trip/members
+                      - text: Open
+              - listitem:
+                - generic:
+                  - generic:
+                    - generic: Join results
+                    - generic [aria-hidden]: ·
+                    - generic: 6 d ago
+                  - paragraph: "You're in: Lisbon long weekend"
+                  - paragraph: Priya approved your request. You joined as Editor.
+                  - generic:
+                    - generic: Lisbon long weekend
+                    - link:
+                      - /url: /spaces/sp-trip/calendar
+                      - text: Open
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-home/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-home/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-home/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - dialog "Switch Space" [ref=f7e241]:
+    - button "Close" [active] [ref=f7e242] [cursor=pointer]
+    - heading "Switch Space" [level=2] [ref=f7e248]
+    - navigation "Spaces" [ref=f7e249]:
+      - link "All Spaces Events and Tasks from every Space Current" [ref=f7e250] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f7e256]:
+          - generic [ref=f7e257]: All Spaces
+          - generic [ref=f7e258]: Events and Tasks from every Space
+        - generic [ref=f7e259]: Current
+      - link "Maya's Space Owner · 1 member" [ref=f7e260] [cursor=pointer]:
+        - /url: /spaces/sp-personal/calendar
+        - generic [ref=f7e265]:
+          - generic [ref=f7e266]: Maya's Space
+          - generic [ref=f7e267]: Owner · 1 member
+      - link "Linden Street Home Owner · 3 members" [ref=f7e268] [cursor=pointer]:
+        - /url: /spaces/sp-home/calendar
+        - generic [ref=f7e273]:
+          - generic [ref=f7e274]: Linden Street Home
+          - generic [ref=f7e275]: Owner · 3 members
+      - link "Lisbon long weekend Editor · 4 members" [ref=f7e276] [cursor=pointer]:
+        - /url: /spaces/sp-trip/calendar
+        - generic [ref=f7e280]:
+          - generic [ref=f7e281]: Lisbon long weekend
+          - generic [ref=f7e282]: Editor · 4 members
+      - button "New shared Space" [ref=f7e283] [cursor=pointer]

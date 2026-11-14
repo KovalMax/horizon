@@ -91,15 +91,22 @@ The MVP is a private beta of a responsive web application usable on mobile and d
 ### Product boundaries
 
 - Every content item belongs to exactly one Space. Each Space has exactly one Owner and may have additional account-holding Members. Viewer access is read-only; Editors can create, edit, and delete shared content. The Owner manages membership and ownership.
-- A personal Space may be shared after an explicit warning about visibility of existing content. The Owner may delete a Space after confirmation; deletion includes a seven-day recovery window, after which the Space and its content are permanently deleted. Restoration returns content and existing Member roles but does not reactivate pending invitations or links.
-- Space invitations support email and reusable links. The Owner selects a role, defaulting to Viewer. Link requests require sign-in and Owner approval; links have Owner-configurable expiry and can be revoked.
+- A personal Space may be shared after an explicit warning about visibility of existing content. Ownership transfers apply to shared Spaces only, go to an existing Member, and demote the outgoing Owner to Editor. An Owner may delete a personal or shared Space after confirmation; only the deleting Owner can restore it within seven days. Deletion immediately removes access, revokes pending invitations and links, and preserves pending join requests for review after restoration. Restoration returns content and existing Member roles without reactivating old invitations or links; an hourly background purge permanently removes Spaces after the recovery deadline.
+- Space invitations support email and reusable links. The Owner selects Viewer or Editor (default Viewer) for a link; Owner access is never granted by a link. Link requests require sign-in and Owner approval; the Owner chooses an expiry timestamp or no expiry and can revoke the link. Revocation blocks new requests while already-pending requests remain reviewable. Only one request per account/Space may be pending; declined requesters may retry through a valid link. Requesters can see their decision status; durable notifications are handled separately.
 - Events are anchored to a selected timezone and displayed in each Member's local timezone. Daily, weekly, and monthly recurrence supports editing or canceling one occurrence or the entire series. Detailed recurrence edge cases remain for feature-level specification.
 - Tasks have open/completed status, at most one assignee, and an optional due date and time. Multiple reminders may be selected relative to a due date. The assignee receives reminders; the creator does when no assignee exists. An explicitly configured reminder time takes precedence; otherwise use the recipient's default and local timezone. Assignees can adjust their own reminder without changing others' preferences.
 - Place import attempts to obtain name, address, coordinates, phone, and website when reliably available. It always presents an editable preview; ratings and photos are excluded. Import methods, supported links, provider terms, and costs require feasibility validation.
-- Notifications are in-app and email for the beta, subject to channel preferences and Space mute. Notify affected Members rather than the actor; Owners receive join requests and requesters receive approval results. Quiet hours are not required for launch.
+- Notifications use a persisted in-app inbox first; email delivery remains deferred. Channel preferences and Space mute control in-app delivery. Notify affected Members rather than the actor; Owners receive join requests and requesters receive approval results. Quiet hours are not required for launch.
 - The beta is online-only with clear offline/error feedback. It does not promise offline edits or synchronization.
 
 ### Design before implementation
+
+### Notification policy
+
+- In-app events are Task assignments, membership role/removal changes, calendar event create/update/cancel changes, new join requests, and join-request outcomes. Due reminders are deferred.
+- Never notify the actor. Assignment changes go to the new assignee; membership changes go to the affected Member; event changes go to all other active Space Members; new requests go to Owners; decisions go to the requester.
+- Read state is independent per item and changes only through explicit mark-read/unread or mark-all-read actions. Opening the inbox does not mark items read.
+- Retain notifications for 90 days. Muting suppresses new in-app delivery and unmuting does not backfill. In-app defaults on and email defaults off for each implemented category.
 
 - Produce a design brief and design system covering visual foundations, reusable components, responsive layouts, and key flows before implementation.
 - Direction: calm, welcoming, modern household planner; spacious layouts, approachable typography, and a restrained palette that distinguishes Spaces without an enterprise-project-management feel.

@@ -10,6 +10,17 @@ use std::env;
 pub trait EmailSender: Send + Sync {
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String>;
 
+    async fn send_task_reminder(
+        &self,
+        recipient: &str,
+        task_title: &str,
+        space_name: &str,
+        due: &str,
+    ) -> Result<(), String> {
+        let _ = (recipient, task_title, space_name, due);
+        Err("task reminders are not supported by this email sender".to_owned())
+    }
+
     async fn send_space_invitation(
         &self,
         recipient: &str,
@@ -85,6 +96,31 @@ impl EmailSender for SmtpEmailSender {
             ))
             .map_err(|_| "could not create sign-in email".to_owned())?;
 
+        self.transport
+            .send(message)
+            .await
+            .map(|_| ())
+            .map_err(|_| "email delivery failed".to_owned())
+    }
+
+    async fn send_task_reminder(
+        &self,
+        recipient: &str,
+        task_title: &str,
+        space_name: &str,
+        due: &str,
+    ) -> Result<(), String> {
+        let recipient = recipient
+            .parse::<Mailbox>()
+            .map_err(|_| "recipient email is invalid".to_owned())?;
+        let message = Message::builder()
+            .from(self.from.clone())
+            .to(recipient)
+            .subject(format!("Reminder: {task_title}"))
+            .body(format!(
+                "A Task in {space_name} is due {due}.\n\n{task_title}\n\nSign in to Horizon to view the Task."
+            ))
+            .map_err(|_| "could not create task reminder email".to_owned())?;
         self.transport
             .send(message)
             .await

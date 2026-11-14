@@ -1,0 +1,85 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button
+      - main:
+        - generic:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: To-dos
+            - paragraph: Shared lists for this Space. Each Task can have one assignee.
+          - generic:
+            - button: New Task
+        - generic:
+          - region:
+            - generic:
+              - heading [level=2]:
+                - text: My to-dos
+                - generic: · 2 open
+              - button
+            - generic:
+              - generic:
+                - generic:
+                  - checkbox
+                - button:
+                  - generic: Call Grandma Ifeoma
+                  - generic: Today
+              - generic:
+                - generic:
+                  - checkbox
+                - button:
+                  - generic: Return library books
+                  - generic:
+                    - generic: Tue 17 Nov
+                    - generic: 1 reminder
+          - generic:
+            - generic: New list
+            - generic:
+              - textbox:
+                - /placeholder: e.g. Weekend jobs
+              - button [disabled]: Add
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - complementary [aria-hidden]:
+    - link:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic: Edit with
+    - button
+  - dialog "Call Grandma Ifeoma" [ref=f9e99]:
+    - generic [ref=f9e100]:
+      - generic [ref=f9e101]:
+        - generic [ref=f9e102]: Maya's Space
+        - generic [ref=f9e107]: My to-dos
+      - heading "Call Grandma Ifeoma" [level=2] [ref=f9e108]
+      - paragraph [ref=f9e109]: Not assigned · Due Saturday 14 November
+    - paragraph [ref=f9e110]: No reminders on this Task.
+    - generic [ref=f9e111]:
+      - button "Delete" [active] [ref=f9e112] [cursor=pointer]
+      - button "Mark complete" [ref=f9e113] [cursor=pointer]
+    - button "Close" [ref=f9e114] [cursor=pointer]

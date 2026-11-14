@@ -205,16 +205,19 @@ export function Button({
   variant = "primary",
   disabled = false,
   className = "",
+  type = "button",
 }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: "primary" | "outline" | "quiet";
   disabled?: boolean;
   className?: string;
+  type?: "button" | "submit" | "reset";
 }) {
   return (
     <button
       className={`button ${variant} ${className}`}
+      type={type}
       onClick={onClick}
       disabled={disabled}
     >

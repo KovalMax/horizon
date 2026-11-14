@@ -1,0 +1,136 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button [expanded]
+      - main:
+        - generic:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: Space settings
+        - generic:
+          - generic:
+            - heading [level=2]: About this Space
+            - generic:
+              - term: Name
+              - definition: Maya's Space
+              - term: Icon
+              - definition: Personal
+              - term: Owner
+              - definition: You
+              - term: Your role
+              - definition:
+                - generic: Owner
+          - generic:
+            - generic:
+              - generic:
+                - generic: Mute this Space
+                - generic: No in-app or email notifications from Maya's Space. You can still open it any time.
+              - switch
+          - region:
+            - heading [level=2]: Leave Space
+            - paragraph: You're the only member. To stop using this Space, delete it instead.
+          - region:
+            - heading [level=2]: Delete Space
+            - list:
+              - listitem: Removes it for all 1 member.
+              - listitem: You can restore it from Settings for 7 days. After that it's gone for good.
+              - listitem: If you restore it, pending invitations and join links stay invalid — you'll need to send new ones.
+            - button: Delete Maya's Space…
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - complementary [aria-hidden]:
+    - link:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic: Edit with
+    - button
+  - dialog "Prototype controls" [ref=f11e105]:
+    - button "Close" [active] [ref=f11e106] [cursor=pointer]
+    - generic [ref=f11e111]:
+      - heading "Prototype controls" [level=2] [ref=f11e112]
+      - paragraph [ref=f11e113]: Switch simulated states to review every screen.
+    - generic [ref=f11e114]:
+      - paragraph [ref=f11e115]: Everything here is fictional sample data kept in this browser tab. Nothing is saved, synced or emailed. Reloading resets it.
+      - generic [ref=f11e116]:
+        - heading "Connection" [level=3] [ref=f11e117]
+        - generic [ref=f11e118]:
+          - generic [ref=f11e119]: Simulate offline
+          - switch "Simulate offline" [ref=f11e124] [cursor=pointer]
+      - generic [ref=f11e125]:
+        - heading "Content area state" [level=3] [ref=f11e126]
+        - radiogroup [ref=f11e127]:
+          - generic [ref=f11e128] [cursor=pointer]:
+            - radio "Normal Sample content" [checked] [ref=f11e129]
+            - generic [ref=f11e133]:
+              - generic [ref=f11e134]: Normal
+              - generic [ref=f11e135]: Sample content
+          - generic [ref=f11e136] [cursor=pointer]:
+            - radio "Loading Skeletons while content loads" [ref=f11e137]
+            - generic [ref=f11e138]:
+              - generic [ref=f11e139]: Loading
+              - generic [ref=f11e140]: Skeletons while content loads
+          - generic [ref=f11e141] [cursor=pointer]:
+            - radio "Load failure Error with retry" [ref=f11e142]
+            - generic [ref=f11e143]:
+              - generic [ref=f11e144]: Load failure
+              - generic [ref=f11e145]: Error with retry
+          - generic [ref=f11e146] [cursor=pointer]:
+            - radio "Empty / first use No content yet" [ref=f11e147]
+            - generic [ref=f11e148]:
+              - generic [ref=f11e149]: Empty / first use
+              - generic [ref=f11e150]: No content yet
+      - generic [ref=f11e151]:
+        - heading "Map placeholder" [level=3] [ref=f11e152]
+        - generic [ref=f11e153]:
+          - generic [ref=f11e154]: Map unavailable
+          - switch "Map unavailable" [ref=f11e157] [cursor=pointer]
+      - generic [ref=f11e158]:
+        - heading "Preview your role" [level=3] [ref=f11e159]
+        - paragraph [ref=f11e160]:
+          - text: In
+          - strong [ref=f11e161]: Maya's Space
+          - text: "you're really Owner. Preview how the screens change:"
+        - radiogroup [ref=f11e162]:
+          - generic [ref=f11e163] [cursor=pointer]:
+            - radio "My real role" [checked] [ref=f11e164]
+            - text: My real role
+          - generic [ref=f11e168] [cursor=pointer]:
+            - radio "Owner" [ref=f11e169]
+            - text: Owner
+          - generic [ref=f11e170] [cursor=pointer]:
+            - radio "Editor" [ref=f11e171]
+            - text: Editor
+          - generic [ref=f11e172] [cursor=pointer]:
+            - radio "Viewer" [ref=f11e173]
+            - text: Viewer
+      - generic [ref=f11e174]:
+        - 'link "Review guide: all screens & states" [ref=f11e175] [cursor=pointer]':
+          - /url: /review
+        - link "Restart onboarding" [ref=f11e176] [cursor=pointer]:
+          - /url: /welcome
+        - button "Reset sample data" [ref=f11e177] [cursor=pointer]

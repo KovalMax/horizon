@@ -26,6 +26,8 @@ pub struct TaskResponse {
     pub title: String,
     pub due_date: Option<String>,
     pub due_time: Option<String>,
+    pub reminder_offsets_minutes: Vec<i32>,
+    pub my_reminder_offsets_minutes: Vec<i32>,
     pub done: bool,
     pub assignee_id: Option<Uuid>,
     pub assignee_email: Option<String>,
@@ -37,6 +39,11 @@ pub struct TaskBoardResponse {
     pub tasks: Vec<TaskResponse>,
     pub lists_next_offset: Option<i64>,
     pub tasks_next_offset: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+pub struct TaskReminderPreferenceResponse {
+    pub offsets_minutes: Vec<i32>,
 }
 
 impl From<TaskList> for TaskListResponse {
@@ -65,6 +72,8 @@ impl From<Task> for TaskResponse {
                 .due_date
                 .map(|date| date.format("%Y-%m-%d").to_string()),
             due_time: task.due_time.map(|time| time.format("%H:%M").to_string()),
+            reminder_offsets_minutes: task.reminder_offsets_minutes,
+            my_reminder_offsets_minutes: task.my_reminder_offsets_minutes,
             done: task.done,
             assignee_id: task.assignee_id,
             assignee_email: task.assignee_email,

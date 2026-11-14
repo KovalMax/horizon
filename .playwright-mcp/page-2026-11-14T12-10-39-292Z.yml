@@ -1,0 +1,178 @@
+- generic [active] [ref=f14e1]:
+  - generic [ref=f14e2]:
+    - link "Skip to content" [ref=f14e3] [cursor=pointer]:
+      - /url: "#main"
+    - generic [ref=f14e4]:
+      - banner [ref=f14e5]:
+        - 'button "Switch Space. Current: All Spaces" [ref=f14e6]':
+          - generic [ref=f14e12]:
+            - generic [ref=f14e13]: Showing
+            - generic [ref=f14e14]: All Spaces
+        - generic [ref=f14e17]:
+          - link "Notifications, 3 unread" [ref=f14e18] [cursor=pointer]:
+            - /url: /notifications
+            - generic [aria-hidden] [ref=f14e19]: "3"
+          - button "Prototype controls" [ref=f14e20] [cursor=pointer]
+      - main [ref=f14e21]:
+        - generic [ref=f14e23]:
+          - generic [ref=f14e24]: Prototype
+          - heading "Review guide" [level=1] [ref=f14e28]
+          - paragraph [ref=f14e29]: Jump straight to each screen and simulated state. Sample data is fictional, nothing is saved, and no emails, maps or payments are used.
+        - generic [ref=f14e30]:
+          - generic [ref=f14e31]:
+            - heading "1 · Onboarding" [level=2] [ref=f14e32]
+            - list [ref=f14e33]:
+              - listitem [ref=f14e34]:
+                - button "Email sign-in link Simulated magic link, including an expired link" [ref=f14e35]:
+                  - generic [ref=f14e36]:
+                    - generic [ref=f14e37]: Email sign-in link
+                    - generic [ref=f14e38]: Simulated magic link, including an expired link
+          - generic [ref=f14e41]:
+            - heading "2 · Overview & navigation" [level=2] [ref=f14e42]
+            - list [ref=f14e43]:
+              - listitem [ref=f14e44]:
+                - button "All Spaces Events and To-dos labeled and filterable by Space" [ref=f14e45]:
+                  - generic [ref=f14e46]:
+                    - generic [ref=f14e47]: All Spaces
+                    - generic [ref=f14e48]: Events and To-dos labeled and filterable by Space
+              - listitem [ref=f14e51]:
+                - button "First-use empty state What a new member sees" [ref=f14e52]:
+                  - generic [ref=f14e53]:
+                    - generic [ref=f14e54]: First-use empty state
+                    - generic [ref=f14e55]: What a new member sees
+          - generic [ref=f14e58]:
+            - heading "3 · Calendar" [level=2] [ref=f14e59]
+            - list [ref=f14e60]:
+              - listitem [ref=f14e61]:
+                - 'button "Trip calendar across timezones Open “Trip planning call”: London time vs your Berlin time, plus each member''s local time" [ref=f14e62]':
+                  - generic [ref=f14e63]:
+                    - generic [ref=f14e64]: Trip calendar across timezones
+                    - generic [ref=f14e65]: "Open “Trip planning call”: London time vs your Berlin time, plus each member's local time"
+              - listitem [ref=f14e68]:
+                - button "Edit one occurrence vs the series Household → Recycling pickup (weekly) → Edit or Cancel event" [ref=f14e69]:
+                  - generic [ref=f14e70]:
+                    - generic [ref=f14e71]: Edit one occurrence vs the series
+                    - generic [ref=f14e72]: Household → Recycling pickup (weekly) → Edit or Cancel event
+          - generic [ref=f14e75]:
+            - heading "4 · To-dos" [level=2] [ref=f14e76]
+            - list [ref=f14e77]:
+              - listitem [ref=f14e78]:
+                - 'button "Reminder times explained Open “Renew home insurance”: personal adjustment and explicit time; “Book boiler service”: recipient''s default" [ref=f14e79]':
+                  - generic [ref=f14e80]:
+                    - generic [ref=f14e81]: Reminder times explained
+                    - generic [ref=f14e82]: "Open “Renew home insurance”: personal adjustment and explicit time; “Book boiler service”: recipient's default"
+              - listitem [ref=f14e85]:
+                - button "Viewer can't edit Household To-dos previewed as a Viewer" [ref=f14e86]:
+                  - generic [ref=f14e87]:
+                    - generic [ref=f14e88]: Viewer can't edit
+                    - generic [ref=f14e89]: Household To-dos previewed as a Viewer
+          - generic [ref=f14e92]:
+            - heading "5 · Places" [level=2] [ref=f14e93]
+            - list [ref=f14e94]:
+              - listitem [ref=f14e95]:
+                - button "List, map & directions Trip places with category filters and the simulated map" [ref=f14e96]:
+                  - generic [ref=f14e97]:
+                    - generic [ref=f14e98]: List, map & directions
+                    - generic [ref=f14e99]: Trip places with category filters and the simulated map
+              - listitem [ref=f14e102]:
+                - button "Map unavailable The list keeps working without the map" [ref=f14e103]:
+                  - generic [ref=f14e104]:
+                    - generic [ref=f14e105]: Map unavailable
+                    - generic [ref=f14e106]: The list keeps working without the map
+              - listitem [ref=f14e109]:
+                - button "Google Maps link import & failure Save a place → Import → try the sample links" [ref=f14e110]:
+                  - generic [ref=f14e111]:
+                    - generic [ref=f14e112]: Google Maps link import & failure
+                    - generic [ref=f14e113]: Save a place → Import → try the sample links
+          - generic [ref=f14e116]:
+            - heading "6 · Members & sharing" [level=2] [ref=f14e117]
+            - list [ref=f14e118]:
+              - listitem [ref=f14e119]:
+                - 'button "Owner view: invites, links, approval Household: approve Tomás''s request, create or revoke links" [ref=f14e120]':
+                  - generic [ref=f14e121]:
+                    - generic [ref=f14e122]: "Owner view: invites, links, approval"
+                    - generic [ref=f14e123]: "Household: approve Tomás's request, create or revoke links"
+              - listitem [ref=f14e126]:
+                - button "Non-owner view Trip, where you're an Editor" [ref=f14e127]:
+                  - generic [ref=f14e128]:
+                    - generic [ref=f14e129]: Non-owner view
+                    - generic [ref=f14e130]: Trip, where you're an Editor
+              - listitem [ref=f14e133]:
+                - button "Sharing a personal Space Try inviting someone to Maya's Space to see the warning" [ref=f14e134]:
+                  - generic [ref=f14e135]:
+                    - generic [ref=f14e136]: Sharing a personal Space
+                    - generic [ref=f14e137]: Try inviting someone to Maya's Space to see the warning
+          - generic [ref=f14e140]:
+            - heading "7 · Notifications & settings" [level=2] [ref=f14e141]
+            - list [ref=f14e142]:
+              - listitem [ref=f14e143]:
+                - button "Notifications Assignment, due reminder, event change, membership, join request & result" [ref=f14e144]:
+                  - generic [ref=f14e145]:
+                    - generic [ref=f14e146]: Notifications
+                    - generic [ref=f14e147]: Assignment, due reminder, event change, membership, join request & result
+              - listitem [ref=f14e150]:
+                - button "Channels, mute & default reminder time Email toggles; push marked unavailable on web" [ref=f14e151]:
+                  - generic [ref=f14e152]:
+                    - generic [ref=f14e153]: Channels, mute & default reminder time
+                    - generic [ref=f14e154]: Email toggles; push marked unavailable on web
+          - generic [ref=f14e157]:
+            - heading "8 · Safety" [level=2] [ref=f14e158]
+            - list [ref=f14e159]:
+              - listitem [ref=f14e160]:
+                - button "Transfer ownership before leaving Household Space settings" [ref=f14e161]:
+                  - generic [ref=f14e162]:
+                    - generic [ref=f14e163]: Transfer ownership before leaving
+                    - generic [ref=f14e164]: Household Space settings
+              - listitem [ref=f14e167]:
+                - button "Restore a deleted Space “Thursday book club” in Settings → Recently deleted" [ref=f14e168]:
+                  - generic [ref=f14e169]:
+                    - generic [ref=f14e170]: Restore a deleted Space
+                    - generic [ref=f14e171]: “Thursday book club” in Settings → Recently deleted
+          - generic [ref=f14e174]:
+            - heading "System states" [level=2] [ref=f14e175]
+            - list [ref=f14e176]:
+              - listitem [ref=f14e177]:
+                - button "Offline Banner, disabled saving, nothing queued" [ref=f14e178]:
+                  - generic [ref=f14e179]:
+                    - generic [ref=f14e180]: Offline
+                    - generic [ref=f14e181]: Banner, disabled saving, nothing queued
+              - listitem [ref=f14e184]:
+                - button "Loading Skeletons in the content area" [ref=f14e185]:
+                  - generic [ref=f14e186]:
+                    - generic [ref=f14e187]: Loading
+                    - generic [ref=f14e188]: Skeletons in the content area
+              - listitem [ref=f14e191]:
+                - button "Load failure Error with retry" [ref=f14e192]:
+                  - generic [ref=f14e193]:
+                    - generic [ref=f14e194]: Load failure
+                    - generic [ref=f14e195]: Error with retry
+          - generic [ref=f14e198]:
+            - heading "Assumptions to validate" [level=2] [ref=f14e199]
+            - list [ref=f14e202]:
+              - listitem [ref=f14e203]: Task reminders go to the assignee, or to the creator when nobody is assigned.
+              - listitem [ref=f14e204]: Viewers can't complete Tasks, since completing is an edit.
+              - listitem [ref=f14e205]: Join links require Owner approval even when they're active.
+              - listitem [ref=f14e206]: Styling, colors and type are an initial proposal, not a final brand.
+            - paragraph [ref=f14e207]:
+              - text: Use
+              - strong [ref=f14e208]: Prototype controls
+              - text: (flask icon) at any time to switch states or preview roles.
+              - link "Back to All Spaces" [ref=f14e209] [cursor=pointer]:
+                - /url: /
+    - navigation "Primary" [ref=f14e210]:
+      - generic [ref=f14e211]:
+        - link "All" [ref=f14e212] [cursor=pointer]:
+          - /url: /
+        - link "Calendar" [ref=f14e217] [cursor=pointer]:
+          - /url: /spaces/sp-home/calendar
+        - link "To-dos" [ref=f14e220] [cursor=pointer]:
+          - /url: /spaces/sp-home/tasks
+        - link "Places" [ref=f14e224] [cursor=pointer]:
+          - /url: /spaces/sp-home/places
+        - button "More" [ref=f14e228]
+  - region "Notifications alt+T"
+  - complementary "Edit with Lovable" [ref=f14e230]:
+    - link "Edit with Lovable" [ref=f14e231] [cursor=pointer]:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic [ref=f14e232]: Edit with
+    - button "Dismiss" [ref=f14e239] [cursor=pointer]

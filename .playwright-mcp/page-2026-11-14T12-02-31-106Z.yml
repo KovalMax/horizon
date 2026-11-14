@@ -1,0 +1,308 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e2]:
+    - link "Skip to content" [ref=f6e3] [cursor=pointer]:
+      - /url: "#main"
+    - complementary "Main" [ref=f6e4]:
+      - generic [ref=f6e5]:
+        - link "Horizon" [ref=f6e6] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f6e12]: Beta prototype
+      - navigation "Overview" [ref=f6e15]:
+        - link "All Spaces" [ref=f6e16] [cursor=pointer]:
+          - /url: /
+        - link "Notifications 3 unread" [ref=f6e21] [cursor=pointer]:
+          - /url: /notifications
+          - text: Notifications
+          - generic [ref=f6e25]:
+            - text: "3"
+            - generic [ref=f6e26]: unread
+        - link "Settings" [ref=f6e27] [cursor=pointer]:
+          - /url: /settings
+      - navigation "Your Spaces" [ref=f6e31]:
+        - heading "Your Spaces" [level=2] [ref=f6e32]
+        - link "Maya's Space Owner" [ref=f6e34] [cursor=pointer]:
+          - /url: /spaces/sp-personal/calendar
+          - generic [ref=f6e39]:
+            - generic [ref=f6e40]: Maya's Space
+            - generic [ref=f6e41]: Owner
+        - link "Linden Street Home Owner" [ref=f6e43] [cursor=pointer]:
+          - /url: /spaces/sp-home/calendar
+          - generic [ref=f6e48]:
+            - generic [ref=f6e49]: Linden Street Home
+            - generic [ref=f6e50]: Owner
+        - link "Lisbon long weekend Editor" [ref=f6e52] [cursor=pointer]:
+          - /url: /spaces/sp-trip/calendar
+          - generic [ref=f6e56]:
+            - generic [ref=f6e57]: Lisbon long weekend
+            - generic [ref=f6e58]: Editor
+        - button "New shared Space" [ref=f6e59]
+      - generic [ref=f6e61]:
+        - link "Review guide" [ref=f6e62] [cursor=pointer]:
+          - /url: /review
+        - button "Prototype controls" [ref=f6e67] [cursor=pointer]
+    - main [ref=f6e69]:
+      - generic [ref=f6e70]:
+        - generic [ref=f6e71]:
+          - heading "Good afternoon, Maya" [level=1] [ref=f6e72]
+          - paragraph [ref=f6e73]: Everything coming up across your Spaces. Pick a Space to see its places or to add things.
+        - button "New event" [ref=f6e75] [cursor=pointer]
+      - region "Your Spaces" [ref=f6e76]:
+        - link [ref=f6e604] [cursor=pointer]:
+          - /url: /spaces/sp-personal/calendar
+          - generic [ref=f6e83]:
+            - paragraph [ref=f6e84]: Maya's Space
+            - paragraph [ref=f6e85]: Owner · 1 member
+          - paragraph [ref=f6e86]: 5 events in 2 weeks · 2 open To-dos
+          - generic [ref=f6e87]: Open Space
+        - link [ref=f6e90] [cursor=pointer]:
+          - /url: /spaces/sp-home/calendar
+          - generic [ref=f6e96]:
+            - paragraph [ref=f6e97]: Linden Street Home
+            - paragraph [ref=f6e98]: Owner · 3 members
+          - paragraph [ref=f6e99]: 5 events in 2 weeks · 4 open To-dos
+          - generic [ref=f6e100]: Open Space
+        - link [ref=f6e103] [cursor=pointer]:
+          - /url: /spaces/sp-trip/calendar
+          - generic [ref=f6e108]:
+            - paragraph [ref=f6e109]: Lisbon long weekend
+            - paragraph [ref=f6e110]: Editor · 4 members
+          - paragraph [ref=f6e111]: 2 events in 2 weeks · 4 open To-dos
+          - generic [ref=f6e112]: Open Space
+      - generic [ref=f6e115]:
+        - group "Filter by Space" [ref=f6e116]:
+          - button "Maya's Space (shown)" [pressed] [ref=f6e605]:
+            - text: Maya's Space
+            - generic [ref=f6e121]: (shown)
+          - button "Linden Street Home (shown)" [pressed] [ref=f6e122]:
+            - text: Linden Street Home
+            - generic [ref=f6e126]: (shown)
+          - button "Lisbon long weekend (shown)" [pressed] [ref=f6e127]:
+            - text: Lisbon long weekend
+            - generic [ref=f6e130]: (shown)
+        - group "Show" [ref=f6e131]:
+          - button "Everything" [pressed] [ref=f6e132]
+          - button "Events" [ref=f6e133]
+          - button "To-dos" [ref=f6e134]
+      - generic [ref=f6e135]:
+        - generic [ref=f6e136]:
+          - region "Today · Saturday 14 November" [ref=f6e137]:
+            - heading "Today · Saturday 14 November" [level=2] [ref=f6e138]:
+              - text: Today
+              - generic [ref=f6e139]: · Saturday 14 November
+            - button "18:30 19:30 Yoga class Maya's Space Studio Hof, Kastanienallee 12 Every week" [ref=f6e606]:
+              - generic [ref=f6e608]:
+                - generic [ref=f6e609]: 18:30
+                - generic [ref=f6e610]: 19:30
+              - generic [ref=f6e611]:
+                - generic [ref=f6e612]: Yoga class
+                - generic [ref=f6e613]:
+                  - generic [ref=f6e614]: Maya's Space
+                  - generic [ref=f6e619]: Studio Hof, Kastanienallee 12
+                  - generic [ref=f6e624]: Every week
+            - generic [ref=f6e631]:
+              - checkbox "Complete “Call Grandma Ifeoma”" [ref=f6e633] [cursor=pointer]
+              - button "Call Grandma Ifeoma Maya's Space Today" [ref=f6e634]:
+                - generic [ref=f6e635]: Call Grandma Ifeoma
+                - generic [ref=f6e636]:
+                  - generic [ref=f6e637]: Maya's Space
+                  - generic [ref=f6e642]: Today
+            - generic [ref=f6e179]:
+              - checkbox "Complete “Pick up dry cleaning”" [ref=f6e181] [cursor=pointer]
+              - button "Pick up dry cleaning Linden Street Home You Today 17:00 1 reminder" [ref=f6e182]:
+                - generic [ref=f6e183]: Pick up dry cleaning
+                - generic [ref=f6e184]:
+                  - generic [ref=f6e185]: Linden Street Home
+                  - generic [ref=f6e190]: You
+                  - generic [ref=f6e194]: Today 17:00
+                  - generic [ref=f6e197]: 1 reminder
+          - region "Tomorrow · Sunday 15 November" [ref=f6e201]:
+            - heading "Tomorrow · Sunday 15 November" [level=2] [ref=f6e202]:
+              - text: Tomorrow
+              - generic [ref=f6e203]: · Sunday 15 November
+            - button "All day Recycling pickup Linden Street Home Every week" [ref=f6e204]:
+              - generic [ref=f6e206]: All day
+              - generic [ref=f6e207]:
+                - generic [ref=f6e208]: Recycling pickup
+                - generic [ref=f6e209]:
+                  - generic [ref=f6e210]: Linden Street Home
+                  - generic [ref=f6e215]: Every week
+            - button "08:00 10:00 Plumber visit (kitchen sink) Linden Street Home Home" [ref=f6e221]:
+              - generic [ref=f6e223]:
+                - generic [ref=f6e224]: 08:00
+                - generic [ref=f6e225]: 10:00
+              - generic [ref=f6e226]:
+                - generic [ref=f6e227]: Plumber visit (kitchen sink)
+                - generic [ref=f6e228]:
+                  - generic [ref=f6e229]: Linden Street Home
+                  - generic [ref=f6e234]: Home
+            - button "20:00 20:45 Trip planning call Lisbon long weekend Every week 19:00 London time" [ref=f6e239]:
+              - generic [ref=f6e241]:
+                - generic [ref=f6e242]: 20:00
+                - generic [ref=f6e243]: 20:45
+              - generic [ref=f6e244]:
+                - generic [ref=f6e245]: Trip planning call
+                - generic [ref=f6e246]:
+                  - generic [ref=f6e247]: Lisbon long weekend
+                  - generic [ref=f6e251]: Every week
+                  - generic [ref=f6e257]: 19:00 London time
+            - generic [ref=f6e262]:
+              - checkbox "Complete “Eggs, spinach, oat milk”" [ref=f6e264] [cursor=pointer]
+              - button "Eggs, spinach, oat milk Linden Street Home Jonas Tomorrow 1 reminder" [ref=f6e265]:
+                - generic [ref=f6e266]: Eggs, spinach, oat milk
+                - generic [ref=f6e267]:
+                  - generic [ref=f6e268]: Linden Street Home
+                  - generic [ref=f6e273]: Jonas
+                  - generic [ref=f6e277]: Tomorrow
+                  - generic [ref=f6e280]: 1 reminder
+          - region "Mon 16 Nov" [ref=f6e645]:
+            - heading "Mon 16 Nov" [level=2] [ref=f6e646]
+            - button "10:30 11:15 Dentist check-up Maya's Space Zahnarztpraxis Mitte, Torstraße 88" [ref=f6e647]:
+              - generic [ref=f6e649]:
+                - generic [ref=f6e650]: 10:30
+                - generic [ref=f6e651]: 11:15
+              - generic [ref=f6e652]:
+                - generic [ref=f6e653]: Dentist check-up
+                - generic [ref=f6e654]:
+                  - generic [ref=f6e655]: Maya's Space
+                  - generic [ref=f6e660]: Zahnarztpraxis Mitte, Torstraße 88
+          - region "Tue 17 Nov" [ref=f6e304]:
+            - heading "Tue 17 Nov" [level=2] [ref=f6e305]
+            - button "19:00 22:00 Dinner with the Hoffmanns Linden Street Home Their place, Lenaustraße 4" [ref=f6e306]:
+              - generic [ref=f6e308]:
+                - generic [ref=f6e309]: 19:00
+                - generic [ref=f6e310]: 22:00
+              - generic [ref=f6e311]:
+                - generic [ref=f6e312]: Dinner with the Hoffmanns
+                - generic [ref=f6e313]:
+                  - generic [ref=f6e314]: Linden Street Home
+                  - generic [ref=f6e319]: Their place, Lenaustraße 4
+            - generic [ref=f6e666]:
+              - checkbox "Complete “Return library books”" [ref=f6e668] [cursor=pointer]
+              - button "Return library books Maya's Space Tue 17 Nov 1 reminder" [ref=f6e669]:
+                - generic [ref=f6e670]: Return library books
+                - generic [ref=f6e671]:
+                  - generic [ref=f6e672]: Maya's Space
+                  - generic [ref=f6e677]: Tue 17 Nov
+                  - generic [ref=f6e680]: 1 reminder
+          - region "Wed 18 Nov" [ref=f6e343]:
+            - heading "Wed 18 Nov" [level=2] [ref=f6e344]
+            - generic [ref=f6e345]:
+              - checkbox "Complete “Book boiler service”" [ref=f6e347] [cursor=pointer]
+              - button "Book boiler service Linden Street Home Jonas Wed 18 Nov 1 reminder" [ref=f6e348]:
+                - generic [ref=f6e349]: Book boiler service
+                - generic [ref=f6e350]:
+                  - generic [ref=f6e351]: Linden Street Home
+                  - generic [ref=f6e356]: Jonas
+                  - generic [ref=f6e360]: Wed 18 Nov
+                  - generic [ref=f6e363]: 1 reminder
+          - region "Thu 19 Nov" [ref=f6e684]:
+            - heading "Thu 19 Nov" [level=2] [ref=f6e685]
+            - button "All day Renew passport — appointment window opens Maya's Space" [ref=f6e686]:
+              - generic [ref=f6e688]: All day
+              - generic [ref=f6e689]:
+                - generic [ref=f6e690]: Renew passport — appointment window opens
+                - generic [ref=f6e691]: Maya's Space
+          - region "Fri 20 Nov" [ref=f6e380]:
+            - heading "Fri 20 Nov" [level=2] [ref=f6e381]
+            - button "All day Rent due Linden Street Home Every month" [ref=f6e382]:
+              - generic [ref=f6e384]: All day
+              - generic [ref=f6e385]:
+                - generic [ref=f6e386]: Rent due
+                - generic [ref=f6e387]:
+                  - generic [ref=f6e388]: Linden Street Home
+                  - generic [ref=f6e393]: Every month
+            - generic [ref=f6e400]:
+              - checkbox "Complete “Renew home insurance”" [ref=f6e402] [cursor=pointer]
+              - button "Renew home insurance Linden Street Home You Fri 20 Nov 2 reminders" [ref=f6e403]:
+                - generic [ref=f6e404]: Renew home insurance
+                - generic [ref=f6e405]:
+                  - generic [ref=f6e406]: Linden Street Home
+                  - generic [ref=f6e411]: You
+                  - generic [ref=f6e415]: Fri 20 Nov
+                  - generic [ref=f6e418]: 2 reminders
+          - region "Sat 21 Nov" [ref=f6e697]:
+            - heading "Sat 21 Nov" [level=2] [ref=f6e698]
+            - button "18:30 19:30 Yoga class Maya's Space Studio Hof, Kastanienallee 12 Every week" [ref=f6e699]:
+              - generic [ref=f6e701]:
+                - generic [ref=f6e702]: 18:30
+                - generic [ref=f6e703]: 19:30
+              - generic [ref=f6e704]:
+                - generic [ref=f6e705]: Yoga class
+                - generic [ref=f6e706]:
+                  - generic [ref=f6e707]: Maya's Space
+                  - generic [ref=f6e712]: Studio Hof, Kastanienallee 12
+                  - generic [ref=f6e717]: Every week
+          - region "Sun 22 Nov" [ref=f6e448]:
+            - heading "Sun 22 Nov" [level=2] [ref=f6e449]
+            - button "All day Recycling pickup Linden Street Home Every week" [ref=f6e450]:
+              - generic [ref=f6e452]: All day
+              - generic [ref=f6e453]:
+                - generic [ref=f6e454]: Recycling pickup
+                - generic [ref=f6e455]:
+                  - generic [ref=f6e456]: Linden Street Home
+                  - generic [ref=f6e461]: Every week
+            - button "20:30 21:15 Trip planning call Lisbon long weekend Every week 19:30 London time Changed for this date" [ref=f6e467]:
+              - generic [ref=f6e469]:
+                - generic [ref=f6e470]: 20:30
+                - generic [ref=f6e471]: 21:15
+              - generic [ref=f6e472]:
+                - generic [ref=f6e473]: Trip planning call
+                - generic [ref=f6e474]:
+                  - generic [ref=f6e475]: Lisbon long weekend
+                  - generic [ref=f6e479]: Every week
+                  - generic [ref=f6e485]: 19:30 London time
+                  - generic [ref=f6e489]: Changed for this date
+          - region "Tue 24 Nov" [ref=f6e490]:
+            - heading "Tue 24 Nov" [level=2] [ref=f6e491]
+            - generic [ref=f6e492]:
+              - checkbox "Complete “Book airport transfer”" [ref=f6e494] [cursor=pointer]
+              - button "Book airport transfer Lisbon long weekend Sam Tue 24 Nov 1 reminder" [ref=f6e495]:
+                - generic [ref=f6e496]: Book airport transfer
+                - generic [ref=f6e497]:
+                  - generic [ref=f6e498]: Lisbon long weekend
+                  - generic [ref=f6e502]: Sam
+                  - generic [ref=f6e506]: Tue 24 Nov
+                  - generic [ref=f6e509]: 1 reminder
+          - region "Thu 26 Nov" [ref=f6e513]:
+            - heading "Thu 26 Nov" [level=2] [ref=f6e514]
+            - generic [ref=f6e515]:
+              - checkbox "Complete “Reserve Belém Tower tickets”" [ref=f6e517] [cursor=pointer]
+              - button "Reserve Belém Tower tickets Lisbon long weekend You Thu 26 Nov 2 reminders" [ref=f6e518]:
+                - generic [ref=f6e519]: Reserve Belém Tower tickets
+                - generic [ref=f6e520]:
+                  - generic [ref=f6e521]: Lisbon long weekend
+                  - generic [ref=f6e525]: You
+                  - generic [ref=f6e529]: Thu 26 Nov
+                  - generic [ref=f6e532]: 2 reminders
+          - region "Sat 28 Nov" [ref=f6e723]:
+            - heading "Sat 28 Nov" [level=2] [ref=f6e724]
+            - button "18:30 19:30 Yoga class Maya's Space Studio Hof, Kastanienallee 12 Every week" [ref=f6e725]:
+              - generic [ref=f6e727]:
+                - generic [ref=f6e728]: 18:30
+                - generic [ref=f6e729]: 19:30
+              - generic [ref=f6e730]:
+                - generic [ref=f6e731]: Yoga class
+                - generic [ref=f6e732]:
+                  - generic [ref=f6e733]: Maya's Space
+                  - generic [ref=f6e738]: Studio Hof, Kastanienallee 12
+                  - generic [ref=f6e743]: Every week
+        - complementary [ref=f6e562]:
+          - region "No due date" [ref=f6e563]:
+            - heading "No due date" [level=2] [ref=f6e564]
+            - generic [ref=f6e565]:
+              - checkbox "Complete “Check passport validity”" [ref=f6e567] [cursor=pointer]
+              - button "Check passport validity Lisbon long weekend" [ref=f6e568]:
+                - generic [ref=f6e569]: Check passport validity
+                - generic [ref=f6e570]: Lisbon long weekend
+            - generic [ref=f6e575]:
+              - checkbox "Complete “Sunscreen”" [ref=f6e577] [cursor=pointer]
+              - button "Sunscreen Lisbon long weekend" [ref=f6e578]:
+                - generic [ref=f6e579]: Sunscreen
+                - generic [ref=f6e580]: Lisbon long weekend
+          - paragraph [ref=f6e589]: Saved places belong to one Space. Open a Space to see its places and map.
+  - region "Notifications alt+T"
+  - complementary "Edit with Lovable" [ref=f6e590]:
+    - link "Edit with Lovable" [ref=f6e591] [cursor=pointer]:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic [ref=f6e592]: Edit with
+    - button "Dismiss" [ref=f6e599] [cursor=pointer]

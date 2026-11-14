@@ -42,6 +42,34 @@ test("calendar date strip expands and creates a dated session event", () => {
   expect(screen.getByText("Garden visit")).toBeTruthy();
 });
 
+test("correcting an invalid event end time clears the error and closing restores focus", async () => {
+  open("/spaces/home/calendar");
+  const opener = screen.getByRole("button", { name: "New event" });
+  opener.focus();
+  fireEvent.click(opener);
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
+    target: { value: "Time validation" },
+  });
+  fireEvent.change(screen.getByLabelText("Starts"), {
+    target: { value: "19:00" },
+  });
+  fireEvent.change(screen.getByLabelText("Ends"), {
+    target: { value: "18:00" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save event" }));
+
+  expect(screen.getAllByRole("alert")[0]?.textContent).toBe(
+    "The end time must be after the start time.",
+  );
+
+  fireEvent.change(screen.getByLabelText("Ends"), {
+    target: { value: "20:00" },
+  });
+  expect(screen.queryAllByRole("alert")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(opener));
+});
+
 test("saved places are Space-scoped and new lists are available to Tasks", () => {
   open("/spaces/trip/places");
   expect(screen.getByText("Pastéis de Belém")).toBeTruthy();
@@ -90,6 +118,9 @@ test("signed-in users list API Spaces and create a persisted shared Space", asyn
         return Response.json([existingSpace]);
       if (url === "/api/spaces" && init?.method === "POST")
         return Response.json(createdSpace, { status: 201 });
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -157,6 +188,9 @@ test("Space listing errors can be retried", async () => {
               },
             ]);
       }
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     }),
   );
@@ -263,6 +297,9 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
       }
       if (url === `/api/lists/${list.id}` && init?.method === "DELETE")
         return new Response(null, { status: 204 });
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -377,6 +414,9 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
       }
       if (url === `/api/events/${savedEvent?.id}` && init?.method === "DELETE")
         return new Response(null, { status: 204 });
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -410,7 +450,7 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Persisted dinner" }));
-  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit event" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
     target: { value: "Updated dinner" },
   });
@@ -422,12 +462,112 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Updated dinner" }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "Updated dinner" })).toBeNull(),
   );
   expect(fetchMock).toHaveBeenCalledWith(
     `/api/events/${savedEvent?.id}`,
+    expect.objectContaining({ method: "DELETE" }),
+  );
+});
+
+test("signed-in Members can cancel one expanded recurring occurrence", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "API household",
+    kind: "shared",
+    role: "owner",
+    member_count: 1,
+  };
+  const now = new Date();
+  const occurrenceDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const recurringEvent = {
+    id: "ad572d7b-c33e-4df9-a5eb-29a01c99e76e",
+    space_id: space.id,
+    space_name: space.name,
+    space_kind: space.kind,
+    title: "Recurring dinner",
+    starts_at: new Date(`${occurrenceDate}T18:00:00`).toISOString(),
+    ends_at: new Date(`${occurrenceDate}T19:00:00`).toISOString(),
+    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    all_day: false,
+    location: null,
+    notes: null,
+    recurrence: "daily",
+    recurrence_ends_on: null,
+    occurrence_date: occurrenceDate,
+    is_override: false,
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/health/ready") return new Response("", { status: 200 });
+    if (url === "/api/auth/magic-links/redeem")
+      return Response.json({
+        account: { id: "user-1", email: "maya@example.com" },
+        tokens: {
+          access_token: "access-secret",
+          refresh_token: "refresh-secret",
+        },
+      });
+    if (url === "/api/account/me")
+      return Response.json({ id: "user-1", email: "maya@example.com" });
+    if (url === "/api/spaces") return Response.json([space]);
+    if (url.startsWith("/api/events?") || url.startsWith("/api/events/range?"))
+      return Response.json({ items: [recurringEvent], next_offset: null });
+    if (url.startsWith("/api/tasks?"))
+      return Response.json({
+        lists: [],
+        tasks: [],
+        lists_next_offset: null,
+        tasks_next_offset: null,
+      });
+    if (url === "/api/places?offset=0")
+      return Response.json({ items: [], next_offset: null });
+    if (url === `/api/spaces/${space.id}/members`)
+      return Response.json([
+        { user_id: "user-1", email: "maya@example.com", role: "owner" },
+      ]);
+    if (
+      url === `/api/spaces/${space.id}/invitations` ||
+      url === "/api/invitations/current"
+    )
+      return Response.json([]);
+    if (
+      url === `/api/events/${recurringEvent.id}/occurrences/${occurrenceDate}`
+    )
+      return new Response(null, { status: 204 });
+    if (url === "/api/join-requests/current") return Response.json([]);
+    if (url.includes("/join-links")) return Response.json([]);
+    if (url.includes("/join-requests")) return Response.json([]);
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /API household/,
+    }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Recurring dinner" }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Cancel this occurrence" }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Recurring dinner" }),
+    ).toBeNull(),
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/events/${recurringEvent.id}/occurrences/${occurrenceDate}`,
     expect.objectContaining({ method: "DELETE" }),
   );
 });
@@ -524,6 +664,9 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
         persistedTasks = [{ ...persistedTasks[0], ...body }];
         return Response.json(persistedTasks[0]);
       }
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -639,6 +782,9 @@ test("signed-in Members load and save Places in their selected Space", async () 
         savedPlaces = [place];
         return Response.json(place, { status: 201 });
       }
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -747,6 +893,9 @@ test("signed-in Owners see real Members and send Viewer invitations", async () =
       if (url === `/api/spaces/${space.id}/invitations`)
         return Response.json(invitations);
       if (url === "/api/invitations/current") return Response.json([]);
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
       throw new Error(`Unexpected request: ${url}`);
     },
   );
@@ -785,5 +934,359 @@ test("signed-in Owners see real Members and send Viewer invitations", async () =
         Authorization: "Bearer access-secret",
       }),
     }),
+  );
+});
+
+test("Space Owners create reusable links and approve join requests", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "API household",
+    kind: "shared",
+    role: "owner",
+    member_count: 1,
+  };
+  const request = {
+    id: "4191eeca-67b8-4167-8c3a-c57f63fb2bde",
+    link_id: "3f2cab12-8d0f-4f9a-8901-4337b73232ea",
+    space_id: space.id,
+    space_name: space.name,
+    requester_id: "2beafda9-fb94-4084-86ca-d670a77c9306",
+    requester_email: "jonas@example.test",
+    role: "editor",
+    status: "pending",
+    requested_at: "2026-11-13T12:00:00Z",
+    decided_at: null,
+  };
+  const link = {
+    id: request.link_id,
+    space_id: space.id,
+    space_name: space.name,
+    role: "editor",
+    created_at: "2026-11-13T12:00:00Z",
+    expires_at: null,
+    revoked_at: null,
+    url: `http://localhost:5173/welcome?join=${request.link_id}`,
+  };
+  let requests: (typeof request)[] = [request];
+  let links: (typeof link)[] = [];
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/health/ready") return new Response("", { status: 200 });
+      if (url === "/api/auth/magic-links/redeem")
+        return Response.json({
+          account: { id: "user-1", email: "maya@example.com" },
+          tokens: {
+            access_token: "access-secret",
+            refresh_token: "refresh-secret",
+          },
+        });
+      if (url === "/api/account/me")
+        return Response.json({ id: "user-1", email: "maya@example.com" });
+      if (url === "/api/spaces") return Response.json([space]);
+      if (url.startsWith("/api/events?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url.startsWith("/api/tasks?"))
+        return Response.json({
+          lists: [],
+          tasks: [],
+          lists_next_offset: null,
+          tasks_next_offset: null,
+        });
+      if (url.startsWith("/api/places?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url === `/api/spaces/${space.id}/members`)
+        return Response.json([
+          { user_id: "user-1", email: "maya@example.com", role: "owner" },
+        ]);
+      if (
+        url === `/api/spaces/${space.id}/invitations` ||
+        url === "/api/invitations/current"
+      )
+        return Response.json([]);
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (
+        url === `/api/spaces/${space.id}/join-links` &&
+        init?.method === "POST"
+      ) {
+        links = [link];
+        return Response.json(link, { status: 201 });
+      }
+      if (url === `/api/spaces/${space.id}/join-links`)
+        return Response.json(links);
+      if (url === `/api/spaces/${space.id}/join-requests`)
+        return Response.json(requests);
+      if (
+        url === `/api/spaces/${space.id}/join-requests/${request.id}/decision`
+      ) {
+        requests = [];
+        return Response.json({
+          ...request,
+          status: "approved",
+          decided_at: new Date().toISOString(),
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /API household/,
+    }),
+  );
+  fireEvent.click(
+    within(spacesNavigation).getByRole("link", { name: "Members" }),
+  );
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Role after approval" }),
+    {
+      target: { value: "editor" },
+    },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create join link" }));
+  expect(await screen.findByText(link.url)).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}/join-links`,
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ role: "editor", expires_at: null }),
+    }),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+  expect(await screen.findByText("No pending join requests.")).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}/join-requests/${request.id}/decision`,
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ decision: "approved" }),
+    }),
+  );
+});
+
+test("Space Owners transfer a shared Space to an existing Member", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "API household",
+    kind: "shared",
+    role: "owner",
+    member_count: 2,
+  };
+  let ownerRole = "owner";
+  let memberRole = "viewer";
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/health/ready") return new Response("", { status: 200 });
+      if (url === "/api/auth/magic-links/redeem")
+        return Response.json({
+          account: { id: "user-1", email: "maya@example.com" },
+          tokens: {
+            access_token: "access-secret",
+            refresh_token: "refresh-secret",
+          },
+        });
+      if (url === "/api/account/me")
+        return Response.json({ id: "user-1", email: "maya@example.com" });
+      if (url === "/api/spaces")
+        return Response.json([{ ...space, role: ownerRole }]);
+      if (url.startsWith("/api/events?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url.startsWith("/api/tasks?"))
+        return Response.json({
+          lists: [],
+          tasks: [],
+          lists_next_offset: null,
+          tasks_next_offset: null,
+        });
+      if (url.startsWith("/api/places?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url === `/api/spaces/${space.id}/members`)
+        return Response.json([
+          { user_id: "user-1", email: "maya@example.com", role: ownerRole },
+          { user_id: "user-2", email: "ruth@example.test", role: memberRole },
+        ]);
+      if (
+        url === `/api/spaces/${space.id}/invitations` ||
+        url === "/api/invitations/current"
+      )
+        return Response.json([]);
+      if (url === "/api/spaces/deleted" || url === "/api/join-requests/current")
+        return Response.json([]);
+      if (
+        url === `/api/spaces/${space.id}/join-links` ||
+        url === `/api/spaces/${space.id}/join-requests`
+      )
+        return Response.json([]);
+      if (url === `/api/spaces/${space.id}/owner` && init?.method === "PATCH") {
+        ownerRole = "editor";
+        memberRole = "owner";
+        return Response.json({
+          space_id: space.id,
+          previous_owner_id: "user-1",
+          new_owner_id: "user-2",
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /API household/,
+    }),
+  );
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("link", {
+      name: "Space settings",
+    }),
+  );
+  fireEvent.change(await screen.findByRole("combobox", { name: "New Owner" }), {
+    target: { value: "user-2" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Transfer ownership" }));
+
+  expect(
+    await screen.findByText(
+      "Ownership transferred. You now have Editor access.",
+    ),
+  ).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}/owner`,
+    expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ new_owner_id: "user-2" }),
+    }),
+  );
+  expect(window.confirm).toHaveBeenCalledWith(
+    "Transfer ownership of API household to ruth@example.test? You will become an Editor.",
+  );
+});
+
+test("Owners delete a Space and restore it from Recently deleted", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "Lost itinerary",
+    kind: "shared",
+    role: "owner",
+    member_count: 1,
+  };
+  const deletedSpace = {
+    id: space.id,
+    name: space.name,
+    kind: "shared",
+    deleted_at: "2026-11-13T12:00:00Z",
+    restore_until: "2026-11-20T12:00:00Z",
+  };
+  let deleted = false;
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/health/ready") return new Response("", { status: 200 });
+      if (url === "/api/auth/magic-links/redeem")
+        return Response.json({
+          account: { id: "user-1", email: "maya@example.com" },
+          tokens: {
+            access_token: "access-secret",
+            refresh_token: "refresh-secret",
+          },
+        });
+      if (url === "/api/account/me")
+        return Response.json({ id: "user-1", email: "maya@example.com" });
+      if (url === "/api/spaces") return Response.json(deleted ? [] : [space]);
+      if (url === "/api/spaces/deleted")
+        return Response.json(deleted ? [deletedSpace] : []);
+      if (url.startsWith("/api/events?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url.startsWith("/api/tasks?"))
+        return Response.json({
+          lists: [],
+          tasks: [],
+          lists_next_offset: null,
+          tasks_next_offset: null,
+        });
+      if (url.startsWith("/api/places?"))
+        return Response.json({ items: [], next_offset: null });
+      if (url === `/api/spaces/${space.id}/members`)
+        return Response.json([
+          { user_id: "user-1", email: "maya@example.com", role: "owner" },
+        ]);
+      if (
+        url === `/api/spaces/${space.id}/invitations` ||
+        url === "/api/invitations/current"
+      )
+        return Response.json([]);
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (
+        url === `/api/spaces/${space.id}/join-links` ||
+        url === `/api/spaces/${space.id}/join-requests`
+      )
+        return Response.json([]);
+      if (url === `/api/spaces/${space.id}` && init?.method === "DELETE") {
+        deleted = true;
+        return Response.json(deletedSpace);
+      }
+      if (
+        url === `/api/spaces/${space.id}/restore` &&
+        init?.method === "POST"
+      ) {
+        deleted = false;
+        return Response.json(space);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /Lost itinerary/,
+    }),
+  );
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("link", {
+      name: "Space settings",
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Delete Space" }));
+  expect(window.confirm).toHaveBeenCalledWith(
+    "Delete Lost itinerary? You can restore it for seven days. After that, it and its content will be permanently deleted.",
+  );
+
+  fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
+  expect(await screen.findByText(/Restorable until/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+
+  expect(await screen.findByRole("heading", { name: "Calendar" })).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}`,
+    expect.objectContaining({ method: "DELETE" }),
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}/restore`,
+    expect.objectContaining({ method: "POST" }),
   );
 });

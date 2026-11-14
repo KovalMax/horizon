@@ -113,6 +113,7 @@ impl TodosApplication {
             request.due_date.as_deref(),
             request.due_time.as_deref(),
             request.assignee_id,
+            &request.reminder_offsets_minutes,
         )?;
         self.repository
             .update_task(task_id, user_id, &draft)
@@ -123,6 +124,33 @@ impl TodosApplication {
     pub async fn delete_task(&self, task_id: Uuid, user_id: Uuid) -> Result<(), TodoError> {
         self.repository.delete_task(task_id, user_id).await
     }
+
+    pub async fn set_my_reminder_preference(
+        &self,
+        task_id: Uuid,
+        user_id: Uuid,
+        offsets: &[i32],
+    ) -> Result<(), TodoError> {
+        if offsets.iter().any(|offset| ![1440, 60].contains(offset))
+            || offsets
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != offsets.len()
+        {
+            return Err(TodoError::Invalid);
+        }
+        if self
+            .repository
+            .set_my_reminder_preference(task_id, user_id, offsets)
+            .await
+            .map_err(|_| TodoError::Unavailable)?
+        {
+            Ok(())
+        } else {
+            Err(TodoError::NotFound)
+        }
+    }
 }
 
 fn validate(request: &CreateTaskRequest) -> Result<TaskDraft, TodoError> {
@@ -132,6 +160,7 @@ fn validate(request: &CreateTaskRequest) -> Result<TaskDraft, TodoError> {
         request.due_date.as_deref(),
         request.due_time.as_deref(),
         request.assignee_id,
+        &request.reminder_offsets_minutes,
     )
 }
 
@@ -149,6 +178,7 @@ fn validate_task_fields(
     due_date: Option<&str>,
     due_time: Option<&str>,
     assignee_id: Option<Uuid>,
+    reminder_offsets_minutes: &[i32],
 ) -> Result<TaskDraft, TodoError> {
     let title = title.trim();
     let list_name = list_name.trim();
@@ -169,11 +199,21 @@ fn validate_task_fields(
                 .map_err(|_| TodoError::Invalid)
         })
         .transpose()?;
+    if reminder_offsets_minutes
+        .iter()
+        .any(|offset| ![1440, 60].contains(offset))
+    {
+        return Err(TodoError::Invalid);
+    }
+    let mut reminder_offsets_minutes = reminder_offsets_minutes.to_vec();
+    reminder_offsets_minutes.sort_unstable();
+    reminder_offsets_minutes.dedup();
     Ok(TaskDraft {
         title: title.to_owned(),
         list_name: list_name.to_owned(),
         due_date,
         due_time,
+        reminder_offsets_minutes,
         assignee_id,
     })
 }

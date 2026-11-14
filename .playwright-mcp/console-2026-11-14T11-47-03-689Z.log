@@ -1,0 +1,16 @@
+[     825ms] [LOG] Initializing RudderStack Analytics @ https://lovable.dev/assets/app-shared-6cV-08Op.js:6
+[    2972ms] [ERROR] Not signed in with the identity provider. @ https://lovable.dev/login?redirect=%2Fauth-bridge%3Fproject_id%3Dlovp_19rv1avzqc95jbdah87ghmb1k5%26return_url%3Dhttps%253A%252F%252Fid-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app%252F:1
+[    4574ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token. @ https://lovable.dev/assets/vendor-sentry-DMYBbyUZ.js:17
+[   67721ms] [INFO] Castle: scoring event {type: $login, status: $attempted} @ https://lovable.dev/assets/vendor-sentry-DMYBbyUZ.js:17
+[   69942ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.closed call. @ https://lovable.dev/assets/vendor-firebase-8pl8Y-ri.js:1
+[   69942ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.closed call. @ https://lovable.dev/assets/vendor-firebase-8pl8Y-ri.js:1
+[  210037ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.closed call. @ https://lovable.dev/assets/vendor-firebase-8pl8Y-ri.js:1
+[  210037ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.closed call. @ https://lovable.dev/assets/vendor-firebase-8pl8Y-ri.js:1
+[  211280ms] [INFO] Castle: scoring event {type: $login, status: $succeeded} @ https://lovable.dev/assets/vendor-sentry-DMYBbyUZ.js:17
+[  212219ms] Transition was aborted because of invalid state. ViewTransition opt-in disabled
+[  212964ms] [LOG] ❤️ Lovable Script — v1.9.3+6bae409001d6 @ https://cdn.gpteng.co/lovable.js:125
+[  213090ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ https://id-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app/assets/index-CZTW5CGO.js:215
+[  213102ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://lovable.dev') does not match the recipient window's origin ('https://id-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app'). @ https://cdn.gpteng.co/lovable.js:58
+[  213133ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://lovable.dev') does not match the recipient window's origin ('https://id-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app'). @ https://cdn.gpteng.co/lovable.js:58
+[  213960ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://lovable.dev') does not match the recipient window's origin ('https://id-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app'). @ https://cdn.gpteng.co/lovable.js:58
+[  219089ms] [WARNING] Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://lovable.dev') does not match the recipient window's origin ('https://id-preview--415ef76e-42b3-4cc6-b71b-5dd55d4f9fc4.lovable.app'). @ https://cdn.gpteng.co/lovable.js:58

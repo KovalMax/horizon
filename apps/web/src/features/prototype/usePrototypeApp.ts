@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   places as seedPlaces,
   spaces,
@@ -9,11 +9,22 @@ import {
 import { createEvent, createTask, toggleTaskCompletion } from "./application";
 import { SessionPrototypeRepository } from "./repository";
 import { checkServiceReadiness } from "../../shared/api/health";
-import { createSharedSpace, listSpaces, SpacesApiError } from "./spacesApi";
+import {
+  createSharedSpace,
+  deleteSpace as deleteSpaceApi,
+  listDeletedSpaces,
+  listSpaces,
+  restoreSpace as restoreSpaceApi,
+  SpacesApiError,
+  transferSpaceOwnership as transferSpaceOwnershipApi,
+  type DeletedSpace,
+} from "./spacesApi";
 import {
   CalendarEventsApiError,
   createCalendarEvent,
   deleteCalendarEvent,
+  updateCalendarOccurrence,
+  cancelCalendarOccurrence,
   listCalendarEvents,
   updateCalendarEvent,
   type CalendarEventInput,
@@ -28,17 +39,39 @@ import {
   updateTodoCompletion,
   updateTodoList,
   updateTodoTask,
+  updateMyTaskReminders,
   type ApiTaskList,
 } from "./todosApi";
 import { createSavedPlace, listSavedPlaces, PlacesApiError } from "./placesApi";
+import {
+  getNotificationSettings,
+  listNotifications,
+  markAllNotificationsRead as markAllNotificationsReadApi,
+  NotificationsApiError,
+  saveNotificationSettings,
+  setNotificationRead,
+  type NotificationItem,
+} from "./notificationsApi";
 import {
   acceptSpaceInvitation,
   createSpaceInvitation,
   listMyInvitations,
   listSpaceInvitations,
   listSpaceMembers,
+  updateSpaceMemberRole,
+  removeSpaceMember,
+  revokeSpaceInvitation,
+  createSpaceJoinLink,
+  listSpaceJoinLinks,
+  revokeSpaceJoinLink,
+  listPendingSpaceJoinRequests,
+  decideSpaceJoinRequest,
+  requestSpaceJoin,
+  listMySpaceJoinRequests,
   MembersApiError,
   type SpaceInvitation,
+  type SpaceJoinLink,
+  type SpaceJoinRequest,
   type SpaceMember,
 } from "./membersApi";
 
@@ -57,6 +90,22 @@ function localDateTimeToRfc3339(date: string, time: string): string {
   return value.toISOString();
 }
 
+const notificationCategories: Record<string, string> = {
+  task_assignment: "Task assignments",
+  membership_change: "Membership changes",
+  event_change: "Event changes",
+  join_request: "Join requests",
+  join_request_result: "Join request results",
+  due_reminder: "Due reminders",
+};
+
+const initialNotificationPreferences = Object.fromEntries(
+  Object.values(notificationCategories).flatMap((category) => [
+    [`${category}:In-app`, true],
+    [`${category}:Email`, false],
+  ]),
+) as Record<string, boolean>;
+
 export function usePrototypeApp(accessToken: string | null = null) {
   const [ready, setReady] = useState<"checking" | "available" | "unavailable">(
     "checking",
@@ -69,24 +118,22 @@ export function usePrototypeApp(accessToken: string | null = null) {
   >("idle");
   const [spacesReload, setSpacesReload] = useState(0);
   const [spacesError, setSpacesError] = useState("");
+  const [deletedSpaces, setDeletedSpaces] = useState<DeletedSpace[]>([]);
+  const [deletedSpacesStatus, setDeletedSpacesStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
   const [creatingSpace, setCreatingSpace] = useState(false);
   const [reminderTime, setReminderTime] = useState("09:00");
+  const [timeZone, setTimeZone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  );
   const [notificationPrefs, setNotificationPrefs] = useState<
     Record<string, boolean>
-  >({
-    "Task assignments:In-app": true,
-    "Task assignments:Email": true,
-    "Due reminders:In-app": true,
-    "Due reminders:Email": true,
-    "Event changes:In-app": true,
-    "Event changes:Email": false,
-    "Membership changes:In-app": true,
-    "Membership changes:Email": false,
-    "Join requests:In-app": true,
-    "Join requests:Email": true,
-    "Join request results:In-app": true,
-    "Join request results:Email": true,
-  });
+  >(initialNotificationPreferences);
+  const [notificationPrefsStatus, setNotificationPrefsStatus] = useState<
+    "idle" | "loading" | "ready" | "saving" | "error"
+  >("idle");
+  const [notificationPrefsError, setNotificationPrefsError] = useState("");
   const [mutedSpaces, setMutedSpaces] = useState<string[]>([]);
   const [repository] = useState(() => new SessionPrototypeRepository());
   const [initialData] = useState(() => repository.loadInitialSnapshot());
@@ -100,6 +147,9 @@ export function usePrototypeApp(accessToken: string | null = null) {
   const [loadingMoreEvents, setLoadingMoreEvents] = useState(false);
   const [savingEvent, setSavingEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [eventEditScope, setEventEditScope] = useState<"occurrence" | "series">(
+    "series",
+  );
   const [tasks, setTasks] = useState(initialData.tasks);
   const [tasksStatus, setTasksStatus] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -126,6 +176,11 @@ export function usePrototypeApp(accessToken: string | null = null) {
   const [spaceInvitations, setSpaceInvitations] = useState<SpaceInvitation[]>(
     [],
   );
+  const [spaceJoinLinks, setSpaceJoinLinks] = useState<SpaceJoinLink[]>([]);
+  const [pendingJoinRequests, setPendingJoinRequests] = useState<
+    SpaceJoinRequest[]
+  >([]);
+  const [myJoinRequests, setMyJoinRequests] = useState<SpaceJoinRequest[]>([]);
   const [myInvitations, setMyInvitations] = useState<SpaceInvitation[]>([]);
   const [membershipStatus, setMembershipStatus] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -133,6 +188,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
   const [membershipError, setMembershipError] = useState("");
   const [membershipReload, setMembershipReload] = useState(0);
   const [savingInvitation, setSavingInvitation] = useState(false);
+  const [savingJoinLink, setSavingJoinLink] = useState(false);
   const [acceptingInvitation, setAcceptingInvitation] = useState("");
   const [taskLists, setTaskLists] = useState<Record<string, string[]>>(() =>
     Object.fromEntries(
@@ -154,13 +210,57 @@ export function usePrototypeApp(accessToken: string | null = null) {
   const [hidden, setHidden] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
   const [doneOpen, setDoneOpen] = useState(true);
-  const [modal, setModal] = useState<ModalKind>("");
-  const [selected, setSelected] = useState<EventItem | TaskItem | null>(null);
+  const [modal, setModalState] = useState<ModalKind>("");
+  const [selected, setSelectedState] = useState<EventItem | TaskItem | null>(
+    null,
+  );
+  const focusReturnTarget = useRef<HTMLElement | null>(null);
+  const restoreFocus = () => {
+    const target = focusReturnTarget.current;
+    focusReturnTarget.current = null;
+    if (target)
+      window.setTimeout(() => target.isConnected && target.focus(), 0);
+  };
+  const setModal = (next: ModalKind) => {
+    if (
+      next &&
+      !selected &&
+      !focusReturnTarget.current &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      focusReturnTarget.current = document.activeElement;
+    }
+    setModalState(next);
+  };
+  const setSelected = (next: EventItem | TaskItem | null) => {
+    if (
+      next &&
+      !modal &&
+      !focusReturnTarget.current &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      focusReturnTarget.current = document.activeElement;
+    }
+    setSelectedState(next);
+    if (!next && !modal) restoreFocus();
+  };
   const [mapMode, setMapMode] = useState(false);
   const [placeFilter, setPlaceFilter] = useState("All");
   const [calendarDay, setCalendarDay] = useState(0);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
-  const [unread, setUnread] = useState(3);
+  const [unread, setUnread] = useState(0);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsStatus, setNotificationsStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [notificationsError, setNotificationsError] = useState("");
+  const [notificationActionError, setNotificationActionError] = useState("");
+  const [notificationsNextOffset, setNotificationsNextOffset] = useState<
+    number | null
+  >(null);
+  const [notificationsReload, setNotificationsReload] = useState(0);
+  const [loadingMoreNotifications, setLoadingMoreNotifications] =
+    useState(false);
   const [requestPending, setRequestPending] = useState(true);
   const [approved, setApproved] = useState(false);
   const [memberRoles, setMemberRoles] = useState<Record<string, string>>({});
@@ -213,6 +313,115 @@ export function usePrototypeApp(accessToken: string | null = null) {
 
   useEffect(() => {
     if (!accessToken) {
+      setNotificationPrefs(initialNotificationPreferences);
+      setMutedSpaces([]);
+      setNotificationPrefsStatus("idle");
+      return;
+    }
+    let active = true;
+    setNotificationPrefsStatus("loading");
+    setNotificationPrefsError("");
+    getNotificationSettings(accessToken)
+      .then((settings) => {
+        if (!active) return;
+        const preferences = { ...initialNotificationPreferences };
+        for (const preference of settings.preferences) {
+          const category = notificationCategories[preference.event_type];
+          if (!category) continue;
+          const channel = preference.channel === "in_app" ? "In-app" : "Email";
+          preferences[`${category}:${channel}`] = preference.enabled;
+        }
+        setNotificationPrefs(preferences);
+        setMutedSpaces(settings.muted_space_ids);
+        setReminderTime(settings.default_reminder_time);
+        setTimeZone(settings.time_zone);
+        setNotificationPrefsStatus("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotificationPrefsStatus("error");
+        setNotificationPrefsError(
+          "Notification preferences couldn’t be loaded. Retry or check your connection.",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setUnread(0);
+      return;
+    }
+    let active = true;
+    listNotifications(accessToken, 0, 1)
+      .then((page) => {
+        if (active) setUnread(page.unread_count);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken || path !== "/notifications") {
+      setNotifications([]);
+      setNotificationsNextOffset(null);
+      setNotificationsStatus("idle");
+      return;
+    }
+    let active = true;
+    setNotifications([]);
+    setNotificationsNextOffset(null);
+    setNotificationsStatus("loading");
+    setNotificationsError("");
+    listNotifications(accessToken)
+      .then((page) => {
+        if (!active) return;
+        setNotifications(page.items);
+        setNotificationsNextOffset(page.next_offset);
+        setUnread(page.unread_count);
+        setNotificationsStatus("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotificationsStatus("error");
+        setNotificationsError(
+          "Notifications couldn’t be loaded. Check your connection and retry.",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, path, notificationsReload]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setDeletedSpaces([]);
+      setDeletedSpacesStatus("idle");
+      return;
+    }
+    let active = true;
+    setDeletedSpacesStatus("loading");
+    listDeletedSpaces(accessToken)
+      .then((result) => {
+        if (!active) return;
+        setDeletedSpaces(result);
+        setDeletedSpacesStatus("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setDeletedSpacesStatus("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessToken, spacesReload]);
+
+  useEffect(() => {
+    if (!accessToken) {
       setEvents(initialData.events);
       setEventsNextOffset(null);
       setEventsStatus("idle");
@@ -224,7 +433,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
     setEventsNextOffset(null);
     setEventsStatus("loading");
     setEventError("");
-    listCalendarEvents(accessToken)
+    listCalendarEvents(accessToken, 0, dateForOffset(0), dateForOffset(90))
       .then((result) => {
         if (!active) return;
         setEvents(result.items);
@@ -346,11 +555,17 @@ export function usePrototypeApp(accessToken: string | null = null) {
     if (!accessToken) {
       setSpaceMembers([]);
       setSpaceInvitations([]);
+      setSpaceJoinLinks([]);
+      setPendingJoinRequests([]);
+      setMyJoinRequests([]);
       setMyInvitations([]);
       setMembershipStatus("idle");
       return;
     }
     const controller = new AbortController();
+    const canManageCurrentSpace = serverSpaces.some(
+      (item) => item.id === currentSpaceId && item.role === "Owner",
+    );
     setMembershipStatus("loading");
     setMembershipError("");
     Promise.all([
@@ -361,12 +576,22 @@ export function usePrototypeApp(accessToken: string | null = null) {
         ? listSpaceInvitations(accessToken, currentSpaceId).catch(() => [])
         : Promise.resolve([]),
       listMyInvitations(accessToken),
+      currentSpaceId && canManageCurrentSpace
+        ? listSpaceJoinLinks(accessToken, currentSpaceId)
+        : Promise.resolve([]),
+      currentSpaceId && canManageCurrentSpace
+        ? listPendingSpaceJoinRequests(accessToken, currentSpaceId)
+        : Promise.resolve([]),
+      listMySpaceJoinRequests(accessToken),
     ])
-      .then(([members, invitations, mine]) => {
+      .then(([members, invitations, mine, links, requests, mineRequests]) => {
         if (controller.signal.aborted) return;
         setSpaceMembers(members);
         setSpaceInvitations(invitations);
         setMyInvitations(mine);
+        setSpaceJoinLinks(links);
+        setPendingJoinRequests(requests);
+        setMyJoinRequests(mineRequests);
         setMembershipStatus("ready");
       })
       .catch(() => {
@@ -377,7 +602,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
         );
       });
     return () => controller.abort();
-  }, [accessToken, currentSpaceId, membershipReload]);
+  }, [accessToken, currentSpaceId, membershipReload, serverSpaces]);
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
@@ -393,7 +618,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
 
   const go = (to: string) => {
     window.history.pushState({}, "", to);
-    setPath(to);
+    setPath(window.location.pathname);
     setMobileMenu(false);
     setSpaceSwitcherOpen(false);
     window.scrollTo(0, 0);
@@ -450,7 +675,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
     } catch (error) {
       setMembershipError(
         error instanceof MembersApiError && error.status === 403
-          ? "Only Owners and Editors can invite people."
+          ? "Only Owners can invite people."
           : error instanceof MembersApiError && error.status === 409
             ? "This email is already a Member or has a pending invitation."
             : "The invitation couldn’t be sent. Check the email address and try again.",
@@ -458,6 +683,218 @@ export function usePrototypeApp(accessToken: string | null = null) {
       return false;
     } finally {
       setSavingInvitation(false);
+    }
+  };
+  const changeMemberRole = async (
+    userId: string,
+    role: "editor" | "viewer",
+  ) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      const updated = await updateSpaceMemberRole(
+        accessToken,
+        currentSpaceId,
+        userId,
+        role,
+      );
+      setSpaceMembers((all) =>
+        all.map((member) => (member.user_id === userId ? updated : member)),
+      );
+      showToast("Member role updated.");
+      return true;
+    } catch {
+      setMembershipError(
+        "The Member role couldn’t be changed. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const removeMember = async (userId: string) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      await removeSpaceMember(accessToken, currentSpaceId, userId);
+      setSpaceMembers((all) =>
+        all.filter((member) => member.user_id !== userId),
+      );
+      setServerSpaces((all) =>
+        all.map((item) =>
+          item.id === currentSpaceId
+            ? { ...item, members: Math.max(0, item.members - 1) }
+            : item,
+        ),
+      );
+      showToast("Member removed from the Space.");
+      return true;
+    } catch {
+      setMembershipError(
+        "The Member couldn’t be removed. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const revokeInvitation = async (invitationId: string) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      await revokeSpaceInvitation(accessToken, currentSpaceId, invitationId);
+      setSpaceInvitations((all) =>
+        all.filter((item) => item.id !== invitationId),
+      );
+      showToast(
+        "Invitation revoked. You can safely invite this address again.",
+      );
+      return true;
+    } catch {
+      setMembershipError(
+        "The invitation couldn’t be revoked. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const createJoinLink = async (
+    role: "viewer" | "editor",
+    expiresAt: string | null,
+  ) => {
+    if (!accessToken || !currentSpaceId) return false;
+    setSavingJoinLink(true);
+    setMembershipError("");
+    try {
+      const link = await createSpaceJoinLink(
+        accessToken,
+        currentSpaceId,
+        role,
+        expiresAt,
+      );
+      setSpaceJoinLinks((all) => [link, ...all]);
+      showToast("Join link created. Copy it to share access.");
+      return true;
+    } catch {
+      setMembershipError(
+        "The join link couldn’t be created. Check its expiry and try again.",
+      );
+      return false;
+    } finally {
+      setSavingJoinLink(false);
+    }
+  };
+  const revokeJoinLink = async (linkId: string) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      await revokeSpaceJoinLink(accessToken, currentSpaceId, linkId);
+      const revokedAt = new Date().toISOString();
+      setSpaceJoinLinks((all) =>
+        all.map((link) =>
+          link.id === linkId ? { ...link, revoked_at: revokedAt } : link,
+        ),
+      );
+      showToast("Join link revoked. It can no longer be used.");
+      return true;
+    } catch {
+      setMembershipError(
+        "The join link couldn’t be revoked. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const decideJoinRequest = async (
+    requestId: string,
+    decision: "approved" | "declined",
+  ) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      const result = await decideSpaceJoinRequest(
+        accessToken,
+        currentSpaceId,
+        requestId,
+        decision,
+      );
+      setPendingJoinRequests((all) =>
+        all.filter((item) => item.id !== requestId),
+      );
+      setMyJoinRequests((all) =>
+        all.map((item) => (item.id === result.id ? result : item)),
+      );
+      if (decision === "approved") {
+        setMembershipReload((current) => current + 1);
+        setSpacesReload((current) => current + 1);
+      }
+      showToast(
+        decision === "approved"
+          ? "Join request approved."
+          : "Join request declined.",
+      );
+      return true;
+    } catch {
+      setMembershipError(
+        "The join request couldn’t be updated. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const requestJoinAccess = async (linkId: string) => {
+    if (!accessToken) return null;
+    try {
+      const result = await requestSpaceJoin(accessToken, linkId);
+      setMyJoinRequests((all) => [
+        result,
+        ...all.filter((item) => item.id !== result.id),
+      ]);
+      return result;
+    } catch {
+      return null;
+    }
+  };
+  const transferOwnership = async (newOwnerId: string) => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      await transferSpaceOwnershipApi(accessToken, currentSpaceId, newOwnerId);
+      setSpacesReload((current) => current + 1);
+      setMembershipReload((current) => current + 1);
+      showToast("Ownership transferred. You now have Editor access.");
+      return true;
+    } catch (error) {
+      setMembershipError(
+        error instanceof SpacesApiError && error.status === 403
+          ? "Only the current Owner can transfer this Space."
+          : "Ownership couldn’t be transferred. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const deleteCurrentSpace = async () => {
+    if (!accessToken || !currentSpaceId) return false;
+    try {
+      const deleted = await deleteSpaceApi(accessToken, currentSpaceId);
+      setSpacesReload((current) => current + 1);
+      go("/");
+      showToast(
+        `${deleted.name} was deleted. You can restore it for seven days.`,
+      );
+      return true;
+    } catch (error) {
+      setMembershipError(
+        error instanceof SpacesApiError && error.status === 403
+          ? "Only the current Owner can delete this Space."
+          : "The Space couldn’t be deleted. Refresh and try again.",
+      );
+      return false;
+    }
+  };
+  const restoreDeletedSpace = async (spaceId: string) => {
+    if (!accessToken) return false;
+    try {
+      const restored = await restoreSpaceApi(accessToken, spaceId);
+      setDeletedSpaces((all) => all.filter((item) => item.id !== spaceId));
+      setSpacesReload((current) => current + 1);
+      go(`/spaces/${restored.id}/calendar`);
+      showToast(
+        `${restored.name} was restored. Previous invitations and links remain invalid.`,
+      );
+      return true;
+    } catch {
+      setSpacesError(
+        "This Space can no longer be restored. Refresh and try again.",
+      );
+      return false;
     }
   };
   const acceptInvitation = async (invitationId: string) => {
@@ -501,14 +938,144 @@ export function usePrototypeApp(accessToken: string | null = null) {
   };
   const goSpace = (id: string, section = "calendar") =>
     go(`/spaces/${id}/${section}`);
+  const markNotificationRead = async (
+    notification: NotificationItem,
+    read: boolean,
+  ) => {
+    if (!accessToken) return false;
+    setNotificationActionError("");
+    try {
+      await setNotificationRead(accessToken, notification.id, read);
+      if (read && !notification.read_at)
+        setUnread((count) => Math.max(0, count - 1));
+      if (!read && notification.read_at) setUnread((count) => count + 1);
+      const readAt = read
+        ? (notification.read_at ?? new Date().toISOString())
+        : null;
+      setNotifications((all) =>
+        all.map((item) =>
+          item.id === notification.id ? { ...item, read_at: readAt } : item,
+        ),
+      );
+      return true;
+    } catch {
+      setNotificationActionError(
+        "That notification couldn’t be updated. Retry your action.",
+      );
+      return false;
+    }
+  };
+  const markAllNotificationsRead = async () => {
+    if (!accessToken) return;
+    setNotificationActionError("");
+    try {
+      await markAllNotificationsReadApi(accessToken);
+      const readAt = new Date().toISOString();
+      setNotifications((all) =>
+        all.map((item) => ({ ...item, read_at: item.read_at ?? readAt })),
+      );
+      setUnread(0);
+      showToast("All notifications marked as read.");
+    } catch {
+      setNotificationActionError(
+        "Notifications couldn’t be marked as read. Retry your action.",
+      );
+    }
+  };
+  const loadMoreNotifications = async () => {
+    if (
+      !accessToken ||
+      notificationsNextOffset === null ||
+      loadingMoreNotifications
+    )
+      return;
+    setNotificationActionError("");
+    setLoadingMoreNotifications(true);
+    try {
+      const page = await listNotifications(
+        accessToken,
+        notificationsNextOffset,
+      );
+      setNotifications((all) => [...all, ...page.items]);
+      setNotificationsNextOffset(page.next_offset);
+      setUnread(page.unread_count);
+    } catch {
+      setNotificationActionError(
+        "More notifications couldn’t be loaded. Retry your action.",
+      );
+    } finally {
+      setLoadingMoreNotifications(false);
+    }
+  };
+  const savePreferences = async () => {
+    if (!accessToken) return false;
+    setNotificationPrefsStatus("saving");
+    setNotificationPrefsError("");
+    const preferences = Object.entries(notificationCategories).flatMap(
+      ([eventType, category]) => [
+        {
+          event_type: eventType,
+          channel: "in_app" as const,
+          enabled: notificationPrefs[`${category}:In-app`] ?? true,
+        },
+        {
+          event_type: eventType,
+          channel: "email" as const,
+          enabled: notificationPrefs[`${category}:Email`] ?? false,
+        },
+      ],
+    );
+    try {
+      const settings = await saveNotificationSettings(accessToken, {
+        preferences,
+        muted_space_ids: mutedSpaces,
+        default_reminder_time: reminderTime,
+        time_zone: timeZone,
+      });
+      setMutedSpaces(settings.muted_space_ids);
+      setNotificationPrefsStatus("ready");
+      showToast("Notification preferences saved.");
+      return true;
+    } catch (error) {
+      setNotificationPrefsStatus("error");
+      setNotificationPrefsError(
+        error instanceof NotificationsApiError && error.status === 400
+          ? "One or more muted Spaces are no longer available. Refresh and try again."
+          : "Notification preferences couldn’t be saved. Check your connection and retry.",
+      );
+      return false;
+    }
+  };
+  const saveMyTaskReminders = async (taskId: string, offsets: number[]) => {
+    if (!accessToken) return;
+    try {
+      const savedOffsets = await updateMyTaskReminders(
+        accessToken,
+        taskId,
+        offsets,
+      );
+      setTasks((all) =>
+        all.map((task) =>
+          String(task.id) === taskId
+            ? { ...task, myReminderOffsetsMinutes: savedOffsets }
+            : task,
+        ),
+      );
+      showToast("Your Task reminders were saved.");
+    } catch {
+      showToast("Your Task reminders couldn’t be saved. Try again.");
+    }
+  };
   const closeModal = () => {
-    setModal("");
+    setModalState("");
     setEditingEvent(null);
+    setEventEditScope("series");
     setEditingTask(null);
     setEditingList(null);
     setEventError("");
     setTaskError("");
     setPlaceError("");
+    restoreFocus();
   };
   const relativeDay = (date: FormDataEntryValue | null) => {
     if (!date) return 1;
@@ -527,6 +1094,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
       const time = String(form.get("time") || "18:00");
       const endTime = String(form.get("end") || "");
       const recurrenceValue = String(form.get("repeat") || "");
+      const recurrenceEndsOnValue = String(form.get("recurrenceEndsOn") || "");
       const timeZone =
         editingEvent?.timeZone ??
         Intl.DateTimeFormat().resolvedOptions().timeZone ??
@@ -541,13 +1109,19 @@ export function usePrototypeApp(accessToken: string | null = null) {
         location: String(form.get("place") || "").trim() || null,
         notes: String(form.get("notes") || "").trim() || null,
         recurrence:
-          recurrenceValue === "Every day"
-            ? "daily"
-            : recurrenceValue === "Every week"
-              ? "weekly"
-              : recurrenceValue === "Every month"
-                ? "monthly"
-                : null,
+          eventEditScope === "occurrence"
+            ? null
+            : recurrenceValue === "Every day"
+              ? "daily"
+              : recurrenceValue === "Every week"
+                ? "weekly"
+                : recurrenceValue === "Every month"
+                  ? "monthly"
+                  : null,
+        recurrenceEndsOn:
+          eventEditScope !== "occurrence" && recurrenceValue
+            ? recurrenceEndsOnValue || null
+            : null,
       };
       if (input.endsAt && new Date(input.endsAt) <= new Date(input.startsAt)) {
         setEventError("The end time must be after the start time.");
@@ -564,21 +1138,48 @@ export function usePrototypeApp(accessToken: string | null = null) {
         setEventError("");
         try {
           const saved = editingEvent
-            ? await updateCalendarEvent(
-                accessToken,
-                String(editingEvent.id),
-                input,
-              )
+            ? eventEditScope === "occurrence" && editingEvent.occurrenceDate
+              ? await updateCalendarOccurrence(
+                  accessToken,
+                  String(editingEvent.id),
+                  editingEvent.occurrenceDate,
+                  input,
+                )
+              : await updateCalendarEvent(
+                  accessToken,
+                  String(editingEvent.id),
+                  input,
+                )
             : await createCalendarEvent(accessToken, space.id, input);
-          setEvents((current) =>
-            editingEvent
-              ? current.map((item) => (item.id === saved.id ? saved : item))
-              : [saved, ...current],
-          );
+          if (editingEvent) {
+            if (eventEditScope === "occurrence") {
+              setEvents((current) =>
+                current.map((item) =>
+                  item.id === saved.id &&
+                  item.occurrenceDate === editingEvent.occurrenceDate
+                    ? saved
+                    : item,
+                ),
+              );
+              setEventsReload((current) => current + 1);
+            } else if (editingEvent.repeat) {
+              setEventsReload((current) => current + 1);
+            } else {
+              setEvents((current) =>
+                current.map((item) => (item.id === saved.id ? saved : item)),
+              );
+            }
+          } else {
+            setEvents((current) => [saved, ...current]);
+          }
           setEventsStatus("ready");
           closeModal();
           showToast(
-            editingEvent ? "Calendar event updated." : "Calendar event saved.",
+            editingEvent
+              ? eventEditScope === "occurrence"
+                ? "Calendar occurrence updated."
+                : "Calendar series updated."
+              : "Calendar event saved.",
           );
         } catch (error) {
           setEventError(
@@ -657,6 +1258,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
             dueDate: String(form.get("dueDate") || "") || null,
             dueTime: String(form.get("taskTime") || "") || null,
             assigneeId: String(form.get("assignee") || "") || null,
+            reminderOffsetsMinutes: form.getAll("reminderOffset").map(Number),
           };
           const saved = editingTask
             ? await updateTodoTask(
@@ -837,32 +1439,54 @@ export function usePrototypeApp(accessToken: string | null = null) {
     );
   };
 
-  const editSelectedEvent = () => {
+  const editSelectedEvent = (scope: "occurrence" | "series" = "series") => {
     if (!selected || "list" in selected) return;
     setEditingEvent(selected);
-    setSelected(null);
+    setEventEditScope(scope);
+    setSelectedState(null);
     setEventError("");
     setModal("event");
   };
 
-  const removeSelectedEvent = async () => {
+  const removeSelectedEvent = async (
+    scope: "occurrence" | "series" = "series",
+  ) => {
     if (!selected || "list" in selected) return;
     if (accessToken && typeof selected.id === "string") {
       try {
-        await deleteCalendarEvent(accessToken, selected.id);
+        if (scope === "occurrence" && selected.occurrenceDate) {
+          await cancelCalendarOccurrence(
+            accessToken,
+            selected.id,
+            selected.occurrenceDate,
+          );
+        } else {
+          await deleteCalendarEvent(accessToken, selected.id);
+        }
       } catch {
         setEventError(
-          "The event couldn’t be deleted. Check your connection and retry.",
+          "The Calendar event couldn’t be canceled. Check your connection and retry.",
         );
         return;
       }
     }
-    setEvents((current) => current.filter((item) => item.id !== selected.id));
+    setEvents((current) =>
+      current.filter((item) =>
+        scope === "occurrence" && selected.occurrenceDate
+          ? !(
+              item.id === selected.id &&
+              item.occurrenceDate === selected.occurrenceDate
+            )
+          : item.id !== selected.id,
+      ),
+    );
     setSelected(null);
     setEventError("");
     showToast(
       accessToken
-        ? "Calendar event deleted."
+        ? scope === "occurrence"
+          ? "Calendar occurrence canceled."
+          : "Calendar event deleted."
         : "Event deleted (prototype only).",
     );
   };
@@ -870,7 +1494,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
   const editSelectedTask = () => {
     if (!selected || !("list" in selected) || !accessToken) return;
     setEditingTask(selected);
-    setSelected(null);
+    setSelectedState(null);
     setTaskError("");
     setModal("task");
   };
@@ -940,7 +1564,12 @@ export function usePrototypeApp(accessToken: string | null = null) {
     setLoadingMoreEvents(true);
     setEventError("");
     try {
-      const page = await listCalendarEvents(accessToken, eventsNextOffset);
+      const page = await listCalendarEvents(
+        accessToken,
+        eventsNextOffset,
+        dateForOffset(0),
+        dateForOffset(90),
+      );
       setEvents((current) => [
         ...current,
         ...page.items.filter(
@@ -1037,6 +1666,11 @@ export function usePrototypeApp(accessToken: string | null = null) {
     spacesError,
     setSpacesError,
     retrySpaces: () => setSpacesReload((current) => current + 1),
+    deletedSpaces,
+    deletedSpacesStatus,
+    restoreDeletedSpace,
+    transferOwnership,
+    deleteCurrentSpace,
     creatingSpace,
     accessToken,
     path,
@@ -1044,8 +1678,14 @@ export function usePrototypeApp(accessToken: string | null = null) {
     setSpaceNames,
     reminderTime,
     setReminderTime,
+    timeZone,
+    setTimeZone,
     notificationPrefs,
     setNotificationPrefs,
+    notificationPrefsStatus,
+    notificationPrefsError,
+    savePreferences,
+    saveMyTaskReminders,
     mutedSpaces,
     setMutedSpaces,
     events,
@@ -1059,6 +1699,7 @@ export function usePrototypeApp(accessToken: string | null = null) {
     loadMoreEvents,
     savingEvent,
     editingEvent,
+    eventEditScope,
     setEditingEvent,
     editSelectedEvent,
     removeSelectedEvent,
@@ -1089,12 +1730,23 @@ export function usePrototypeApp(accessToken: string | null = null) {
     savingPlace,
     spaceMembers,
     spaceInvitations,
+    spaceJoinLinks,
+    pendingJoinRequests,
+    myJoinRequests,
     myInvitations,
     membershipStatus,
     membershipError,
     savingInvitation,
+    savingJoinLink,
     acceptingInvitation,
     inviteMember,
+    changeMemberRole,
+    removeMember,
+    revokeInvitation,
+    createJoinLink,
+    revokeJoinLink,
+    decideJoinRequest,
+    requestJoinAccess,
     acceptInvitation,
     hidden,
     setHidden,
@@ -1120,7 +1772,18 @@ export function usePrototypeApp(accessToken: string | null = null) {
     calendarExpanded,
     setCalendarExpanded,
     unread,
-    setUnread,
+    notifications,
+    notificationsStatus,
+    notificationsError,
+    notificationActionError,
+    notificationsNextOffset,
+    loadingMoreNotifications,
+    retryNotifications: () => setNotificationsReload((current) => current + 1),
+    loadMoreNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    openNotification: (notification: NotificationItem) =>
+      goSpace(notification.space_id, notification.destination),
     requestPending,
     setRequestPending,
     approved,

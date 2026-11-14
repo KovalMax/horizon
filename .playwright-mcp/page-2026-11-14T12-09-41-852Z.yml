@@ -1,0 +1,86 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button
+      - main:
+        - generic:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: Saved places
+            - paragraph: Places saved in Maya's Space. Only this Space's places are shown.
+          - generic:
+            - button: Save a place
+        - generic:
+          - group:
+            - button [pressed]: All (1)
+            - button: Services (1)
+          - group:
+            - button [pressed]: List
+            - button: Map
+        - generic:
+          - list:
+            - listitem:
+              - generic:
+                - generic:
+                  - heading [level=2]: Ostbloc climbing gym
+                  - generic: Services
+                - paragraph: Hauptstraße 3, Berlin
+                - generic:
+                  - button: Directions
+                  - button: Remove
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button: More
+  - region "Notifications alt+T"
+  - complementary [aria-hidden]:
+    - link:
+      - /url: https://lovable.dev/projects/lovp_19rv1avzqc95jbdah87ghmb1k5?utm_source=lovable-badge
+      - generic: Edit with
+    - button
+  - dialog "Add place details" [active] [ref=f10e125]:
+    - generic [ref=f10e126]:
+      - generic [ref=f10e127]:
+        - heading "Add place details" [level=2] [ref=f10e128]
+        - paragraph [ref=f10e129]: Only a name is required.
+      - generic [ref=f10e130]:
+        - generic [ref=f10e131]: Name
+        - textbox "Name" [ref=f10e132]
+      - generic [ref=f10e133]:
+        - generic [ref=f10e134]: Category
+        - combobox "Category" [ref=f10e135] [cursor=pointer]:
+          - generic: Food & drink
+        - combobox [aria-hidden] [ref=f10e138]
+      - generic [ref=f10e139]:
+        - generic [ref=f10e140]: Address (optional)
+        - textbox "Address (optional)" [ref=f10e141]
+      - generic [ref=f10e142]:
+        - generic [ref=f10e143]: Notes (optional)
+        - textbox "Notes (optional)" [ref=f10e144]
+      - generic [ref=f10e145]:
+        - button "Back" [ref=f10e146] [cursor=pointer]
+        - button "Save place" [ref=f10e147] [cursor=pointer]
+    - button "Close" [ref=f10e120] [cursor=pointer]

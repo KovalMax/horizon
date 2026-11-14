@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../auth/api";
 import type { PlaceItem } from "./domain";
 
 type ApiSavedPlace = {
@@ -45,7 +46,7 @@ export async function listSavedPlaces(
   offset = 0,
 ): Promise<{ items: PlaceItem[]; nextOffset: number | null }> {
   const page = await readJson<ApiPlacePage>(
-    await fetch(`/api/places?offset=${offset}`, {
+    await authenticatedFetch(`/api/places?offset=${offset}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   );
@@ -61,7 +62,7 @@ export async function createSavedPlace(
   place: Omit<PlaceItem, "id" | "space">,
 ): Promise<PlaceItem> {
   const saved = await readJson<ApiSavedPlace>(
-    await fetch(`/api/spaces/${spaceId}/places`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/places`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

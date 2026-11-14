@@ -94,16 +94,7 @@ export function CalendarPage({
           (_, index) => index + calendarDay,
         ).map((day) => {
           const list = events.filter(
-            (e) =>
-              e.space === space.id &&
-              (e.day === day ||
-                (e.repeat === "Every day" && day >= e.day) ||
-                (e.repeat === "Every week" &&
-                  day >= e.day &&
-                  (day - e.day) % 7 === 0) ||
-                (e.repeat === "Every month" &&
-                  day >= e.day &&
-                  (day - e.day) % 30 === 0)),
+            (e) => e.space === space.id && e.day === day,
           );
           if (!list.length) return null;
           return (

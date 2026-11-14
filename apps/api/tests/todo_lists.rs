@@ -62,7 +62,8 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             .service(todos::create_task)
             .service(todos::update_task)
             .service(todos::delete_task)
-            .service(todos::update_task_completion),
+            .service(todos::update_task_completion)
+            .service(todos::update_my_task_reminders),
     )
     .await;
 
@@ -176,6 +177,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
         due_date: Some("2026-12-12".to_owned()),
         due_time: Some("10:30".to_owned()),
         assignee_id: Some(assigned_user_id),
+        reminder_offsets_minutes: vec![1440, 60],
     };
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/tasks", space.id))
@@ -205,6 +207,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             due_date: None,
             due_time: None,
             assignee_id: Some(other_member_id),
+            reminder_offsets_minutes: vec![1440, 60],
         })
         .to_request();
     assert_eq!(
@@ -236,6 +239,44 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
     let second_task: todos::TaskResponse = actix_test::read_body_json(response).await;
     assert_eq!(second_task.title, "Pack snacks");
     assert_eq!(second_task.assignee_id, None);
+
+    let request = actix_test::TestRequest::put()
+        .uri(&format!("/tasks/{}/reminders", task.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(todos::UpdateTaskReminderPreferenceRequest {
+            offsets_minutes: vec![60],
+        })
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::NOT_FOUND,
+        "the creator cannot edit an assignee's private reminder choices"
+    );
+
+    let request = actix_test::TestRequest::put()
+        .uri(&format!("/tasks/{}/reminders", second_task.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(todos::UpdateTaskReminderPreferenceRequest {
+            offsets_minutes: vec![],
+        })
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let private_preference: todos::TaskReminderPreferenceResponse =
+        actix_test::read_body_json(response).await;
+    assert!(private_preference.offsets_minutes.is_empty());
+    let (mut shared_offsets, private_offsets): (Vec<i32>, Vec<i32>) = sqlx::query_as(
+        "SELECT t.reminder_offsets_minutes, p.offsets_minutes FROM tasks t \
+         JOIN task_reminder_preferences p ON p.task_id = t.id AND p.user_id = t.creator_id \
+         WHERE t.id = $1",
+    )
+    .bind(second_task.id)
+    .fetch_one(&pool)
+    .await
+    .expect("test should read private and shared offsets independently");
+    shared_offsets.sort_unstable();
+    assert_eq!(shared_offsets, vec![60, 1440]);
+    assert!(private_offsets.is_empty());
 
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/lists", space.id))
@@ -312,6 +353,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             due_date: Some("2026-12-14".to_owned()),
             due_time: Some("11:30".to_owned()),
             assignee_id: Some(assigned_user_id),
+            reminder_offsets_minutes: vec![1440, 60],
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;
@@ -332,6 +374,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             due_date: Some("2026-12-14".to_owned()),
             due_time: Some("11:30".to_owned()),
             assignee_id: None,
+            reminder_offsets_minutes: vec![1440, 60],
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;
@@ -348,6 +391,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             due_date: Some("2026-12-14".to_owned()),
             due_time: Some("11:30".to_owned()),
             assignee_id: Some(assigned_user_id),
+            reminder_offsets_minutes: vec![1440, 60],
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;
@@ -413,6 +457,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             due_date: None,
             due_time: None,
             assignee_id: None,
+            reminder_offsets_minutes: vec![1440, 60],
         })
         .to_request();
     assert_eq!(

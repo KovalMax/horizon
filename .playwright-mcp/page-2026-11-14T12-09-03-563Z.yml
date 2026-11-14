@@ -1,0 +1,77 @@
+- generic:
+  - generic [aria-hidden]:
+    - link:
+      - /url: "#main"
+      - text: Skip to content
+    - generic:
+      - banner:
+        - button:
+          - generic:
+            - generic: Space
+            - generic: Maya's Space
+        - generic:
+          - link:
+            - /url: /notifications
+            - generic [aria-hidden]: "3"
+          - button
+      - main:
+        - generic:
+          - generic:
+            - generic: Maya's Space
+            - heading [level=1]: To-dos
+            - paragraph: Shared lists for this Space. Each Task can have one assignee.
+          - generic:
+            - button: New Task
+        - generic:
+          - region:
+            - generic:
+              - heading [level=2]:
+                - text: My to-dos
+                - generic: · 1 open
+              - button
+            - generic:
+              - generic:
+                - generic:
+                  - checkbox
+                - button:
+                  - generic: Return library books
+                  - generic:
+                    - generic: Tue 17 Nov
+                    - generic: 1 reminder
+            - group:
+              - generic: Completed (1)
+          - generic:
+            - generic: New list
+            - generic:
+              - textbox:
+                - /placeholder: e.g. Weekend jobs
+              - button [disabled]: Add
+    - navigation:
+      - generic:
+        - link:
+          - /url: /
+          - text: All
+        - link:
+          - /url: /spaces/sp-personal/calendar
+          - text: Calendar
+        - link:
+          - /url: /spaces/sp-personal/tasks
+          - text: To-dos
+        - link:
+          - /url: /spaces/sp-personal/places
+          - text: Places
+        - button [expanded]: More
+  - region "Notifications alt+T"
+  - dialog "More" [ref=f9e126]:
+    - button "Close" [active] [ref=f9e127] [cursor=pointer]
+    - heading "More" [level=2] [ref=f9e133]
+    - navigation "More" [ref=f9e134]:
+      - link "Members & sharing" [ref=f9e135] [cursor=pointer]:
+        - /url: /spaces/sp-personal/members
+      - link "Space settings" [ref=f9e141] [cursor=pointer]:
+        - /url: /spaces/sp-personal/settings
+      - link "Notification settings" [ref=f9e143] [cursor=pointer]:
+        - /url: /settings
+      - link "Review guide" [ref=f9e147] [cursor=pointer]:
+        - /url: /review
+      - button "Prototype controls" [ref=f9e153] [cursor=pointer]

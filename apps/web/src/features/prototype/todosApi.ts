@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../auth/api";
 import type { TaskItem } from "./domain";
 
 export type ApiTaskList = {
@@ -18,6 +19,8 @@ type ApiTask = {
   title: string;
   due_date: string | null;
   due_time: string | null;
+  reminder_offsets_minutes: number[];
+  my_reminder_offsets_minutes: number[];
   done: boolean;
   assignee_id: string | null;
   assignee_email: string | null;
@@ -60,6 +63,10 @@ function toTask(task: ApiTask): TaskItem {
     listId: task.list_id,
     day,
     time: task.due_time?.slice(0, 5) ?? undefined,
+    reminders: (task.reminder_offsets_minutes ?? []).length,
+    reminderOffsetsMinutes: task.reminder_offsets_minutes ?? [1440, 60],
+    myReminderOffsetsMinutes: task.my_reminder_offsets_minutes ??
+      task.reminder_offsets_minutes ?? [1440, 60],
     done: task.done,
     assigneeId: task.assignee_id ?? undefined,
     owner: task.assignee_email ?? undefined,
@@ -89,7 +96,7 @@ export async function listTodos(
   tasksNextOffset: number | null;
 }> {
   const board = await readJson<ApiTaskBoard>(
-    await fetch(
+    await authenticatedFetch(
       `/api/tasks?lists_offset=${listsOffset}&tasks_offset=${tasksOffset}`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -110,7 +117,7 @@ export async function createTodoList(
   name: string,
 ): Promise<ApiTaskList> {
   return readJson<ApiTaskList>(
-    await fetch(`/api/spaces/${spaceId}/lists`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/lists`, {
       method: "POST",
       headers: headers(accessToken),
       body: JSON.stringify({ name }),
@@ -124,7 +131,7 @@ export async function updateTodoList(
   name: string,
 ): Promise<ApiTaskList> {
   return readJson<ApiTaskList>(
-    await fetch(`/api/lists/${listId}`, {
+    await authenticatedFetch(`/api/lists/${listId}`, {
       method: "PUT",
       headers: headers(accessToken),
       body: JSON.stringify({ name }),
@@ -136,7 +143,7 @@ export async function deleteTodoList(
   accessToken: string,
   listId: string,
 ): Promise<void> {
-  const response = await fetch(`/api/lists/${listId}`, {
+  const response = await authenticatedFetch(`/api/lists/${listId}`, {
     method: "DELETE",
     headers: headers(accessToken),
   });
@@ -152,10 +159,11 @@ export async function createTodoTask(
     dueDate: string | null;
     dueTime: string | null;
     assigneeId: string | null;
+    reminderOffsetsMinutes: number[];
   },
 ): Promise<TaskItem> {
   const task = await readJson<ApiTask>(
-    await fetch(`/api/spaces/${spaceId}/tasks`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/tasks`, {
       method: "POST",
       headers: headers(accessToken),
       body: JSON.stringify({
@@ -164,6 +172,7 @@ export async function createTodoTask(
         due_date: input.dueDate,
         due_time: input.dueTime,
         assignee_id: input.assigneeId,
+        reminder_offsets_minutes: input.reminderOffsetsMinutes,
       }),
     }),
   );
@@ -176,7 +185,7 @@ export async function updateTodoCompletion(
   done: boolean,
 ): Promise<TaskItem> {
   const task = await readJson<ApiTask>(
-    await fetch(`/api/tasks/${taskId}/completion`, {
+    await authenticatedFetch(`/api/tasks/${taskId}/completion`, {
       method: "PUT",
       headers: headers(accessToken),
       body: JSON.stringify({ done }),
@@ -194,10 +203,11 @@ export async function updateTodoTask(
     dueDate: string | null;
     dueTime: string | null;
     assigneeId: string | null;
+    reminderOffsetsMinutes: number[];
   },
 ): Promise<TaskItem> {
   const task = await readJson<ApiTask>(
-    await fetch(`/api/tasks/${taskId}`, {
+    await authenticatedFetch(`/api/tasks/${taskId}`, {
       method: "PUT",
       headers: headers(accessToken),
       body: JSON.stringify({
@@ -206,6 +216,7 @@ export async function updateTodoTask(
         due_date: input.dueDate,
         due_time: input.dueTime,
         assignee_id: input.assigneeId,
+        reminder_offsets_minutes: input.reminderOffsetsMinutes,
       }),
     }),
   );
@@ -216,9 +227,24 @@ export async function deleteTodoTask(
   accessToken: string,
   taskId: string,
 ): Promise<void> {
-  const response = await fetch(`/api/tasks/${taskId}`, {
+  const response = await authenticatedFetch(`/api/tasks/${taskId}`, {
     method: "DELETE",
     headers: headers(accessToken),
   });
   if (!response.ok) throw new TodosApiError(response.status);
+}
+
+export async function updateMyTaskReminders(
+  accessToken: string,
+  taskId: string,
+  offsetsMinutes: number[],
+): Promise<number[]> {
+  const result = await readJson<{ offsets_minutes: number[] }>(
+    await authenticatedFetch(`/api/tasks/${taskId}/reminders`, {
+      method: "PUT",
+      headers: headers(accessToken),
+      body: JSON.stringify({ offsets_minutes: offsetsMinutes }),
+    }),
+  );
+  return result.offsets_minutes;
 }

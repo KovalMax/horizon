@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AuthApiError,
+  getAuthTokens,
   getCurrentAccount,
   redeemMagicLink,
   requestMagicLink,
   revokeCurrentSession,
+  setAuthTokens,
+  subscribeAuthTokens,
   type AuthAccount,
   type AuthTokens,
 } from "./api";
@@ -30,6 +33,18 @@ export function useAuth(): AuthState {
     useState<AuthState["redemptionStatus"]>("idle");
   const [error, setError] = useState("");
 
+  useEffect(
+    () =>
+      subscribeAuthTokens((updatedTokens, reason) => {
+        setTokens(updatedTokens);
+        if (reason === "expired") {
+          setAccount(null);
+          setError("Your session expired. Please sign in again.");
+        }
+      }),
+    [],
+  );
+
   const requestLink = async (email: string) => {
     setRequestStatus("sending");
     setError("");
@@ -47,13 +62,14 @@ export function useAuth(): AuthState {
     setError("");
     try {
       const newTokens = await redeemMagicLink(token);
+      setAuthTokens(newTokens);
       const currentAccount = await getCurrentAccount(newTokens.accessToken);
-      setTokens(newTokens);
+      setTokens(getAuthTokens() ?? newTokens);
       setAccount(currentAccount);
       setRedemptionStatus("idle");
       return true;
     } catch (failure) {
-      setTokens(null);
+      setAuthTokens(null, "signed-out");
       setAccount(null);
       setRedemptionStatus("failed");
       setError(
@@ -66,7 +82,8 @@ export function useAuth(): AuthState {
   };
 
   const signOut = async () => {
-    const refreshToken = tokens?.refreshToken;
+    const refreshToken = getAuthTokens()?.refreshToken ?? tokens?.refreshToken;
+    setAuthTokens(null, "signed-out");
     setTokens(null);
     setAccount(null);
     setRequestStatus("idle");

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "../auth/api";
 export type SpaceMember = {
   user_id: string;
   email: string;
@@ -11,6 +12,30 @@ export type SpaceInvitation = {
   email: string;
   role: "viewer";
   expires_at: string;
+};
+
+export type SpaceJoinLink = {
+  id: string;
+  space_id: string;
+  space_name: string;
+  role: "viewer" | "editor";
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  url: string;
+};
+
+export type SpaceJoinRequest = {
+  id: string;
+  link_id: string;
+  space_id: string;
+  space_name: string;
+  requester_id: string;
+  requester_email: string | null;
+  role: "viewer" | "editor";
+  status: "pending" | "approved" | "declined";
+  requested_at: string;
+  decided_at: string | null;
 };
 
 export class MembersApiError extends Error {
@@ -36,7 +61,7 @@ export async function listSpaceMembers(
   spaceId: string,
 ): Promise<SpaceMember[]> {
   return readJson(
-    await fetch(`/api/spaces/${spaceId}/members`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/members`, {
       headers: headers(accessToken),
     }),
   );
@@ -47,7 +72,7 @@ export async function listSpaceInvitations(
   spaceId: string,
 ): Promise<SpaceInvitation[]> {
   return readJson(
-    await fetch(`/api/spaces/${spaceId}/invitations`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/invitations`, {
       headers: headers(accessToken),
     }),
   );
@@ -59,7 +84,7 @@ export async function createSpaceInvitation(
   email: string,
 ): Promise<SpaceInvitation> {
   return readJson(
-    await fetch(`/api/spaces/${spaceId}/invitations`, {
+    await authenticatedFetch(`/api/spaces/${spaceId}/invitations`, {
       method: "POST",
       headers: headers(accessToken, true),
       body: JSON.stringify({ email }),
@@ -67,11 +92,53 @@ export async function createSpaceInvitation(
   );
 }
 
+export async function updateSpaceMemberRole(
+  accessToken: string,
+  spaceId: string,
+  userId: string,
+  role: "editor" | "viewer",
+): Promise<SpaceMember> {
+  return readJson(
+    await authenticatedFetch(`/api/spaces/${spaceId}/members/${userId}`, {
+      method: "PATCH",
+      headers: headers(accessToken, true),
+      body: JSON.stringify({ role }),
+    }),
+  );
+}
+
+export async function removeSpaceMember(
+  accessToken: string,
+  spaceId: string,
+  userId: string,
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `/api/spaces/${spaceId}/members/${userId}`,
+    {
+      method: "DELETE",
+      headers: headers(accessToken),
+    },
+  );
+  if (!response.ok) throw new MembersApiError(response.status);
+}
+
+export async function revokeSpaceInvitation(
+  accessToken: string,
+  spaceId: string,
+  invitationId: string,
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `/api/spaces/${spaceId}/invitations/${invitationId}`,
+    { method: "DELETE", headers: headers(accessToken) },
+  );
+  if (!response.ok) throw new MembersApiError(response.status);
+}
+
 export async function listMyInvitations(
   accessToken: string,
 ): Promise<SpaceInvitation[]> {
   return readJson(
-    await fetch("/api/invitations/current", {
+    await authenticatedFetch("/api/invitations/current", {
       headers: headers(accessToken),
     }),
   );
@@ -82,8 +149,100 @@ export async function acceptSpaceInvitation(
   invitationId: string,
 ): Promise<SpaceInvitation> {
   return readJson(
-    await fetch(`/api/invitations/${invitationId}/accept`, {
+    await authenticatedFetch(`/api/invitations/${invitationId}/accept`, {
       method: "POST",
+      headers: headers(accessToken),
+    }),
+  );
+}
+
+export async function listSpaceJoinLinks(
+  accessToken: string,
+  spaceId: string,
+): Promise<SpaceJoinLink[]> {
+  return readJson(
+    await authenticatedFetch(`/api/spaces/${spaceId}/join-links`, {
+      headers: headers(accessToken),
+    }),
+  );
+}
+
+export async function createSpaceJoinLink(
+  accessToken: string,
+  spaceId: string,
+  role: "viewer" | "editor",
+  expiresAt: string | null,
+): Promise<SpaceJoinLink> {
+  return readJson(
+    await authenticatedFetch(`/api/spaces/${spaceId}/join-links`, {
+      method: "POST",
+      headers: headers(accessToken, true),
+      body: JSON.stringify({ role, expires_at: expiresAt }),
+    }),
+  );
+}
+
+export async function revokeSpaceJoinLink(
+  accessToken: string,
+  spaceId: string,
+  linkId: string,
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `/api/spaces/${spaceId}/join-links/${linkId}`,
+    {
+      method: "DELETE",
+      headers: headers(accessToken),
+    },
+  );
+  if (!response.ok) throw new MembersApiError(response.status);
+}
+
+export async function listPendingSpaceJoinRequests(
+  accessToken: string,
+  spaceId: string,
+): Promise<SpaceJoinRequest[]> {
+  return readJson(
+    await authenticatedFetch(`/api/spaces/${spaceId}/join-requests`, {
+      headers: headers(accessToken),
+    }),
+  );
+}
+
+export async function decideSpaceJoinRequest(
+  accessToken: string,
+  spaceId: string,
+  requestId: string,
+  decision: "approved" | "declined",
+): Promise<SpaceJoinRequest> {
+  return readJson(
+    await authenticatedFetch(
+      `/api/spaces/${spaceId}/join-requests/${requestId}/decision`,
+      {
+        method: "POST",
+        headers: headers(accessToken, true),
+        body: JSON.stringify({ decision }),
+      },
+    ),
+  );
+}
+
+export async function requestSpaceJoin(
+  accessToken: string,
+  linkId: string,
+): Promise<SpaceJoinRequest> {
+  return readJson(
+    await authenticatedFetch(`/api/join-links/${linkId}/requests`, {
+      method: "POST",
+      headers: headers(accessToken),
+    }),
+  );
+}
+
+export async function listMySpaceJoinRequests(
+  accessToken: string,
+): Promise<SpaceJoinRequest[]> {
+  return readJson(
+    await authenticatedFetch("/api/join-requests/current", {
       headers: headers(accessToken),
     }),
   );

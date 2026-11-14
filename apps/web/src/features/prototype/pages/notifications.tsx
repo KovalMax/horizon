@@ -1,5 +1,62 @@
+import type { NotificationItem } from "../notificationsApi";
 import type { PrototypeAppState, PageHelpers } from "./context";
-import { Icon, Button } from "../../../shared/ui";
+import { Button, Icon } from "../../../shared/ui";
+
+function notificationIcon(eventType: string): string {
+  if (eventType === "task_assignment") return "list";
+  if (eventType === "event_change") return "calendar";
+  return "users";
+}
+
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function NotificationRow({
+  item,
+  state,
+}: {
+  item: NotificationItem;
+  state: PrototypeAppState;
+}) {
+  const isUnread = item.read_at === null;
+  return (
+    <article className={`notification-item ${isUnread ? "unread" : ""}`}>
+      <span className="notification-icon" aria-hidden="true">
+        <Icon name={notificationIcon(item.event_type)} />
+      </span>
+      <div className="notification-content">
+        <h2>{item.title}</h2>
+        <p>{item.body}</p>
+        <small>{item.space_name}</small>
+        <time dateTime={item.created_at}>{formatTime(item.created_at)}</time>
+        <div className="notification-actions">
+          <Button
+            variant="outline"
+            onClick={() => state.openNotification(item)}
+          >
+            Open{" "}
+            {item.destination === "tasks"
+              ? "Tasks"
+              : item.destination === "calendar"
+                ? "Calendar"
+                : "Members"}
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={() => void state.markNotificationRead(item, isUnread)}
+          >
+            Mark as {isUnread ? "read" : "unread"}
+          </Button>
+        </div>
+      </div>
+      {isUnread && <span className="unread-dot" aria-label="Unread" />}
+    </article>
+  );
+}
 
 export function NotificationsPage({
   state,
@@ -8,7 +65,6 @@ export function NotificationsPage({
   state: PrototypeAppState;
   helpers: PageHelpers;
 }) {
-  const { setUnread, unread, goSpace, showToast } = state;
   const { pageHeader } = helpers;
   return (
     <>
@@ -17,68 +73,50 @@ export function NotificationsPage({
         "Updates from your Spaces.",
         <Button
           variant="outline"
-          onClick={() => {
-            setUnread(0);
-            showToast("All notifications marked as read");
-          }}
+          disabled={state.unread === 0 || state.notificationsStatus !== "ready"}
+          onClick={() => void state.markAllNotificationsRead()}
         >
           Mark all read
         </Button>,
       )}
-      <div className="notification-list">
-        {[
-          {
-            title: "Tomás Rivera asked to join",
-            body: "Linden Street Home · Used the Viewer link LINDEN-7Q4X. Approve or decline in Members.",
-            time: "45 minutes ago",
-            icon: "users",
-            space: "home",
-          },
-          {
-            title: "Due today: Pick up dry cleaning",
-            body: "Linden Street Home · Due at 17:00. Reminder set on the Task.",
-            time: "90 minutes ago",
-            icon: "list",
-            space: "home",
-          },
-          {
-            title: "Jonas assigned you a Task",
-            body: "Renew home insurance in Home admin, due in 6 days.",
-            time: "5 hours ago",
-            icon: "list",
-            space: "home",
-          },
-          {
-            title: "Priya moved one Trip planning call",
-            body: "Only the call on this date changed. Other weeks are unchanged.",
-            time: "9 hours ago",
-            icon: "calendar",
-            space: "trip",
-          },
-        ].map((n, i) => (
-          <button
-            className={`notification-item ${i < unread ? "unread" : ""}`}
-            key={n.title}
-            onClick={() => {
-              setUnread(Math.max(0, unread - 1));
-              goSpace(
-                n.space,
-                i === 0 ? "members" : i === 1 || i === 2 ? "tasks" : "calendar",
-              );
-            }}
-          >
-            <span className="notification-icon">
-              <Icon name={n.icon} />
-            </span>
-            <span>
-              <b>{n.title}</b>
-              <small>{n.body}</small>
-              <small>{n.time}</small>
-            </span>
-            {i < unread && <i className="unread-dot" />}
-          </button>
-        ))}
-      </div>
+      {state.notificationsStatus === "loading" && (
+        <p role="status">Loading notifications…</p>
+      )}
+      {state.notificationsStatus === "error" && (
+        <div role="alert">
+          <p>{state.notificationsError}</p>
+          <Button variant="outline" onClick={state.retryNotifications}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {state.notificationActionError && (
+        <p role="alert">{state.notificationActionError}</p>
+      )}
+      {state.notificationsStatus === "ready" &&
+        state.notifications.length === 0 && (
+          <section className="list-card">
+            <h2>You’re all caught up</h2>
+            <p>New updates from your Spaces will appear here.</p>
+          </section>
+        )}
+      {state.notificationsStatus === "ready" &&
+        state.notifications.length > 0 && (
+          <div className="notification-list" aria-label="Your notifications">
+            {state.notifications.map((item) => (
+              <NotificationRow key={item.id} item={item} state={state} />
+            ))}
+          </div>
+        )}
+      {state.notificationsNextOffset !== null && (
+        <Button
+          variant="outline"
+          disabled={state.loadingMoreNotifications}
+          onClick={() => void state.loadMoreNotifications()}
+        >
+          {state.loadingMoreNotifications ? "Loading…" : "Load more"}
+        </Button>
+      )}
     </>
   );
 }

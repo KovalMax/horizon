@@ -12,8 +12,11 @@ export function SettingsPage({
     showToast,
     reminderTime,
     setReminderTime,
+    timeZone,
+    setTimeZone,
     notificationPrefs,
     setNotificationPrefs,
+    notificationPrefsStatus,
     mutedSpaces,
     setMutedSpaces,
   } = state;
@@ -37,6 +40,14 @@ export function SettingsPage({
           </Button>
         </div>
         <label className="form-field">
+          Time zone (IANA)
+          <input
+            value={timeZone}
+            onChange={(event) => setTimeZone(event.target.value)}
+            placeholder="Europe/Berlin"
+          />
+        </label>
+        <label className="form-field">
           Default reminder time
           <input
             type="time"
@@ -44,22 +55,29 @@ export function SettingsPage({
             onChange={(event) => setReminderTime(event.target.value)}
           />
         </label>
-        <Button
-          onClick={() => showToast("Preferences are active for this session.")}
-        >
-          Save preferences
+        <Button onClick={() => void state.savePreferences()}>
+          Save account preferences
         </Button>
       </section>
       <section className="list-card">
         <h2>Notification channels</h2>
-        <p>Choose where each type of update should reach you.</p>
+        <p>
+          Choose which updates may reach you. Email delivery follows your saved
+          channel choices.
+        </p>
+        {state.notificationPrefsStatus === "loading" && (
+          <p role="status">Loading notification preferences…</p>
+        )}
+        {state.notificationPrefsStatus === "error" && (
+          <p role="alert">{state.notificationPrefsError}</p>
+        )}
         {[
           "Task assignments",
-          "Due reminders",
           "Event changes",
           "Membership changes",
           "Join requests",
           "Join request results",
+          "Due reminders",
         ].map((label) => (
           <div className="setting-row" key={label}>
             <span>{label}</span>
@@ -91,10 +109,30 @@ export function SettingsPage({
             </label>
           </div>
         ))}
+        {state.notificationPrefsError &&
+          state.notificationPrefsStatus !== "error" && (
+            <p role="alert">{state.notificationPrefsError}</p>
+          )}
+        {state.accessToken && (
+          <Button
+            disabled={
+              notificationPrefsStatus === "loading" ||
+              notificationPrefsStatus === "saving"
+            }
+            onClick={() => void state.savePreferences()}
+          >
+            {notificationPrefsStatus === "saving"
+              ? "Saving…"
+              : "Save notification preferences"}
+          </Button>
+        )}
       </section>
       <section className="list-card">
         <h2>Muted Spaces</h2>
-        <p>Muted Spaces won't send you notifications.</p>
+        <p>
+          In-app notifications from muted Spaces aren’t delivered, and unmuting
+          won’t backfill them. Save your changes with the button above.
+        </p>
         {state.activeSpaces.map((s) => (
           <label className="setting-row" key={s.id}>
             <span>{s.name}</span>
@@ -112,23 +150,45 @@ export function SettingsPage({
           </label>
         ))}
       </section>
-      <section className="list-card">
-        <h2>Recently deleted</h2>
-        <div className="row-between">
-          <div>
-            <b>Thursday book club</b>
-            <p>Deleted 2 days ago · Restorable for 5 more days</p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() =>
-              showToast("Space restored. Old invites and links remain invalid.")
-            }
-          >
-            Restore
-          </Button>
-        </div>
-      </section>
+      {state.accessToken && (
+        <section className="list-card">
+          <h2>Recently deleted</h2>
+          <p>
+            Spaces you deleted are restorable for seven days. Previous
+            invitations and join links stay invalid after restoration.
+          </p>
+          {state.deletedSpacesStatus === "loading" && (
+            <p role="status">Loading deleted Spaces…</p>
+          )}
+          {state.deletedSpacesStatus === "error" && (
+            <p role="alert">
+              Deleted Spaces couldn’t be loaded. Refresh and try again.
+            </p>
+          )}
+          {state.deletedSpacesStatus === "ready" &&
+            state.deletedSpaces.length === 0 && (
+              <p>No deleted Spaces to restore.</p>
+            )}
+          {state.deletedSpaces.map((deletedSpace) => (
+            <div className="row-between" key={deletedSpace.id}>
+              <div>
+                <b>{deletedSpace.name}</b>
+                <p>
+                  Deleted {new Date(deletedSpace.deleted_at).toLocaleString()} ·
+                  Restorable until{" "}
+                  {new Date(deletedSpace.restore_until).toLocaleString()}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => void state.restoreDeletedSpace(deletedSpace.id)}
+              >
+                Restore
+              </Button>
+            </div>
+          ))}
+        </section>
+      )}
     </>
   );
 }

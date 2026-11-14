@@ -25,6 +25,10 @@ export type EventItem = {
   startsAt?: string;
   endsAt?: string;
   timeZone?: string;
+  occurrenceDate?: string;
+  occurrenceId?: string;
+  isOccurrenceOverride?: boolean;
+  recurrenceEndsOn?: string;
 };
 export type TaskItem = {
   id: number | string;
@@ -35,6 +39,8 @@ export type TaskItem = {
   owner?: string;
   assigneeId?: string;
   reminders?: number;
+  reminderOffsetsMinutes?: number[];
+  myReminderOffsetsMinutes?: number[];
   done?: boolean;
   list: string;
   listId?: string;

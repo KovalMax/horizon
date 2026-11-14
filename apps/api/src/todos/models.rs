@@ -19,6 +19,8 @@ pub(super) struct Task {
     pub list_name: String,
     pub due_date: Option<NaiveDate>,
     pub due_time: Option<NaiveTime>,
+    pub reminder_offsets_minutes: Vec<i32>,
+    pub my_reminder_offsets_minutes: Vec<i32>,
     pub done: bool,
     pub assignee_id: Option<Uuid>,
     pub assignee_email: Option<String>,
@@ -32,6 +34,7 @@ pub(super) struct TaskDraft {
     pub list_name: String,
     pub due_date: Option<NaiveDate>,
     pub due_time: Option<NaiveTime>,
+    pub reminder_offsets_minutes: Vec<i32>,
     pub assignee_id: Option<Uuid>,
 }
 

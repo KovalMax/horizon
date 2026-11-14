@@ -77,6 +77,7 @@ export function TasksPage({
             <div className="list-heading">
               <h2>
                 {list} · {rows.filter((t) => !t.done).length} open
+                {rows.filter((t) => !t.done).length === 1 ? " Task" : " Tasks"}
               </h2>
               {canManage &&
                 state.accessToken &&

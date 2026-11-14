@@ -3,12 +3,17 @@ use actix_web::{
     http::{header, StatusCode},
     post, put, web, HttpRequest, HttpResponse,
 };
+use chrono::NaiveDate;
 use uuid::Uuid;
 
 use crate::auth::{AuthApplication, AuthError, Problem};
-use crate::pagination::{PageQuery, PageWindow};
+use crate::pagination::PageWindow;
 
-use super::{models::EventError, requests::CreateEventRequest, services::EventsApplication};
+use super::{
+    models::EventError,
+    requests::{CreateEventRequest, EventListQuery, EventRangeQuery},
+    services::EventsApplication,
+};
 
 fn bearer_token(request: &HttpRequest) -> Option<&str> {
     request
@@ -91,13 +96,100 @@ fn event_error(error: EventError) -> HttpResponse {
             "Service unavailable",
             "database_unavailable",
         ),
+        EventError::InvalidOccurrence => problem(
+            StatusCode::NOT_FOUND,
+            "Calendar occurrence not found",
+            "calendar_occurrence_not_found",
+        ),
+    }
+}
+
+#[utoipa::path(get, path = "/events/range", params(EventRangeQuery), security(("accessBearer" = [])), responses((status = 200, body = super::responses::EventPageResponse), (status = 400, body = Problem), (status = 401, body = Problem), (status = 503, body = Problem)))]
+#[get("/events/range")]
+pub async fn list_occurrences(
+    request: HttpRequest,
+    query: web::Query<EventRangeQuery>,
+    auth: web::Data<AuthApplication>,
+    events: web::Data<EventsApplication>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    let (Ok(start), Ok(end)) = (
+        NaiveDate::parse_from_str(&query.start_date, "%Y-%m-%d"),
+        NaiveDate::parse_from_str(&query.end_date, "%Y-%m-%d"),
+    ) else {
+        return event_error(EventError::Invalid);
+    };
+    let Some(page) = PageWindow::new(query.offset, query.limit) else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "Invalid page window",
+            "invalid_page_window",
+        );
+    };
+    match events
+        .list_occurrences_for_member(user_id, start, end, page)
+        .await
+    {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(error) => event_error(error),
+    }
+}
+
+#[utoipa::path(put, path = "/events/{event_id}/occurrences/{occurrence_date}", params(("event_id" = Uuid, Path), ("occurrence_date" = String, Path)), request_body = CreateEventRequest, security(("accessBearer" = [])), responses((status = 200, body = super::responses::EventResponse), (status = 400, body = Problem), (status = 403, body = Problem), (status = 404, body = Problem)))]
+#[put("/events/{event_id}/occurrences/{occurrence_date}")]
+pub async fn update_occurrence(
+    request: HttpRequest,
+    path: web::Path<(Uuid, String)>,
+    auth: web::Data<AuthApplication>,
+    events: web::Data<EventsApplication>,
+    body: web::Json<CreateEventRequest>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    let (event_id, date) = path.into_inner();
+    let Ok(date) = NaiveDate::parse_from_str(&date, "%Y-%m-%d") else {
+        return event_error(EventError::Invalid);
+    };
+    match events
+        .update_occurrence(event_id, user_id, date, &body)
+        .await
+    {
+        Ok(result) => HttpResponse::Ok().json(result),
+        Err(error) => event_error(error),
+    }
+}
+
+#[utoipa::path(delete, path = "/events/{event_id}/occurrences/{occurrence_date}", params(("event_id" = Uuid, Path), ("occurrence_date" = String, Path)), security(("accessBearer" = [])), responses((status = 204), (status = 400, body = Problem), (status = 403, body = Problem), (status = 404, body = Problem)))]
+#[delete("/events/{event_id}/occurrences/{occurrence_date}")]
+pub async fn cancel_occurrence(
+    request: HttpRequest,
+    path: web::Path<(Uuid, String)>,
+    auth: web::Data<AuthApplication>,
+    events: web::Data<EventsApplication>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    let (event_id, date) = path.into_inner();
+    let Ok(date) = NaiveDate::parse_from_str(&date, "%Y-%m-%d") else {
+        return event_error(EventError::Invalid);
+    };
+    match events.cancel_occurrence(event_id, user_id, date).await {
+        Ok(()) => HttpResponse::NoContent().finish(),
+        Err(error) => event_error(error),
     }
 }
 
 #[utoipa::path(
     get,
     path = "/events",
-    params(PageQuery),
+    params(EventListQuery),
     security(("accessBearer" = [])),
     responses(
         (status = 200, description = "A page of Calendar events in Spaces the authenticated Member can access", body = super::responses::EventPageResponse),
@@ -109,7 +201,7 @@ fn event_error(error: EventError) -> HttpResponse {
 #[get("/events")]
 pub async fn list_events(
     request: HttpRequest,
-    query: web::Query<PageQuery>,
+    query: web::Query<EventListQuery>,
     auth: web::Data<AuthApplication>,
     events: web::Data<EventsApplication>,
 ) -> HttpResponse {
@@ -124,7 +216,22 @@ pub async fn list_events(
             "invalid_page_offset",
         );
     };
-    match events.list_for_member(user_id, page).await {
+    let result = match (&query.start_date, &query.end_date) {
+        (Some(start), Some(end)) => {
+            let (Ok(start), Ok(end)) = (
+                NaiveDate::parse_from_str(start, "%Y-%m-%d"),
+                NaiveDate::parse_from_str(end, "%Y-%m-%d"),
+            ) else {
+                return event_error(EventError::Invalid);
+            };
+            events
+                .list_occurrences_for_member(user_id, start, end, page)
+                .await
+        }
+        (None, None) => events.list_for_member(user_id, page).await,
+        _ => return event_error(EventError::Invalid),
+    };
+    match result {
         Ok(result) => HttpResponse::Ok().json(result),
         Err(error) => event_error(error),
     }

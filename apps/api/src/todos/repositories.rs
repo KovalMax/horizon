@@ -16,6 +16,26 @@ impl PostgresTodosRepository {
         Self { pool }
     }
 
+    pub(super) async fn set_my_reminder_preference(
+        &self,
+        task_id: Uuid,
+        user_id: Uuid,
+        offsets: &[i32],
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT INTO task_reminder_preferences (task_id, user_id, offsets_minutes) \
+             SELECT t.id, $2, $3 FROM tasks t \
+             WHERE t.id = $1 AND COALESCE(t.assignee_id, t.creator_id) = $2 \
+             ON CONFLICT (task_id, user_id) DO UPDATE SET offsets_minutes = EXCLUDED.offsets_minutes, updated_at = now()",
+        )
+        .bind(task_id)
+        .bind(user_id)
+        .bind(offsets)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     pub(super) async fn list_for_member(
         &self,
         user_id: Uuid,
@@ -39,7 +59,9 @@ impl PostgresTodosRepository {
         .collect();
         let tasks = sqlx::query_as::<_, TaskRow>(
             "SELECT t.id, l.space_id, l.id AS list_id, t.title, l.name AS list_name, \
-             t.due_date, t.due_time, t.done, t.assignee_id, assigned.email_normalized AS assignee_email, \
+             t.due_date, t.due_time, t.reminder_offsets_minutes, \
+             COALESCE((SELECT offsets_minutes FROM task_reminder_preferences WHERE task_id = t.id AND user_id = $1), t.reminder_offsets_minutes) AS my_reminder_offsets_minutes, \
+             t.done, t.assignee_id, assigned.email_normalized AS assignee_email, \
              s.name AS space_name, s.kind AS space_kind \
              FROM tasks t \
              JOIN todo_lists l ON l.id = t.list_id \
@@ -219,8 +241,8 @@ impl PostgresTodosRepository {
         .map_err(|_| TodoError::Unavailable)?;
         let task_id = Uuid::new_v4();
         sqlx::query(
-            "INSERT INTO tasks (id, list_id, creator_id, title, due_date, due_time, assignee_id) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO tasks (id, list_id, creator_id, title, due_date, due_time, assignee_id, reminder_offsets_minutes) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
         )
         .bind(task_id)
         .bind(list_id)
@@ -229,9 +251,26 @@ impl PostgresTodosRepository {
         .bind(draft.due_date)
         .bind(draft.due_time)
         .bind(draft.assignee_id)
+        .bind(&draft.reminder_offsets_minutes)
         .execute(&mut *transaction)
         .await
         .map_err(|_| TodoError::Unavailable)?;
+        if let Some(assignee_id) = draft.assignee_id {
+            crate::notifications::enqueue_notification(
+                &mut transaction,
+                space_id,
+                user_id,
+                assignee_id,
+                &crate::notifications::NotificationContent {
+                    event_type: "task_assignment",
+                    title: "Task assigned to you",
+                    body: &draft.title,
+                    destination: "tasks",
+                },
+            )
+            .await
+            .map_err(|_| TodoError::Unavailable)?;
+        }
         transaction
             .commit()
             .await
@@ -280,8 +319,8 @@ impl PostgresTodosRepository {
             .begin()
             .await
             .map_err(|_| TodoError::Unavailable)?;
-        let task_context = sqlx::query_as::<_, (Uuid, String)>(
-            "SELECT l.space_id, m.role FROM tasks t \
+        let task_context = sqlx::query_as::<_, (Uuid, String, Option<Uuid>)>(
+            "SELECT l.space_id, m.role, t.assignee_id FROM tasks t \
              JOIN todo_lists l ON l.id = t.list_id \
              JOIN space_memberships m ON m.space_id = l.space_id AND m.user_id = $2 \
              WHERE t.id = $1 FOR UPDATE OF t",
@@ -291,7 +330,7 @@ impl PostgresTodosRepository {
         .fetch_optional(&mut *transaction)
         .await
         .map_err(|_| TodoError::Unavailable)?;
-        let Some((space_id, role)) = task_context else {
+        let Some((space_id, role, previous_assignee_id)) = task_context else {
             return Err(self.task_write_error(task_id, user_id).await?);
         };
         if role == "viewer" {
@@ -326,7 +365,7 @@ impl PostgresTodosRepository {
         .map_err(|_| TodoError::Unavailable)?;
         sqlx::query(
             "UPDATE tasks SET title = $2, list_id = $3, due_date = $4, due_time = $5, \
-             assignee_id = $6, updated_at = now() WHERE id = $1",
+             assignee_id = $6, reminder_offsets_minutes = $7, updated_at = now() WHERE id = $1",
         )
         .bind(task_id)
         .bind(&draft.title)
@@ -334,9 +373,29 @@ impl PostgresTodosRepository {
         .bind(draft.due_date)
         .bind(draft.due_time)
         .bind(draft.assignee_id)
+        .bind(&draft.reminder_offsets_minutes)
         .execute(&mut *transaction)
         .await
         .map_err(|_| TodoError::Unavailable)?;
+        if let Some(assignee_id) = draft
+            .assignee_id
+            .filter(|id| Some(*id) != previous_assignee_id)
+        {
+            crate::notifications::enqueue_notification(
+                &mut transaction,
+                space_id,
+                user_id,
+                assignee_id,
+                &crate::notifications::NotificationContent {
+                    event_type: "task_assignment",
+                    title: "Task assigned to you",
+                    body: &draft.title,
+                    destination: "tasks",
+                },
+            )
+            .await
+            .map_err(|_| TodoError::Unavailable)?;
+        }
         transaction
             .commit()
             .await
@@ -382,7 +441,9 @@ impl PostgresTodosRepository {
     async fn find_task(&self, task_id: Uuid, user_id: Uuid) -> Result<Option<Task>, TodoError> {
         sqlx::query_as::<_, TaskRow>(
             "SELECT t.id, l.space_id, l.id AS list_id, t.title, l.name AS list_name, \
-             t.due_date, t.due_time, t.done, t.assignee_id, assigned.email_normalized AS assignee_email, \
+             t.due_date, t.due_time, t.reminder_offsets_minutes, \
+             COALESCE((SELECT offsets_minutes FROM task_reminder_preferences WHERE task_id = t.id AND user_id = $2), t.reminder_offsets_minutes) AS my_reminder_offsets_minutes, \
+             t.done, t.assignee_id, assigned.email_normalized AS assignee_email, \
              s.name AS space_name, s.kind AS space_kind \
              FROM tasks t JOIN todo_lists l ON l.id = t.list_id \
              JOIN spaces s ON s.id = l.space_id \
@@ -488,6 +549,8 @@ struct TaskRow {
     list_name: String,
     due_date: Option<NaiveDate>,
     due_time: Option<NaiveTime>,
+    reminder_offsets_minutes: Vec<i32>,
+    my_reminder_offsets_minutes: Vec<i32>,
     done: bool,
     assignee_id: Option<Uuid>,
     assignee_email: Option<String>,
@@ -505,6 +568,8 @@ impl From<TaskRow> for Task {
             list_name: row.list_name,
             due_date: row.due_date,
             due_time: row.due_time,
+            reminder_offsets_minutes: row.reminder_offsets_minutes,
+            my_reminder_offsets_minutes: row.my_reminder_offsets_minutes,
             done: row.done,
             assignee_id: row.assignee_id,
             assignee_email: row.assignee_email,

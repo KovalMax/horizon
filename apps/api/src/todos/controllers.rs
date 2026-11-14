@@ -12,7 +12,7 @@ use super::{
     models::TodoError,
     requests::{
         CreateTaskListRequest, CreateTaskRequest, UpdateTaskCompletionRequest,
-        UpdateTaskListRequest, UpdateTaskRequest,
+        UpdateTaskListRequest, UpdateTaskReminderPreferenceRequest, UpdateTaskRequest,
     },
     services::TodosApplication,
 };
@@ -373,6 +373,37 @@ pub async fn update_task_completion(
         .await
     {
         Ok(task) => HttpResponse::Ok().json(task),
+        Err(error) => todo_error(error),
+    }
+}
+
+#[utoipa::path(
+    put,
+    path = "/tasks/{task_id}/reminders",
+    params(("task_id" = Uuid, Path, description = "Task to change the caller's reminder offsets for")),
+    request_body = UpdateTaskReminderPreferenceRequest,
+    security(("accessBearer" = [])),
+    responses((status = 200, body = super::responses::TaskReminderPreferenceResponse), (status = 400, body = Problem), (status = 401, body = Problem), (status = 404, body = Problem))
+)]
+#[put("/tasks/{task_id}/reminders")]
+pub async fn update_my_task_reminders(
+    request: HttpRequest,
+    path: web::Path<Uuid>,
+    auth: web::Data<AuthApplication>,
+    todos: web::Data<TodosApplication>,
+    body: web::Json<UpdateTaskReminderPreferenceRequest>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match todos
+        .set_my_reminder_preference(path.into_inner(), user_id, &body.offsets_minutes)
+        .await
+    {
+        Ok(()) => HttpResponse::Ok().json(super::responses::TaskReminderPreferenceResponse {
+            offsets_minutes: body.offsets_minutes.clone(),
+        }),
         Err(error) => todo_error(error),
     }
 }

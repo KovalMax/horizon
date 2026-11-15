@@ -5,9 +5,8 @@ pub(super) const ACCESS_TOKEN_TTL_SECONDS: i64 = 10 * 60;
 pub(super) const MAGIC_LINK_TTL_MINUTES: i64 = 30;
 pub(super) const REFRESH_IDLE_DAYS: i64 = 30;
 pub(super) const SESSION_ABSOLUTE_DAYS: i64 = 90;
-pub(super) const MAGIC_LINK_EMAIL_HOURLY_LIMIT: i64 = 5;
-pub(super) const MAGIC_LINK_IP_HOURLY_LIMIT: i64 = 20;
-pub(super) const MAGIC_LINK_RESEND_COOLDOWN_SECONDS: i64 = 60;
+pub(super) const MAGIC_LINK_IP_PER_MINUTE_LIMIT: i64 = 20;
+pub(super) const MAGIC_LINK_RESEND_COOLDOWN_SECONDS: i64 = 30;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Account {

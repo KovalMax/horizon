@@ -9,7 +9,10 @@ use horizon_api::auth::{
 };
 use horizon_api::spaces::{self, CreateSpaceRequest};
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, Mutex};
+use std::{
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    sync::{Arc, Mutex},
+};
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
@@ -87,7 +90,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .expect("Retry-After should be valid text")
         .parse::<i64>()
         .expect("Retry-After should be a number of seconds");
-    assert!((1..=60).contains(&retry_after));
+    assert!((1..=30).contains(&retry_after));
 
     let link = mailer
         .0
@@ -116,6 +119,43 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
     );
     let authentication: AuthenticationResult = actix_test::read_body_json(response).await;
     assert_eq!(authentication.account.email, email);
+
+    let rate_limit_ip = SocketAddr::new(IpAddr::V6(Ipv6Addr::from(Uuid::new_v4().as_u128())), 1234);
+    for request_number in 0..20 {
+        let request = actix_test::TestRequest::post()
+            .uri("/auth/magic-links")
+            .peer_addr(rate_limit_ip)
+            .set_json(MagicLinkRequest {
+                email: format!(
+                    "rate-limit-{request_number}-{}@example.test",
+                    Uuid::new_v4()
+                ),
+            })
+            .to_request();
+        assert_eq!(
+            actix_test::call_service(&app, request).await.status(),
+            StatusCode::ACCEPTED
+        );
+    }
+
+    let request = actix_test::TestRequest::post()
+        .uri("/auth/magic-links")
+        .peer_addr(rate_limit_ip)
+        .set_json(MagicLinkRequest {
+            email: format!("rate-limit-overflow-{}@example.test", Uuid::new_v4()),
+        })
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    let retry_after = response
+        .headers()
+        .get("Retry-After")
+        .expect("IP rate-limit response should provide a retry interval")
+        .to_str()
+        .expect("Retry-After should be valid text")
+        .parse::<i64>()
+        .expect("Retry-After should be a number of seconds");
+    assert!((1..=60).contains(&retry_after));
 
     let replay = actix_test::TestRequest::post()
         .uri("/auth/magic-links/redeem")

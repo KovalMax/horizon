@@ -143,8 +143,10 @@ jobs:
         run: |
           ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \
             'set -eu
-             install -d -m 750 "$HOME/traefik/dynamic"
+             install -d -m 755 "$HOME/traefik/dynamic"
+             chmod 755 "$HOME/traefik/dynamic"
              cat > "$HOME/traefik/dynamic/horizon.yml.next"
+             chmod 644 "$HOME/traefik/dynamic/horizon.yml.next"
              mv "$HOME/traefik/dynamic/horizon.yml.next" "$HOME/traefik/dynamic/horizon.yml"' \
             < infra/traefik/dynamic.yml
       - name: Stage release image tag on deployment host

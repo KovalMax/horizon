@@ -17,6 +17,7 @@ export function AuthScreen({
   requestJoinAccess?: (linkId: string) => Promise<SpaceJoinRequest | null>;
 }) {
   const handledCallback = useRef(false);
+  const [missingCallbackToken, setMissingCallbackToken] = useState(false);
   const joinToken = new URLSearchParams(window.location.search).get("join");
   const [joinSubmission, setJoinSubmission] = useState<SpaceJoinRequest | null>(
     null,
@@ -40,8 +41,15 @@ export function AuthScreen({
       "",
       `${window.location.pathname}${window.location.search}`,
     );
+    if (!token) {
+      if (auth.tokens) navigate("/");
+      else if (auth.redemptionStatus !== "redeeming") {
+        setMissingCallbackToken(true);
+      }
+      return;
+    }
     const savedJoinToken = window.localStorage.getItem("horizon-join-link");
-    void auth.redeemLink(token ?? "").then((succeeded) => {
+    void auth.redeemLink(token).then((succeeded) => {
       if (!succeeded) return;
       if (savedJoinToken) {
         window.localStorage.removeItem("horizon-join-link");
@@ -59,20 +67,24 @@ export function AuthScreen({
   };
 
   if (path === "/auth/complete") {
+    const redemptionFailed =
+      auth.redemptionStatus === "failed" || missingCallbackToken;
     return (
       <main className="welcome-card auth-card" aria-live="polite">
         <HorizonMark large />
         <span className="eyebrow">SECURE SIGN-IN</span>
-        <h1>
-          {auth.redemptionStatus === "failed"
-            ? "Link not accepted"
-            : "Signing you in…"}
-        </h1>
+        <h1>{redemptionFailed ? "Link not accepted" : "Signing you in…"}</h1>
         {auth.redemptionStatus === "redeeming" && (
           <p role="status">Verifying your sign-in link.</p>
         )}
-        {auth.error && <p role="alert">{auth.error}</p>}
-        {auth.redemptionStatus === "failed" && (
+        {missingCallbackToken ? (
+          <p role="alert">
+            This sign-in link is missing its token. Request a new link.
+          </p>
+        ) : (
+          auth.error && <p role="alert">{auth.error}</p>
+        )}
+        {redemptionFailed && (
           <Button onClick={() => navigate("/welcome")}>
             Request a new link
           </Button>

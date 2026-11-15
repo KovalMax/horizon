@@ -8,6 +8,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { App } from "../src/App";
+import { AuthScreen } from "../src/features/auth/AuthScreen";
+import type { AuthState } from "../src/features/auth/useAuth";
 import {
   authenticatedFetch,
   getAuthTokens,
@@ -202,6 +204,46 @@ test("redeems the URL fragment, removes it, loads the account, and keeps tokens 
     headers: { Authorization: "Bearer access-secret" },
   });
   expect(await screen.findByText("maya@example.com")).toBeTruthy();
+});
+
+test("does not submit a redemption request when the callback has no token", async () => {
+  setPath("/auth/complete");
+  const fetchMock = successfulAuthFetch();
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  expect(
+    await screen.findByText(
+      "This sign-in link is missing its token. Request a new link.",
+    ),
+  ).toBeTruthy();
+  expect(
+    fetchMock.mock.calls.some(
+      ([input]) => String(input) === "/api/auth/magic-links/redeem",
+    ),
+  ).toBe(false);
+});
+
+test("keeps an existing session when a callback remount has no token", async () => {
+  setPath("/auth/complete");
+  const auth = {
+    account,
+    tokens: { accessToken: "access-secret", refreshToken: "refresh-secret" },
+    requestStatus: "idle",
+    redemptionStatus: "idle",
+    error: "",
+    restoring: false,
+    requestLink: vi.fn(async () => {}),
+    redeemLink: vi.fn(async () => true),
+    signOut: vi.fn(async () => {}),
+    resetRequest: vi.fn(),
+  } satisfies AuthState;
+  const navigate = vi.fn();
+
+  render(<AuthScreen path="/auth/complete" auth={auth} navigate={navigate} />);
+
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith("/"));
+  expect(auth.redeemLink).not.toHaveBeenCalled();
 });
 
 test("restores the signed-in session after a page reload using the tab refresh token", async () => {

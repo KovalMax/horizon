@@ -67,11 +67,12 @@ export function AuthScreen({
       instanceId,
       hasToken: Boolean(token),
       hasSession: Boolean(auth.tokens),
+      urlPath: window.location.pathname,
     });
     window.history.replaceState(
       window.history.state,
       "",
-      `${window.location.pathname}${window.location.search}`,
+      `/${window.location.search}`,
     );
     if (!token) {
       if (auth.tokens) navigate("/");

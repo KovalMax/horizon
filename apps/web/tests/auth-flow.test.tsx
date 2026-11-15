@@ -206,6 +206,23 @@ test("redeems the URL fragment, removes it, loads the account, and keeps tokens 
   expect(await screen.findByText("maya@example.com")).toBeTruthy();
 });
 
+test("leaves the callback route before submitting its one-time token", async () => {
+  setPath("/auth/complete#token=one-time-secret");
+  let redemptionPath: string | null = null;
+  const baseFetch = successfulAuthFetch();
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input) === "/api/auth/magic-links/redeem") {
+      redemptionPath = window.location.pathname;
+    }
+    return baseFetch(input);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  expect(await screen.findByText("Signed in as")).toBeTruthy();
+  expect(redemptionPath).toBe("/");
+});
+
 test("does not submit a redemption request when the callback has no token", async () => {
   setPath("/auth/complete");
   const fetchMock = successfulAuthFetch();

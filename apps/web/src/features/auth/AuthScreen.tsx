@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AuthState } from "./useAuth";
 import { Button, HorizonMark } from "../../shared/ui";
 import type { SpaceJoinRequest } from "../planner/membersApi";
+import { authDebug, createAuthDebugId } from "./authDebug";
 
 export function AuthScreen({
   path,
@@ -17,6 +18,10 @@ export function AuthScreen({
   requestJoinAccess?: (linkId: string) => Promise<SpaceJoinRequest | null>;
 }) {
   const handledCallback = useRef(false);
+  const callbackInstanceId = useRef<string | null>(null);
+  if (!callbackInstanceId.current) {
+    callbackInstanceId.current = createAuthDebugId();
+  }
   const [missingCallbackToken, setMissingCallbackToken] = useState(false);
   const joinToken = new URLSearchParams(window.location.search).get("join");
   const [joinSubmission, setJoinSubmission] = useState<SpaceJoinRequest | null>(
@@ -25,17 +30,44 @@ export function AuthScreen({
   const [joinError, setJoinError] = useState("");
 
   useEffect(() => {
+    authDebug("auth-screen-mounted", {
+      instanceId: callbackInstanceId.current!,
+      path,
+      hasSession: Boolean(auth.tokens),
+    });
+    return () => {
+      authDebug("auth-screen-unmounted", {
+        instanceId: callbackInstanceId.current!,
+        path,
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     if (path !== "/welcome") return;
     if (joinToken) window.localStorage.setItem("horizon-join-link", joinToken);
     else window.localStorage.removeItem("horizon-join-link");
   }, [joinToken, path]);
 
   useEffect(() => {
+    const instanceId = callbackInstanceId.current!;
+    authDebug("callback-effect", {
+      instanceId,
+      path,
+      alreadyHandled: handledCallback.current,
+      hasFragment: Boolean(window.location.hash),
+      hasSession: Boolean(auth.tokens),
+    });
     if (path !== "/auth/complete" || handledCallback.current) return;
     handledCallback.current = true;
     const token = new URLSearchParams(window.location.hash.slice(1)).get(
       "token",
     );
+    authDebug("callback-start", {
+      instanceId,
+      hasToken: Boolean(token),
+      hasSession: Boolean(auth.tokens),
+    });
     window.history.replaceState(
       window.history.state,
       "",
@@ -49,7 +81,13 @@ export function AuthScreen({
       return;
     }
     const savedJoinToken = window.localStorage.getItem("horizon-join-link");
+    authDebug("redeem-start", { instanceId, hasToken: true });
     void auth.redeemLink(token).then((succeeded) => {
+      authDebug("redeem-finished", {
+        instanceId,
+        succeeded,
+        path: window.location.pathname,
+      });
       if (!succeeded) return;
       if (savedJoinToken) {
         window.localStorage.removeItem("horizon-join-link");

@@ -4,6 +4,7 @@ import { useAuth } from "./features/auth/useAuth";
 import type { AuthState } from "./features/auth/useAuth";
 import { PlannerShell } from "./features/planner/PlannerShell";
 import { usePlannerApp } from "./features/planner/usePlannerApp";
+import { authDebug } from "./features/auth/authDebug";
 
 function UnauthenticatedApp({ authState }: { authState: AuthState }) {
   const [path, setPath] = useState(window.location.pathname);
@@ -33,6 +34,18 @@ function AuthenticatedPlanner({ authState }: { authState: AuthState }) {
 
 export function App() {
   const authState = useAuth();
+  useEffect(() => {
+    authDebug("app-state", {
+      mode: authState.restoring
+        ? "restoring"
+        : authState.tokens
+          ? "authenticated"
+          : "unauthenticated",
+      hasTokens: Boolean(authState.tokens),
+      path: window.location.pathname,
+    });
+  }, [authState.restoring, Boolean(authState.tokens)]);
+
   if (authState.restoring) {
     return (
       <main className="welcome-card auth-card" role="status">

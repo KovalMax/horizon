@@ -1,3 +1,5 @@
+import { authDebug } from "./authDebug";
+
 export type AuthAccount = {
   id: string;
   email: string;
@@ -47,6 +49,10 @@ export function setAuthTokens(
 ): void {
   currentTokens = tokens;
   storeRefreshToken(tokens?.refreshToken ?? null);
+  authDebug("tokens-changed", {
+    reason,
+    hasTokens: Boolean(tokens),
+  });
   for (const listener of tokenListeners) listener(tokens, reason);
 }
 

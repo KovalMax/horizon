@@ -110,7 +110,7 @@ jobs:
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
     steps:
       - uses: actions/checkout@v4
         with:

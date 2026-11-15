@@ -37,6 +37,11 @@ function successfulAuthFetch() {
       return Response.json(authResponse);
     }
     if (url === "/api/account/me") return Response.json(account);
+    if (url === "/api/auth/token/refresh")
+      return Response.json({
+        access_token: "restored-access",
+        refresh_token: "restored-refresh",
+      });
     if (url === "/api/spaces") return Response.json([]);
     if (url === "/api/join-requests/current") return Response.json([]);
     if (url === "/api/auth/session/current")
@@ -165,7 +170,6 @@ test("requests a real magic link and shows an account-neutral confirmation", asy
   vi.stubGlobal("fetch", fetchMock);
   render(<App />);
 
-  fireEvent.click(screen.getByRole("link", { name: "Sign in" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Email address" }), {
     target: { value: "maya@example.com" },
   });
@@ -198,6 +202,89 @@ test("redeems the URL fragment, removes it, loads the account, and keeps tokens 
     headers: { Authorization: "Bearer access-secret" },
   });
   expect(await screen.findByText("maya@example.com")).toBeTruthy();
+});
+
+test("restores the signed-in session after a page reload using the tab refresh token", async () => {
+  window.sessionStorage.setItem("horizon-refresh-token", "persisted-refresh");
+  const fetchMock = successfulAuthFetch();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(await screen.findByText("Signed in as")).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith("/api/auth/token/refresh", {
+    method: "POST",
+    headers: { Authorization: "Bearer persisted-refresh" },
+  });
+  expect(fetchMock).toHaveBeenCalledWith("/api/account/me", {
+    headers: { Authorization: "Bearer restored-access" },
+  });
+  expect(window.sessionStorage.getItem("horizon-refresh-token")).toBe(
+    "restored-refresh",
+  );
+  expect(getAuthTokens()).toEqual({
+    accessToken: "restored-access",
+    refreshToken: "restored-refresh",
+  });
+});
+
+test("preserves a rotated session when the account lookup is temporarily unavailable", async () => {
+  window.sessionStorage.setItem("horizon-refresh-token", "persisted-refresh");
+  const successfulFetch = successfulAuthFetch();
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/account/me") {
+        return new Response("", { status: 503 });
+      }
+      return successfulFetch(input, init);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(await screen.findByText(/couldn’t load your account/i)).toBeTruthy();
+  expect(screen.getByRole("navigation", { name: "Spaces" })).toBeTruthy();
+  expect(window.sessionStorage.getItem("horizon-refresh-token")).toBe(
+    "restored-refresh",
+  );
+  expect(getAuthTokens()).toEqual({
+    accessToken: "restored-access",
+    refreshToken: "restored-refresh",
+  });
+});
+
+test("explains rate limits and respects the server retry interval", async () => {
+  setPath("/welcome");
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          title: "Too many requests",
+          status: 429,
+          code: "rate_limited",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/problem+json",
+            "Retry-After": "60",
+          },
+        },
+      ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  fireEvent.change(screen.getByRole("textbox", { name: "Email address" }), {
+    target: { value: "maya@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Send sign-in link" }));
+
+  expect(
+    await screen.findByText(/wait about a minute before trying again/i),
+  ).toBeTruthy();
+  expect(screen.getByText(/does not affect your account/i)).toBeTruthy();
 });
 
 test("returns a signed-in requester to a join link and submits an approval request", async () => {

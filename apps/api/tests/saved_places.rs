@@ -126,7 +126,6 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let second_place: PlaceResponse = actix_test::read_body_json(response).await;
-
     let request = actix_test::TestRequest::get()
         .uri("/places?limit=1")
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
@@ -165,7 +164,6 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     let viewer_places: PlacePageResponse = actix_test::read_body_json(response).await;
     assert_eq!(viewer_places.items.len(), 1);
     assert_eq!(viewer_places.items[0].id, created.id);
-
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/places", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))

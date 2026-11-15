@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AuthState } from "./useAuth";
 import { Button, HorizonMark } from "../../shared/ui";
-import type { SpaceJoinRequest } from "../prototype/membersApi";
+import type { SpaceJoinRequest } from "../planner/membersApi";
 
 export function AuthScreen({
   path,
   auth,
   navigate,
-  joinRequests,
-  requestJoinAccess,
+  joinRequests = [],
+  requestJoinAccess = async () => null,
 }: {
   path: string;
   auth: AuthState;
   navigate: (path: string) => void;
-  joinRequests: SpaceJoinRequest[];
-  requestJoinAccess: (linkId: string) => Promise<SpaceJoinRequest | null>;
+  joinRequests?: SpaceJoinRequest[];
+  requestJoinAccess?: (linkId: string) => Promise<SpaceJoinRequest | null>;
 }) {
   const handledCallback = useRef(false);
   const joinToken = new URLSearchParams(window.location.search).get("join");
@@ -179,8 +179,8 @@ export function AuthScreen({
               : "Send sign-in link"}
           </Button>
           <small className="form-footnote">
-            Your sign-in credentials stay in memory and are cleared when you
-            leave.
+            You’ll stay signed in when you reload this tab. Sign out to end your
+            session.
           </small>
         </form>
       )}

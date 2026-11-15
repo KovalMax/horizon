@@ -71,6 +71,24 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::ACCEPTED);
 
+    let throttled = actix_test::TestRequest::post()
+        .uri("/auth/magic-links")
+        .set_json(MagicLinkRequest {
+            email: email.clone(),
+        })
+        .to_request();
+    let response = actix_test::call_service(&app, throttled).await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    let retry_after = response
+        .headers()
+        .get("Retry-After")
+        .expect("rate-limit response should tell the client when to retry")
+        .to_str()
+        .expect("Retry-After should be valid text")
+        .parse::<i64>()
+        .expect("Retry-After should be a number of seconds");
+    assert!((1..=60).contains(&retry_after));
+
     let link = mailer
         .0
         .lock()

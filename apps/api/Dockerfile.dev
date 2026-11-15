@@ -1,0 +1,11 @@
+FROM rust:1.99.1-slim
+RUN rustup component add rustfmt clippy \
+    && cargo install --locked cargo-watch
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir -p src \
+    && touch src/main.rs \
+    && cargo fetch --locked \
+    && rm -rf src
+EXPOSE 8000
+CMD ["cargo", "watch", "--poll", "--watch", "src", "--watch", "migrations", "--watch", "Cargo.toml", "--watch", "Cargo.lock", "-s", "cargo run --locked -- migrate && cargo run --locked"]

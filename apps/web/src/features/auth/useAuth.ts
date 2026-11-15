@@ -3,8 +3,10 @@ import {
   AuthApiError,
   getAuthTokens,
   getCurrentAccount,
+  hasStoredRefreshToken,
   redeemMagicLink,
   requestMagicLink,
+  restoreAuthSession,
   revokeCurrentSession,
   setAuthTokens,
   subscribeAuthTokens,
@@ -12,12 +14,25 @@ import {
   type AuthTokens,
 } from "./api";
 
+function formatRetryDelay(seconds: number | null): string {
+  if (seconds === null) return "a little while";
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 2) return "about a minute";
+  if (minutes < 60) return `about ${minutes} minutes`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes
+    ? `about ${hours} hour${hours === 1 ? "" : "s"} and ${remainingMinutes} minute${remainingMinutes === 1 ? "" : "s"}`
+    : `about ${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
 export type AuthState = {
   account: AuthAccount | null;
   tokens: AuthTokens | null;
   requestStatus: "idle" | "sending" | "sent";
   redemptionStatus: "idle" | "redeeming" | "failed";
   error: string;
+  restoring: boolean;
   requestLink: (email: string) => Promise<void>;
   redeemLink: (token: string) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -32,6 +47,7 @@ export function useAuth(): AuthState {
   const [redemptionStatus, setRedemptionStatus] =
     useState<AuthState["redemptionStatus"]>("idle");
   const [error, setError] = useState("");
+  const [restoring, setRestoring] = useState(hasStoredRefreshToken);
 
   useEffect(
     () =>
@@ -45,23 +61,67 @@ export function useAuth(): AuthState {
     [],
   );
 
+  useEffect(() => {
+    let active = true;
+    const restore = async () => {
+      try {
+        const restoredTokens = await restoreAuthSession();
+        if (!active) return;
+        if (!restoredTokens) {
+          if (hasStoredRefreshToken()) {
+            setError(
+              "We couldn’t restore your session. Check your connection and refresh this page to try again.",
+            );
+          }
+          return;
+        }
+        const currentAccount = await getCurrentAccount(
+          restoredTokens.accessToken,
+        );
+        if (!active) return;
+        setTokens(getAuthTokens() ?? restoredTokens);
+        setAccount(currentAccount);
+      } catch {
+        if (!active) return;
+        setAccount(null);
+        setError(
+          "Your session is still available, but we couldn’t load your account. Check your connection and reload this tab to retry.",
+        );
+      } finally {
+        if (active) setRestoring(false);
+      }
+    };
+    void restore();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const requestLink = async (email: string) => {
     setRequestStatus("sending");
     setError("");
     try {
       await requestMagicLink(email);
       setRequestStatus("sent");
-    } catch {
+    } catch (failure) {
       setRequestStatus("idle");
-      setError("We couldn't send the sign-in link. Please try again shortly.");
+      setError(
+        failure instanceof AuthApiError && failure.status === 429
+          ? `Too many sign-in requests were made recently. Please wait ${formatRetryDelay(failure.retryAfterSeconds)} before trying again. This does not affect your account.`
+          : failure instanceof AuthApiError && failure.status === 503
+            ? "Sign-in email is temporarily unavailable. Your account is safe; please try again later."
+            : "We couldn’t send the sign-in link. Please check your connection and try again.",
+      );
     }
   };
 
   const redeemLink = async (token: string): Promise<boolean> => {
     setRedemptionStatus("redeeming");
     setError("");
+    let redeemedTokens: AuthTokens | null = null;
     try {
       const newTokens = await redeemMagicLink(token);
+      redeemedTokens = newTokens;
       setAuthTokens(newTokens);
       const currentAccount = await getCurrentAccount(newTokens.accessToken);
       setTokens(getAuthTokens() ?? newTokens);
@@ -69,13 +129,19 @@ export function useAuth(): AuthState {
       setRedemptionStatus("idle");
       return true;
     } catch (failure) {
-      setAuthTokens(null, "signed-out");
-      setAccount(null);
+      if (redeemedTokens) {
+        setTokens(redeemedTokens);
+      } else {
+        setAuthTokens(null, "signed-out");
+        setAccount(null);
+      }
       setRedemptionStatus("failed");
       setError(
-        failure instanceof AuthApiError && failure.status === 401
-          ? "This sign-in link is invalid, expired, or already used."
-          : "We couldn't complete sign-in. Please try again shortly.",
+        redeemedTokens
+          ? "Your sign-in succeeded, but we couldn’t load your account. Reload this tab to retry."
+          : failure instanceof AuthApiError && failure.status === 401
+            ? "This sign-in link is invalid, expired, or already used."
+            : "We couldn't complete sign-in. Please try again shortly.",
       );
       return false;
     }
@@ -108,6 +174,7 @@ export function useAuth(): AuthState {
     requestStatus,
     redemptionStatus,
     error,
+    restoring,
     requestLink,
     redeemLink,
     signOut,

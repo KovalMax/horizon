@@ -53,7 +53,7 @@ A location stored in a Space and organized by category.
 _Avoid_: Bookmark
 
 **Place category**:
-A built-in or custom grouping for Saved places within a Space.
+A built-in grouping for Saved places within a Space. Custom categories are deferred.
 _Avoid_: Tag (when referring to a Place's category)
 
 **All Spaces view**:

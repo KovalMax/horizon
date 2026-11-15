@@ -38,7 +38,7 @@ pub struct AccessPrincipal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuthError {
     InvalidRequest,
-    RateLimited,
+    RateLimited { retry_after_seconds: i64 },
     Unauthorized,
     Unavailable,
     EmailDelivery,

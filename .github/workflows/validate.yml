@@ -1,0 +1,55 @@
+name: Validate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API and web check containers
+        run: docker compose --file compose.checks.yaml build api web
+      - name: Start PostgreSQL
+        run: docker compose --file compose.checks.yaml up --detach --wait db
+      - name: Check Rust formatting
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
+      - name: Run Rust Clippy
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+      - name: Run Rust tests
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo test --locked
+      - name: Check web formatting
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run format:check
+      - name: Build web application
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run build
+      - name: Run web unit tests
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm test
+      - name: Stop PostgreSQL and remove check containers
+        if: always()
+        run: docker compose --file compose.checks.yaml down --remove-orphans
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: apps/web
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Run browser checks
+        run: npm run test:e2e
+        working-directory: apps/web

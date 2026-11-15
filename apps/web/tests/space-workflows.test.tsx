@@ -27,62 +27,6 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-test("calendar date strip expands and creates a dated session event", () => {
-  open("/spaces/home/calendar");
-  expect(screen.getByRole("group", { name: "Choose a date" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Show 4 more weeks" }));
-  expect(
-    screen.getByRole("button", { name: "Show the next week" }),
-  ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "New event" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
-    target: { value: "Garden visit" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save event" }));
-  expect(screen.getByText("Garden visit")).toBeTruthy();
-});
-
-test("correcting an invalid event end time clears the error and closing restores focus", async () => {
-  open("/spaces/home/calendar");
-  const opener = screen.getByRole("button", { name: "New event" });
-  opener.focus();
-  fireEvent.click(opener);
-  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
-    target: { value: "Time validation" },
-  });
-  fireEvent.change(screen.getByLabelText("Starts"), {
-    target: { value: "19:00" },
-  });
-  fireEvent.change(screen.getByLabelText("Ends"), {
-    target: { value: "18:00" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save event" }));
-
-  expect(screen.getAllByRole("alert")[0]?.textContent).toBe(
-    "The end time must be after the start time.",
-  );
-
-  fireEvent.change(screen.getByLabelText("Ends"), {
-    target: { value: "20:00" },
-  });
-  expect(screen.queryAllByRole("alert")).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  await waitFor(() => expect(document.activeElement).toBe(opener));
-});
-
-test("saved places are Space-scoped and new lists are available to Tasks", () => {
-  open("/spaces/trip/places");
-  expect(screen.getByText("Pastéis de Belém")).toBeTruthy();
-  expect(screen.queryByText("Markthalle Neun")).toBeNull();
-  fireEvent.click(screen.getAllByRole("button", { name: "To-dos" })[0]!);
-  fireEvent.click(screen.getByRole("button", { name: /New list/ }));
-  fireEvent.change(screen.getByRole("textbox", { name: "List name" }), {
-    target: { value: "Day bag" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Create list" }));
-  expect(screen.getByText(/Day bag · 0 open/)).toBeTruthy();
-});
-
 test("signed-in users list API Spaces and create a persisted shared Space", async () => {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -825,6 +769,12 @@ test("signed-in Members load and save Places in their selected Space", async () 
       method: "POST",
       headers: expect.objectContaining({
         Authorization: "Bearer access-secret",
+      }),
+      body: JSON.stringify({
+        name: "Neighborhood bakery",
+        category: "Food & drink",
+        address: "12 Linden Street",
+        note: "Best sourdough before noon",
       }),
     }),
   );

@@ -12,8 +12,10 @@ jsonwebtoken = "9"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "chrono"] }
+tokio = { version = "1", features = ["sync", "time"] }
 utoipa = { version = "5", features = ["actix_extras", "uuid"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 uuid = { version = "1", features = ["v4", "serde"] }

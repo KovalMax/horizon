@@ -42,6 +42,18 @@ fn problem(status: StatusCode, title: &'static str, code: &'static str) -> HttpR
         })
 }
 
+fn rate_limited(retry_after_seconds: i64) -> HttpResponse {
+    HttpResponse::TooManyRequests()
+        .insert_header((header::RETRY_AFTER, retry_after_seconds.to_string()))
+        .content_type("application/problem+json")
+        .json(Problem {
+            r#type: "about:blank",
+            title: "Too many requests",
+            status: StatusCode::TOO_MANY_REQUESTS.as_u16(),
+            code: "rate_limited",
+        })
+}
+
 fn unauthorized() -> HttpResponse {
     problem(
         StatusCode::UNAUTHORIZED,
@@ -85,11 +97,9 @@ pub async fn request_magic_link(
         Err(AuthError::InvalidRequest) => {
             problem(StatusCode::BAD_REQUEST, "Invalid request", "invalid_email")
         }
-        Err(AuthError::RateLimited) => problem(
-            StatusCode::TOO_MANY_REQUESTS,
-            "Too many requests",
-            "rate_limited",
-        ),
+        Err(AuthError::RateLimited {
+            retry_after_seconds,
+        }) => rate_limited(retry_after_seconds),
         Err(AuthError::EmailDelivery) => problem(
             StatusCode::SERVICE_UNAVAILABLE,
             "Email delivery unavailable",

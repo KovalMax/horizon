@@ -19,6 +19,15 @@ pub struct RotatedRefreshToken {
     pub refresh_expires_at: DateTime<Utc>,
 }
 
+#[derive(sqlx::FromRow)]
+struct RateLimitCounts {
+    email_count: i64,
+    ip_count: i64,
+    latest_email_request: Option<DateTime<Utc>>,
+    oldest_email_request: Option<DateTime<Utc>>,
+    oldest_ip_request: Option<DateTime<Utc>>,
+}
+
 pub(super) async fn lock_rate_limit_keys(
     transaction: &mut Transaction<'_, Postgres>,
     email: &str,
@@ -39,37 +48,65 @@ pub(super) async fn is_rate_limited(
     transaction: &mut Transaction<'_, Postgres>,
     email: &str,
     ip: &str,
-) -> Result<bool, sqlx::Error> {
-    let (email_count, ip_count, latest_email_request): (i64, i64, Option<DateTime<Utc>>) =
-        sqlx::query_as(
-            "SELECT email_requests.request_count, ip_requests.request_count, \
-                    email_requests.latest_request \
+) -> Result<Option<i64>, sqlx::Error> {
+    let rate_limits: RateLimitCounts = sqlx::query_as(
+        "SELECT email_requests.request_count AS email_count, \
+                    ip_requests.request_count AS ip_count, \
+                    email_requests.latest_request AS latest_email_request, \
+                    email_requests.oldest_request AS oldest_email_request, \
+                    ip_requests.oldest_request AS oldest_ip_request \
              FROM ( \
-                 SELECT COUNT(*) AS request_count, MAX(created_at) AS latest_request \
+                 SELECT COUNT(*) AS request_count, MAX(created_at) AS latest_request, \
+                        MIN(created_at) AS oldest_request \
                  FROM auth_challenges \
                  WHERE email_normalized = $1 \
                    AND created_at > now() - interval '1 hour' \
              ) AS email_requests \
              CROSS JOIN ( \
-                 SELECT COUNT(*) AS request_count \
+                 SELECT COUNT(*) AS request_count, MIN(created_at) AS oldest_request \
                  FROM auth_challenges \
                  WHERE request_ip = $2 \
                    AND created_at > now() - interval '1 hour' \
              ) AS ip_requests",
-        )
-        .bind(email)
-        .bind(ip)
-        .fetch_one(&mut **transaction)
-        .await?;
+    )
+    .bind(email)
+    .bind(ip)
+    .fetch_one(&mut **transaction)
+    .await?;
 
-    let cooldown_active = latest_email_request
-        .map(|created_at| {
-            created_at > Utc::now() - ChronoDuration::seconds(MAGIC_LINK_RESEND_COOLDOWN_SECONDS)
-        })
-        .unwrap_or(false);
-    Ok(cooldown_active
-        || email_count >= MAGIC_LINK_EMAIL_HOURLY_LIMIT
-        || ip_count >= MAGIC_LINK_IP_HOURLY_LIMIT)
+    let RateLimitCounts {
+        email_count,
+        ip_count,
+        latest_email_request,
+        oldest_email_request,
+        oldest_ip_request,
+    } = rate_limits;
+    let now = Utc::now();
+    let mut retry_after_seconds = 0;
+    let mut include_expiry = |expiry: Option<DateTime<Utc>>| {
+        if let Some(expiry) = expiry {
+            let remaining_milliseconds = (expiry - now).num_milliseconds();
+            if remaining_milliseconds > 0 {
+                retry_after_seconds =
+                    retry_after_seconds.max((remaining_milliseconds + 999) / 1_000);
+            }
+        }
+    };
+    if latest_email_request.is_some_and(|latest| {
+        latest > now - ChronoDuration::seconds(MAGIC_LINK_RESEND_COOLDOWN_SECONDS)
+    }) {
+        include_expiry(
+            latest_email_request
+                .map(|latest| latest + ChronoDuration::seconds(MAGIC_LINK_RESEND_COOLDOWN_SECONDS)),
+        );
+    }
+    if email_count >= MAGIC_LINK_EMAIL_HOURLY_LIMIT {
+        include_expiry(oldest_email_request.map(|oldest| oldest + ChronoDuration::hours(1)));
+    }
+    if ip_count >= MAGIC_LINK_IP_HOURLY_LIMIT {
+        include_expiry(oldest_ip_request.map(|oldest| oldest + ChronoDuration::hours(1)));
+    }
+    Ok((retry_after_seconds > 0).then_some(retry_after_seconds.max(1)))
 }
 
 #[async_trait]
@@ -143,8 +180,12 @@ impl AuthRepository for PostgresAuthRepository {
             .await
             .map_err(|_| super::models::AuthError::Unavailable)?;
         match is_rate_limited(&mut transaction, email, ip).await {
-            Ok(true) => return Err(super::models::AuthError::RateLimited),
-            Ok(false) => {}
+            Ok(Some(retry_after_seconds)) => {
+                return Err(super::models::AuthError::RateLimited {
+                    retry_after_seconds,
+                });
+            }
+            Ok(None) => {}
             Err(_) => return Err(super::models::AuthError::Unavailable),
         }
         sqlx::query(

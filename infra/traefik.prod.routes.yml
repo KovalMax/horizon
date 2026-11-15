@@ -1,17 +1,24 @@
 http:
   routers:
-    api:
-      rule: Host(`horizon.example.com`) && (Path(`/api`) || PathPrefix(`/api/`))
+    same-origin-api:
+      rule: Host(`horizon.false.tel`) && (Path(`/api`) || PathPrefix(`/api/`))
       entryPoints: [websecure]
       service: api
       middlewares: [security-headers, strip-api]
       tls:
         certResolver: letsencrypt
     web:
-      rule: Host(`horizon.example.com`)
+      rule: Host(`horizon.false.tel`)
       entryPoints: [websecure]
       service: web
       middlewares: [security-headers]
+      tls:
+        certResolver: letsencrypt
+    api:
+      rule: Host(`api.horizon.false.tel`)
+      entryPoints: [websecure]
+      service: api
+      middlewares: [security-headers, api-cors]
       tls:
         certResolver: letsencrypt
   services:
@@ -35,3 +42,20 @@ http:
     strip-api:
       stripPrefix:
         prefixes: [/api]
+    api-cors:
+      headers:
+        accessControlAllowOriginList:
+          - https://horizon.false.tel
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+        accessControlAllowCredentials: false
+        accessControlMaxAge: 600
+        addVaryHeader: true

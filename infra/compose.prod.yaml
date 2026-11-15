@@ -1,4 +1,4 @@
-# Production application stack template. Replace the example domain before deployment.
+# Production application stack; image versions come from the synced .image-tag.
 services:
   traefik:
     image: traefik:v3.7.17
@@ -48,9 +48,7 @@ services:
       - database
 
   api:
-    build:
-      context: ../apps/api
-      dockerfile: Dockerfile.prod
+    image: ghcr.io/kovalmax/horizon/api:${IMAGE_TAG:?Set IMAGE_TAG using .image-tag}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
@@ -81,9 +79,7 @@ services:
       - egress
 
   web:
-    build:
-      context: ../apps/web
-      dockerfile: Dockerfile.prod
+    image: ghcr.io/kovalmax/horizon/web:${IMAGE_TAG:?Set IMAGE_TAG using .image-tag}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]

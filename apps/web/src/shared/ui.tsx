@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { Space } from "../features/prototype/domain";
 
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   const common = {
@@ -178,16 +177,19 @@ export function AppLink({
   children,
   className = "",
   onNavigate,
+  ariaLabel,
 }: {
   to: string;
   children: ReactNode;
   className?: string;
   onNavigate: (to: string) => void;
+  ariaLabel?: string;
 }) {
   return (
     <a
       href={to}
       className={className}
+      aria-label={ariaLabel}
       onClick={(e) => {
         if (!e.metaKey && !e.ctrlKey && e.button === 0) {
           e.preventDefault();
@@ -206,6 +208,7 @@ export function Button({
   disabled = false,
   className = "",
   type = "button",
+  "aria-label": ariaLabel,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -213,6 +216,7 @@ export function Button({
   disabled?: boolean;
   className?: string;
   type?: "button" | "submit" | "reset";
+  "aria-label"?: string;
 }) {
   return (
     <button
@@ -220,17 +224,25 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel}
     >
       {children}
     </button>
   );
 }
 
+type SpaceSummary = {
+  id: string;
+  name: string;
+  tone: string;
+  icon: string;
+};
+
 export function SpaceGlyph({
   space,
   small = false,
 }: {
-  space?: Space;
+  space?: Pick<SpaceSummary, "tone" | "icon">;
   small?: boolean;
 }) {
   return (
@@ -241,7 +253,7 @@ export function SpaceGlyph({
     </span>
   );
 }
-export function SpacePill({ space }: { space: Space }) {
+export function SpacePill({ space }: { space: SpaceSummary }) {
   return (
     <span className={`space-pill ${space.tone}`}>
       <Icon name={space.icon} size={12} />
@@ -257,7 +269,7 @@ export function BottomBar({
   onMore,
 }: {
   path: string;
-  space: Space;
+  space: SpaceSummary;
   go: (to: string) => void;
   goSpace: (id: string, section?: string) => void;
   onMore: () => void;

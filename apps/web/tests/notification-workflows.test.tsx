@@ -114,9 +114,9 @@ async function setup(path: string) {
   render(<App />);
   await screen.findByText("Signed in as");
   fireEvent.click(
-    screen.getByRole("link", {
-      name: path === "/notifications" ? /Notifications/ : "Settings",
-    }),
+    path === "/notifications"
+      ? screen.getAllByRole("link", { name: /Notifications/ })[0]!
+      : screen.getByRole("link", { name: "Settings" }),
   );
   return fetchMock;
 }

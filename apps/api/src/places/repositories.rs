@@ -44,7 +44,8 @@ impl PostgresPlacesRepository {
     ) -> Result<SavedPlace, PlaceError> {
         let id = Uuid::new_v4();
         let inserted = sqlx::query_scalar::<_, Uuid>(
-            "INSERT INTO saved_places (id, space_id, creator_id, name, category, address, note) \
+            "INSERT INTO saved_places \
+             (id, space_id, creator_id, name, category, address, note) \
              SELECT $1, $2, $3, $4, $5, $6, $7 \
              WHERE EXISTS (SELECT 1 FROM space_memberships \
                            WHERE space_id = $2 AND user_id = $3 AND role IN ('owner', 'editor')) \

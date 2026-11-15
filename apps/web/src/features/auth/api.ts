@@ -18,12 +18,35 @@ type AuthTokenListener = (
 let currentTokens: AuthTokens | null = null;
 let refreshInFlight: Promise<AuthTokens | null> | null = null;
 const tokenListeners = new Set<AuthTokenListener>();
+const refreshTokenStorageKey = "horizon-refresh-token";
+
+function storedRefreshToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(refreshTokenStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+export function hasStoredRefreshToken(): boolean {
+  return Boolean(storedRefreshToken());
+}
+
+function storeRefreshToken(token: string | null): void {
+  try {
+    if (token) window.sessionStorage.setItem(refreshTokenStorageKey, token);
+    else window.sessionStorage.removeItem(refreshTokenStorageKey);
+  } catch {
+    // Keep the in-memory session usable when storage is disabled or unavailable.
+  }
+}
 
 export function setAuthTokens(
   tokens: AuthTokens | null,
   reason: AuthTokenChangeReason = "updated",
 ): void {
   currentTokens = tokens;
+  storeRefreshToken(tokens?.refreshToken ?? null);
   for (const listener of tokenListeners) listener(tokens, reason);
 }
 
@@ -34,6 +57,35 @@ export function getAuthTokens(): AuthTokens | null {
 export function subscribeAuthTokens(listener: AuthTokenListener): () => void {
   tokenListeners.add(listener);
   return () => tokenListeners.delete(listener);
+}
+
+/** Rotates the tab-scoped refresh token after a full page reload. */
+export async function restoreAuthSession(): Promise<AuthTokens | null> {
+  const refreshToken = storedRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const response = await fetch("/api/auth/token/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    });
+    if (response.status === 401) {
+      storeRefreshToken(null);
+      return null;
+    }
+    if (!response.ok) return null;
+    const responseTokens = (await response.json()) as {
+      access_token: string;
+      refresh_token: string;
+    };
+    const tokens = {
+      accessToken: responseTokens.access_token,
+      refreshToken: responseTokens.refresh_token,
+    };
+    setAuthTokens(tokens);
+    return tokens;
+  } catch {
+    return null;
+  }
 }
 
 async function refreshTokensFor(
@@ -135,7 +187,10 @@ type AuthenticationResponse = {
 };
 
 export class AuthApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly retryAfterSeconds: number | null = null,
+  ) {
     super("The request could not be completed.");
   }
 }
@@ -146,7 +201,13 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new AuthApiError(response.status);
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    throw new AuthApiError(
+      response.status,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    );
+  }
   return response.json() as Promise<T>;
 }
 

@@ -37,6 +37,11 @@ pub struct SmtpEmailSender {
     from: Mailbox,
 }
 
+fn log_smtp_delivery_failure(kind: &str, recipient: &str, error: &lettre::transport::smtp::Error) {
+    let details = error.to_string().replace(recipient, "<redacted-recipient>");
+    eprintln!("SMTP {kind} delivery failed: {details}");
+}
+
 impl SmtpEmailSender {
     pub fn from_env() -> Result<Self, String> {
         let host = env::var("SMTP_HOST").map_err(|_| "SMTP_HOST must be configured".to_owned())?;
@@ -53,7 +58,12 @@ impl SmtpEmailSender {
             .unwrap_or(false);
 
         let builder = if use_tls {
-            AsyncSmtpTransport::<Tokio1Executor>::relay(&host)
+            let relay = if port == 465 {
+                AsyncSmtpTransport::<Tokio1Executor>::relay(&host)
+            } else {
+                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host)
+            };
+            relay
                 .map_err(|_| "SMTP_HOST is invalid".to_owned())?
                 .port(port)
         } else {
@@ -87,6 +97,7 @@ impl EmailSender for SmtpEmailSender {
         let recipient = recipient
             .parse::<Mailbox>()
             .map_err(|_| "recipient email is invalid".to_owned())?;
+        let recipient_address = recipient.email.to_string();
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
@@ -100,7 +111,10 @@ impl EmailSender for SmtpEmailSender {
             .send(message)
             .await
             .map(|_| ())
-            .map_err(|_| "email delivery failed".to_owned())
+            .map_err(|error| {
+                log_smtp_delivery_failure("magic-link", &recipient_address, &error);
+                "email delivery failed".to_owned()
+            })
     }
 
     async fn send_task_reminder(
@@ -113,6 +127,7 @@ impl EmailSender for SmtpEmailSender {
         let recipient = recipient
             .parse::<Mailbox>()
             .map_err(|_| "recipient email is invalid".to_owned())?;
+        let recipient_address = recipient.email.to_string();
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
@@ -125,7 +140,10 @@ impl EmailSender for SmtpEmailSender {
             .send(message)
             .await
             .map(|_| ())
-            .map_err(|_| "email delivery failed".to_owned())
+            .map_err(|error| {
+                log_smtp_delivery_failure("task-reminder", &recipient_address, &error);
+                "email delivery failed".to_owned()
+            })
     }
 
     async fn send_space_invitation(
@@ -137,6 +155,7 @@ impl EmailSender for SmtpEmailSender {
         let recipient = recipient
             .parse::<Mailbox>()
             .map_err(|_| "recipient email is invalid".to_owned())?;
+        let recipient_address = recipient.email.to_string();
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
@@ -149,6 +168,9 @@ impl EmailSender for SmtpEmailSender {
             .send(message)
             .await
             .map(|_| ())
-            .map_err(|_| "email delivery failed".to_owned())
+            .map_err(|error| {
+                log_smtp_delivery_failure("space-invitation", &recipient_address, &error);
+                "email delivery failed".to_owned()
+            })
     }
 }

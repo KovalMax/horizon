@@ -12,7 +12,7 @@ mod token_service;
 pub use controllers::{
     current_account, redeem_magic_link, refresh_token, request_magic_link, revoke_current_session,
 };
-pub use email::EmailSender;
+pub use email::{EmailSender, SmtpEmailSender};
 pub use factories::AuthSettings;
 pub use models::{AccessPrincipal, Account, AuthError, AuthenticatedSession, TokenSet};
 pub use repositories::{AuthRepository, PostgresAuthRepository};

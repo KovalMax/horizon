@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AuthState } from "./useAuth";
 import { Button, HorizonMark } from "../../shared/ui";
 import type { SpaceJoinRequest } from "../planner/membersApi";
+import { authDebug, createAuthDebugId } from "./authDebug";
 
 export function AuthScreen({
   path,
@@ -17,11 +18,30 @@ export function AuthScreen({
   requestJoinAccess?: (linkId: string) => Promise<SpaceJoinRequest | null>;
 }) {
   const handledCallback = useRef(false);
+  const callbackInstanceId = useRef<string | null>(null);
+  if (!callbackInstanceId.current) {
+    callbackInstanceId.current = createAuthDebugId();
+  }
+  const [missingCallbackToken, setMissingCallbackToken] = useState(false);
   const joinToken = new URLSearchParams(window.location.search).get("join");
   const [joinSubmission, setJoinSubmission] = useState<SpaceJoinRequest | null>(
     null,
   );
   const [joinError, setJoinError] = useState("");
+
+  useEffect(() => {
+    authDebug("auth-screen-mounted", {
+      instanceId: callbackInstanceId.current!,
+      path,
+      hasSession: Boolean(auth.tokens),
+    });
+    return () => {
+      authDebug("auth-screen-unmounted", {
+        instanceId: callbackInstanceId.current!,
+        path,
+      });
+    };
+  }, []);
 
   useEffect(() => {
     if (path !== "/welcome") return;
@@ -30,18 +50,44 @@ export function AuthScreen({
   }, [joinToken, path]);
 
   useEffect(() => {
+    const instanceId = callbackInstanceId.current!;
+    authDebug("callback-effect", {
+      instanceId,
+      path,
+      alreadyHandled: handledCallback.current,
+      hasFragment: Boolean(window.location.hash),
+      hasSession: Boolean(auth.tokens),
+    });
     if (path !== "/auth/complete" || handledCallback.current) return;
     handledCallback.current = true;
     const token = new URLSearchParams(window.location.hash.slice(1)).get(
       "token",
     );
+    authDebug("callback-start", {
+      instanceId,
+      hasToken: Boolean(token),
+      hasSession: Boolean(auth.tokens),
+    });
     window.history.replaceState(
       window.history.state,
       "",
       `${window.location.pathname}${window.location.search}`,
     );
+    if (!token) {
+      if (auth.tokens) navigate("/");
+      else if (auth.redemptionStatus !== "redeeming") {
+        setMissingCallbackToken(true);
+      }
+      return;
+    }
     const savedJoinToken = window.localStorage.getItem("horizon-join-link");
-    void auth.redeemLink(token ?? "").then((succeeded) => {
+    authDebug("redeem-start", { instanceId, hasToken: true });
+    void auth.redeemLink(token).then((succeeded) => {
+      authDebug("redeem-finished", {
+        instanceId,
+        succeeded,
+        path: window.location.pathname,
+      });
       if (!succeeded) return;
       if (savedJoinToken) {
         window.localStorage.removeItem("horizon-join-link");
@@ -59,20 +105,24 @@ export function AuthScreen({
   };
 
   if (path === "/auth/complete") {
+    const redemptionFailed =
+      auth.redemptionStatus === "failed" || missingCallbackToken;
     return (
       <main className="welcome-card auth-card" aria-live="polite">
         <HorizonMark large />
         <span className="eyebrow">SECURE SIGN-IN</span>
-        <h1>
-          {auth.redemptionStatus === "failed"
-            ? "Link not accepted"
-            : "Signing you in…"}
-        </h1>
+        <h1>{redemptionFailed ? "Link not accepted" : "Signing you in…"}</h1>
         {auth.redemptionStatus === "redeeming" && (
           <p role="status">Verifying your sign-in link.</p>
         )}
-        {auth.error && <p role="alert">{auth.error}</p>}
-        {auth.redemptionStatus === "failed" && (
+        {missingCallbackToken ? (
+          <p role="alert">
+            This sign-in link is missing its token. Request a new link.
+          </p>
+        ) : (
+          auth.error && <p role="alert">{auth.error}</p>
+        )}
+        {redemptionFailed && (
           <Button onClick={() => navigate("/welcome")}>
             Request a new link
           </Button>

@@ -13,7 +13,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build API and web check containers
         run: docker compose --file compose.checks.yaml build api web
       - name: Start PostgreSQL
@@ -38,8 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

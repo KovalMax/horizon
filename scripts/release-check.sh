@@ -15,7 +15,6 @@ compose run --rm --no-deps web npm test
 compose run --rm --no-deps web npm run build
 
 IMAGE_TAG=release-check \
-ACME_EMAIL=ci@example.invalid \
 POSTGRES_DB=horizon_check \
 POSTGRES_USER=horizon_check \
 POSTGRES_PASSWORD=ci-only-password \

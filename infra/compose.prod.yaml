@@ -1,35 +1,5 @@
 # Production application stack; image versions come from the synced .image-tag.
 services:
-  traefik:
-    image: traefik:v3.7.17
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
-    security_opt:
-      - no-new-privileges:true
-    command:
-      - --api=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --providers.file.filename=/etc/traefik/routes.yml
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in the deployment environment}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./traefik.prod.routes.yml:/etc/traefik/routes.yml:ro
-      - traefik_prod_acme:/letsencrypt
-    depends_on:
-      - api
-      - web
-    networks:
-      - edge
-
   db:
     image: postgres:17.11-trixie
     restart: unless-stopped
@@ -74,9 +44,10 @@ services:
       db:
         condition: service_healthy
     networks:
-      - database
-      - edge
-      - egress
+      database: {}
+      edge:
+        aliases: [horizon-api]
+      egress: {}
 
   web:
     image: ghcr.io/kovalmax/horizon/web:${IMAGE_TAG:?Set IMAGE_TAG using .image-tag}
@@ -88,14 +59,16 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
     networks:
-      - edge
+      edge:
+        aliases: [horizon-web]
 
 volumes:
   postgres_prod_data:
-  traefik_prod_acme:
 
 networks:
   database:
     internal: true
   edge:
+    external: true
+    name: public-edge
   egress:

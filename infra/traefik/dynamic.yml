@@ -1,37 +1,38 @@
+# Horizon production routes for the shared Traefik file provider.
 http:
   routers:
-    same-origin-api:
+    horizon-same-origin-api:
       rule: Host(`horizon.false.tel`) && (Path(`/api`) || PathPrefix(`/api/`))
       entryPoints: [websecure]
-      service: api
-      middlewares: [security-headers, strip-api]
+      service: horizon-api
+      middlewares: [horizon-security-headers, horizon-strip-api]
       tls:
         certResolver: letsencrypt
-    web:
+    horizon-web:
       rule: Host(`horizon.false.tel`)
       entryPoints: [websecure]
-      service: web
-      middlewares: [security-headers]
+      service: horizon-web
+      middlewares: [horizon-security-headers]
       tls:
         certResolver: letsencrypt
-    api:
+    horizon-api:
       rule: Host(`api.horizon.false.tel`)
       entryPoints: [websecure]
-      service: api
-      middlewares: [security-headers, api-cors]
+      service: horizon-api
+      middlewares: [horizon-security-headers, horizon-api-cors]
       tls:
         certResolver: letsencrypt
   services:
-    web:
+    horizon-web:
       loadBalancer:
         servers:
-          - url: http://web:8080
-    api:
+          - url: http://horizon-web:8080
+    horizon-api:
       loadBalancer:
         servers:
-          - url: http://api:8000
+          - url: http://horizon-api:8000
   middlewares:
-    security-headers:
+    horizon-security-headers:
       headers:
         contentSecurityPolicy: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; upgrade-insecure-requests"
         contentTypeNosniff: true
@@ -39,10 +40,10 @@ http:
         referrerPolicy: strict-origin-when-cross-origin
         permissionsPolicy: "camera=(), geolocation=(), microphone=(), payment=()"
         stsSeconds: 31536000
-    strip-api:
+    horizon-strip-api:
       stripPrefix:
         prefixes: [/api]
-    api-cors:
+    horizon-api-cors:
       headers:
         accessControlAllowOriginList:
           - https://horizon.false.tel

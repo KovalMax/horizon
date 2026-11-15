@@ -49,7 +49,6 @@ jobs:
       - name: Validate production Compose configuration
         env:
           IMAGE_TAG: release-check
-          ACME_EMAIL: ci@example.invalid
           POSTGRES_DB: horizon_check
           POSTGRES_USER: horizon_check
           POSTGRES_PASSWORD: ci-only-password
@@ -138,8 +137,16 @@ jobs:
       - name: Stage production Compose configuration
         run: |
           scp -i "$HOME/.ssh/id_ed25519" \
-            infra/compose.prod.yaml infra/traefik.prod.routes.yml \
+            infra/compose.prod.yaml \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+      - name: Install Horizon routes for shared Traefik
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \
+            'set -eu
+             install -d -m 750 "$HOME/traefik/dynamic"
+             cat > "$HOME/traefik/dynamic/horizon.yml.next"
+             mv "$HOME/traefik/dynamic/horizon.yml.next" "$HOME/traefik/dynamic/horizon.yml"' \
+            < infra/traefik/dynamic.yml
       - name: Stage release image tag on deployment host
         run: |
           scp -i "$HOME/.ssh/id_ed25519" .image-tag \

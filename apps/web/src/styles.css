@@ -1333,14 +1333,14 @@ select:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
 }
-.invite-compose .join-link-field {
+.join-link-compose .join-link-field {
   min-width: 128px;
   margin: 16px 0;
 }
-.invite-compose .join-link-expiry {
+.join-link-compose .join-link-expiry {
   width: min(300px, 100%);
 }
-.invite-compose > .button {
+.join-link-compose > .button {
   min-height: 43px;
   margin-bottom: 16px;
   white-space: nowrap;

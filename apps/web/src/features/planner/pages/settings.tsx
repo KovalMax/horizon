@@ -58,9 +58,13 @@ export function SettingsPage({
   const { pageHeader } = helpers;
   return (
     <>
-      {pageHeader("Settings", "Your account and notification preferences.")}
+      {pageHeader(
+        "Settings",
+        "Manage your time, reminders, and notification preferences.",
+      )}
       <section className="list-card">
         <h2>Time and reminders</h2>
+        <p>Changes are saved with the Save settings button below.</p>
         <label className="form-field">
           Time zone
           <input
@@ -140,23 +144,13 @@ export function SettingsPage({
           state.notificationPrefsStatus !== "error" && (
             <p role="alert">{state.notificationPrefsError}</p>
           )}
-        <Button
-          disabled={
-            notificationPrefsStatus === "loading" ||
-            notificationPrefsStatus === "saving"
-          }
-          onClick={() => void state.savePreferences()}
-        >
-          {notificationPrefsStatus === "saving"
-            ? "Saving…"
-            : "Save notification preferences"}
-        </Button>
       </section>
       <section className="list-card">
         <h2>Muted Spaces</h2>
         <p>
           In-app notifications from muted Spaces aren’t delivered, and unmuting
-          won’t backfill them. Save your changes with the button above.
+          won’t backfill them. Save your changes with the Save settings button
+          below.
         </p>
         {state.activeSpaces.map((s) => (
           <label className="setting-row" key={s.id}>
@@ -211,6 +205,22 @@ export function SettingsPage({
             </Button>
           </div>
         ))}
+      </section>
+      <section className="settings-save list-card">
+        <h2>Save settings</h2>
+        <p>
+          Save your time zone, reminder time, notification channels, and muted
+          Spaces.
+        </p>
+        <Button
+          disabled={
+            notificationPrefsStatus === "loading" ||
+            notificationPrefsStatus === "saving"
+          }
+          onClick={() => void state.savePreferences()}
+        >
+          {notificationPrefsStatus === "saving" ? "Saving…" : "Save settings"}
+        </Button>
       </section>
     </>
   );

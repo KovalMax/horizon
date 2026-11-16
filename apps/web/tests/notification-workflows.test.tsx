@@ -165,7 +165,7 @@ test("inbox displays persisted items and supports explicit read state", async ()
   );
 });
 
-test("notification channel choices are persisted", async () => {
+test("Save settings persists notification channels and profile preferences together", async () => {
   const fetchMock = await setup("/settings");
   expect(
     await screen.findByRole("heading", { name: "Notification channels" }),
@@ -174,9 +174,7 @@ test("notification channel choices are persisted", async () => {
     name: "In-app",
   })[0]!;
   fireEvent.click(assignmentInApp);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Save notification preferences" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
   await waitFor(() => {
     const saveCall = fetchMock.mock.calls.find(
@@ -187,6 +185,8 @@ test("notification channel choices are persisted", async () => {
     expect(saveCall).toBeTruthy();
     const saved = JSON.parse(String(saveCall?.[1]?.body));
     expect(saved.preferences).toHaveLength(12);
+    expect(saved.time_zone).toBe("Europe/Berlin");
+    expect(saved.default_reminder_time).toBe("09:00");
     expect(
       saved.preferences.find(
         (item: { event_type: string; channel: string }) =>

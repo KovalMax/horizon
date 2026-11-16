@@ -173,7 +173,7 @@ export function MembersPage({
             request before they join.
           </p>
           <form
-            className="invite-compose"
+            className="invite-compose join-link-compose"
             onSubmit={async (event) => {
               event.preventDefault();
               const form = event.currentTarget;

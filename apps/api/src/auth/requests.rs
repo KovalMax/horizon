@@ -6,6 +6,8 @@ use utoipa::ToSchema;
 pub struct MagicLinkRequest {
     #[schema(format = Email, max_length = 320)]
     pub email: String,
+    #[serde(default)]
+    pub time_zone: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]

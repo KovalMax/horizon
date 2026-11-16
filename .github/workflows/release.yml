@@ -13,8 +13,8 @@ concurrency:
 
 jobs:
   preflight:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     env:
       COMPOSE_PROJECT_NAME: horizon-release-checks-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -32,20 +32,30 @@ jobs:
           esac
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: Build API and web check containers
-        run: docker compose --file compose.checks.yaml build api web
+      - name: Build API check container
+        run: docker compose --file compose.checks.yaml build api
+      - name: Build API
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
       - name: Start fresh PostgreSQL database
         run: docker compose --file compose.checks.yaml up --detach --wait db
-      - name: Run Rust tests
+      - name: Run API tests
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo test --locked
+      - name: Check API formatting
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
+      - name: Run API Clippy
+        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+      - name: Build web check container
+        run: docker compose --file compose.checks.yaml build web
+      - name: Build web application
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run build
+      - name: Run web unit tests
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm test
+      - name: Check web formatting
+        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run format:check
       - name: Apply database migrations
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo run --locked -- migrate
       - name: Verify migrations are already up to date
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo run --locked -- migrate
-      - name: Run web unit tests
-        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm test
-      - name: Build web application
-        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run build
       - name: Validate production Compose configuration
         env:
           IMAGE_TAG: release-check
@@ -58,6 +68,21 @@ jobs:
           SMTP_HOST: localhost
           SMTP_FROM: Horizon <no-reply@example.invalid>
         run: docker compose --file infra/compose.prod.yaml config --quiet
+      - name: Set up Node.js for Playwright
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies for Playwright
+        run: npm ci
+        working-directory: apps/web
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Run Playwright browser checks
+        run: npm run test:e2e
+        working-directory: apps/web
       - name: Stop PostgreSQL and remove release-check containers
         if: always()
         run: docker compose --file compose.checks.yaml down --remove-orphans
@@ -80,7 +105,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish API image (ARM64)
+      - name: Build and publish API image to GHCR (ARM64)
         uses: docker/build-push-action@v7
         with:
           context: ./apps/api
@@ -92,7 +117,7 @@ jobs:
           provenance: true
           cache-from: type=gha,scope=horizon-api
           cache-to: type=gha,mode=max,scope=horizon-api
-      - name: Publish web image (ARM64)
+      - name: Build and publish web image to GHCR (ARM64)
         uses: docker/build-push-action@v7
         with:
           context: ./apps/web
@@ -107,7 +132,7 @@ jobs:
 
   deploy:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

@@ -102,7 +102,9 @@ export function AuthScreen({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const email = new FormData(event.currentTarget).get("email");
-    if (typeof email === "string") void auth.requestLink(email.trim());
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    if (typeof email === "string")
+      void auth.requestLink(email.trim(), timeZone);
   };
 
   if (path === "/auth/complete") {
@@ -207,7 +209,6 @@ export function AuthScreen({
           <p role="status">
             If that address can receive mail, a sign-in link is on its way.
           </p>
-          <small>For local development, check the Mailpit inbox.</small>
           <Button variant="outline" onClick={auth.resetRequest}>
             Use a different email
           </Button>

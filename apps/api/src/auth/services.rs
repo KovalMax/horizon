@@ -117,8 +117,17 @@ impl AuthApplication {
         }
     }
 
-    pub async fn request_magic_link(&self, email: &str, ip: &str) -> Result<(), AuthError> {
+    pub async fn request_magic_link(
+        &self,
+        email: &str,
+        ip: &str,
+        time_zone: Option<&str>,
+    ) -> Result<(), AuthError> {
         let email = normalized_email(email).ok_or(AuthError::InvalidRequest)?;
+        let time_zone = time_zone
+            .and_then(|value| value.parse::<chrono_tz::Tz>().ok())
+            .map(|zone| zone.to_string())
+            .unwrap_or_else(|| "UTC".to_owned());
         let secret = self.token_service.create_secret();
         let challenge_id = Uuid::new_v4();
         let expires_at = Utc::now() + chrono::Duration::minutes(MAGIC_LINK_TTL_MINUTES);
@@ -127,6 +136,7 @@ impl AuthApplication {
                 challenge_id,
                 &email,
                 ip,
+                &time_zone,
                 self.token_service.hash_secret(&secret),
                 expires_at,
             )

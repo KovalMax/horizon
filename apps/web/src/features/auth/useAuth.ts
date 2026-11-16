@@ -33,7 +33,7 @@ export type AuthState = {
   redemptionStatus: "idle" | "redeeming" | "failed";
   error: string;
   restoring: boolean;
-  requestLink: (email: string) => Promise<void>;
+  requestLink: (email: string, timeZone: string) => Promise<void>;
   redeemLink: (token: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   resetRequest: () => void;
@@ -97,11 +97,11 @@ export function useAuth(): AuthState {
     };
   }, []);
 
-  const requestLink = async (email: string) => {
+  const requestLink = async (email: string, timeZone: string) => {
     setRequestStatus("sending");
     setError("");
     try {
-      await requestMagicLink(email);
+      await requestMagicLink(email, timeZone);
       setRequestStatus("sent");
     } catch (failure) {
       setRequestStatus("idle");

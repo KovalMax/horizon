@@ -104,6 +104,7 @@ pub trait AuthRepository: Send + Sync {
         id: Uuid,
         email: &str,
         ip: &str,
+        time_zone: &str,
         secret_hash: Vec<u8>,
         expires_at: DateTime<Utc>,
     ) -> Result<(), super::models::AuthError>;
@@ -156,6 +157,7 @@ impl AuthRepository for PostgresAuthRepository {
         id: Uuid,
         email: &str,
         ip: &str,
+        time_zone: &str,
         secret_hash: Vec<u8>,
         expires_at: DateTime<Utc>,
     ) -> Result<(), super::models::AuthError> {
@@ -177,13 +179,14 @@ impl AuthRepository for PostgresAuthRepository {
             Err(_) => return Err(super::models::AuthError::Unavailable),
         }
         sqlx::query(
-            "INSERT INTO auth_challenges (id, email_normalized, secret_hash, request_ip, expires_at) \
-             VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO auth_challenges (id, email_normalized, secret_hash, request_ip, time_zone, expires_at) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(id)
         .bind(email)
         .bind(secret_hash)
         .bind(ip)
+        .bind(time_zone)
         .bind(expires_at)
         .execute(&mut *transaction)
         .await
@@ -249,15 +252,16 @@ impl AuthRepository for PostgresAuthRepository {
             .begin()
             .await
             .map_err(|_| AuthError::Unavailable)?;
-        let challenge = sqlx::query_as::<_, (Uuid, String, DateTime<Utc>, Option<DateTime<Utc>>)>(
-            "SELECT id, email_normalized, expires_at, consumed_at \
+        let challenge =
+            sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>)>(
+                "SELECT id, email_normalized, time_zone, expires_at, consumed_at \
              FROM auth_challenges WHERE secret_hash = $1 FOR UPDATE",
-        )
-        .bind(secret_hash)
-        .fetch_optional(&mut *transaction)
-        .await
-        .map_err(|_| AuthError::Unavailable)?;
-        let Some((challenge_id, email, expires_at, consumed_at)) = challenge else {
+            )
+            .bind(secret_hash)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(|_| AuthError::Unavailable)?;
+        let Some((challenge_id, email, time_zone, expires_at, consumed_at)) = challenge else {
             return Err(AuthError::Unauthorized);
         };
         if consumed_at.is_some() || expires_at <= now {
@@ -296,8 +300,9 @@ impl AuthRepository for PostgresAuthRepository {
             None => {
                 let user_id = Uuid::new_v4();
                 let identity_id = Uuid::new_v4();
-                sqlx::query("INSERT INTO users (id) VALUES ($1)")
+                sqlx::query("INSERT INTO users (id, time_zone) VALUES ($1, $2)")
                     .bind(user_id)
+                    .bind(time_zone)
                     .execute(&mut *transaction)
                     .await
                     .map_err(|_| AuthError::Unavailable)?;

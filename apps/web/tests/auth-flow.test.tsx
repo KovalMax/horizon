@@ -183,7 +183,10 @@ test("requests a real magic link and shows an account-neutral confirmation", asy
   expect(fetchMock).toHaveBeenCalledWith("/api/auth/magic-links", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "maya@example.com" }),
+    body: JSON.stringify({
+      email: "maya@example.com",
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    }),
   });
 });
 

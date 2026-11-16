@@ -118,3 +118,69 @@ test("restores the signed-in account after a browser reload", async ({
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   expect(refreshRequests).toBe(1);
 });
+
+test("redeems a magic-link callback once after leaving the callback URL", async ({
+  page,
+}) => {
+  const redemptionRequests: Array<{
+    body: unknown;
+    pathAtRequest: string;
+  }> = [];
+  await page.route("**/api/auth/magic-links/redeem", async (route) => {
+    redemptionRequests.push({
+      body: route.request().postDataJSON(),
+      pathAtRequest: new URL(page.url()).pathname,
+    });
+    await route.fulfill({
+      status: 200,
+      json: {
+        account: { id: "user-1", email: "maya@example.com" },
+        tokens: {
+          access_token: "access-from-link",
+          refresh_token: "refresh-from-link",
+        },
+      },
+    });
+  });
+  await page.route("**/api/account/me", (route) =>
+    route.fulfill({
+      status: 200,
+      json: { id: "user-1", email: "maya@example.com" },
+    }),
+  );
+  await page.route("**/api/spaces", (route) =>
+    route.fulfill({ status: 200, json: [] }),
+  );
+
+  await page.goto("/auth/complete#token=one-time-secret");
+
+  await expect(
+    page.getByText("maya@example.com", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await page.waitForLoadState("networkidle");
+
+  expect(redemptionRequests).toEqual([
+    {
+      body: { token: "one-time-secret" },
+      pathAtRequest: "/",
+    },
+  ]);
+});
+
+test("does not redeem a callback with no token", async ({ page }) => {
+  let redemptionRequests = 0;
+  await page.route("**/api/auth/magic-links/redeem", async (route) => {
+    redemptionRequests += 1;
+    await route.fulfill({ status: 401, json: { message: "invalid token" } });
+  });
+
+  await page.goto("/auth/complete");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "This sign-in link is missing its token",
+  );
+  await expect(page).toHaveURL(/\/$/);
+  expect(redemptionRequests).toBe(0);
+});

@@ -61,6 +61,7 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
         .uri("/auth/magic-links")
         .set_json(MagicLinkRequest {
             email: format!("{}@example.test", Uuid::new_v4()),
+            time_zone: None,
         })
         .to_request();
     assert_eq!(

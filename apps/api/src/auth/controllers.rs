@@ -90,7 +90,10 @@ pub async fn request_magic_link(
     body: web::Json<MagicLinkRequest>,
 ) -> HttpResponse {
     let ip = request_ip(&request);
-    match state.request_magic_link(&body.email, &ip).await {
+    match state
+        .request_magic_link(&body.email, &ip, body.time_zone.as_deref())
+        .await
+    {
         Ok(()) => HttpResponse::Accepted().json(MagicLinkAccepted {
             message: "If the address can receive mail, a sign-in link will be sent.".to_owned(),
         }),

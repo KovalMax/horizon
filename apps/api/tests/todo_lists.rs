@@ -70,7 +70,10 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
     let email = format!("{}@example.test", Uuid::new_v4());
     let request = actix_test::TestRequest::post()
         .uri("/auth/magic-links")
-        .set_json(MagicLinkRequest { email })
+        .set_json(MagicLinkRequest {
+            email,
+            time_zone: None,
+        })
         .to_request();
     assert_eq!(
         actix_test::call_service(&app, request).await.status(),

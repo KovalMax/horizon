@@ -217,8 +217,14 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function requestMagicLink(email: string): Promise<void> {
-  await postJson<{ message: string }>("/auth/magic-links", { email });
+export async function requestMagicLink(
+  email: string,
+  timeZone: string,
+): Promise<void> {
+  await postJson<{ message: string }>("/auth/magic-links", {
+    email,
+    time_zone: timeZone,
+  });
 }
 
 export async function redeemMagicLink(token: string): Promise<AuthTokens> {

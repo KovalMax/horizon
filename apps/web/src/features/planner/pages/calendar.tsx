@@ -75,7 +75,7 @@ export function CalendarPage({
       </div>
       {pageHeader(
         "Calendar",
-        "Times shown in your time · Berlin (CET)",
+        "Times follow each event’s time zone",
         <Button onClick={() => setModal("event")}>
           <Icon name="plus" />
           New event
@@ -322,12 +322,11 @@ export function CalendarPage({
         <aside className="tip-card calendar-tip">
           <b>About times</b>
           <p>
-            Every event keeps the timezone it was created in. You see it
-            converted to Berlin (CET); open an event to see the original time
-            and each member’s local time.
+            Each event is shown in the time zone it was scheduled in. Open an
+            event to see its time zone.
           </p>
           <p>All-day events stay on the same date for everyone.</p>
-          <p>Tip: use the arrow keys in the day strip to move between days.</p>
+          <p>Use the arrow keys in the day strip to move between days.</p>
         </aside>
       </div>
       {eventsStatus === "loading" && (

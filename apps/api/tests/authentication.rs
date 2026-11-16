@@ -69,6 +69,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .uri("/auth/magic-links")
         .set_json(MagicLinkRequest {
             email: format!(" {} ", email.to_ascii_uppercase()),
+            time_zone: Some("Europe/Berlin".to_owned()),
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;
@@ -78,6 +79,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .uri("/auth/magic-links")
         .set_json(MagicLinkRequest {
             email: email.clone(),
+            time_zone: None,
         })
         .to_request();
     let response = actix_test::call_service(&app, throttled).await;
@@ -119,6 +121,12 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
     );
     let authentication: AuthenticationResult = actix_test::read_body_json(response).await;
     assert_eq!(authentication.account.email, email);
+    let time_zone = sqlx::query_scalar::<_, String>("SELECT time_zone FROM users WHERE id = $1")
+        .bind(authentication.account.id)
+        .fetch_one(&pool)
+        .await
+        .expect("new account should have a stored time zone");
+    assert_eq!(time_zone, "Europe/Berlin");
 
     let rate_limit_ip = SocketAddr::new(IpAddr::V6(Ipv6Addr::from(Uuid::new_v4().as_u128())), 1234);
     for request_number in 0..20 {
@@ -130,6 +138,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
                     "rate-limit-{request_number}-{}@example.test",
                     Uuid::new_v4()
                 ),
+                time_zone: None,
             })
             .to_request();
         assert_eq!(
@@ -143,6 +152,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .peer_addr(rate_limit_ip)
         .set_json(MagicLinkRequest {
             email: format!("rate-limit-overflow-{}@example.test", Uuid::new_v4()),
+            time_zone: None,
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;

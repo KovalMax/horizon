@@ -26,7 +26,7 @@ export function SettingsPage({
       <section className="list-card">
         <h2>Time and reminders</h2>
         <label className="form-field">
-          Time zone (IANA)
+          Time zone
           <input
             value={timeZone}
             onChange={(event) => setTimeZone(event.target.value)}

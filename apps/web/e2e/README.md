@@ -19,7 +19,8 @@ docker run --rm -v "$PWD:/work" -w /work \
 ```
 
 The deterministic suite runs the Vite app on `127.0.0.1:4173`. It stubs external
-API responses where needed and checks sign-in request feedback, retry and rate-limit behavior, and session
+API responses where needed and checks sign-in requests, callback redemption and
+URL cleanup, missing-token handling, retry and rate-limit feedback, and session
 restoration. Authenticated persisted planner workflows are covered by web tests;
 the deterministic browser suite does not replace the real local
 browser-to-API-to-PostgreSQL smoke test.

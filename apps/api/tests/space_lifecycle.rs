@@ -48,6 +48,7 @@ macro_rules! authenticate {
                 .uri("/auth/magic-links")
                 .set_json(MagicLinkRequest {
                     email: email.to_owned(),
+                    time_zone: None,
                 })
                 .to_request();
             assert_eq!(

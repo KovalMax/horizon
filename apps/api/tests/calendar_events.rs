@@ -70,6 +70,7 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
         .uri("/auth/magic-links")
         .set_json(MagicLinkRequest {
             email: email.clone(),
+            time_zone: None,
         })
         .to_request();
     assert_eq!(

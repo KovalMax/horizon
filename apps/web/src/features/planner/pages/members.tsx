@@ -173,7 +173,7 @@ export function MembersPage({
             request before they join.
           </p>
           <form
-            className="invite-compose"
+            className="invite-compose join-link-compose"
             onSubmit={async (event) => {
               event.preventDefault();
               const form = event.currentTarget;
@@ -202,14 +202,14 @@ export function MembersPage({
               }
             }}
           >
-            <label className="form-field">
+            <label className="form-field join-link-field">
               Role after approval
               <select name="joinLinkRole" defaultValue="viewer">
                 <option value="viewer">Viewer</option>
                 <option value="editor">Editor</option>
               </select>
             </label>
-            <label className="form-field">
+            <label className="form-field join-link-field join-link-expiry">
               Expires at (optional)
               <input name="joinLinkExpiresAt" type="datetime-local" />
               <small>

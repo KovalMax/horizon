@@ -223,13 +223,13 @@ export function useNotifications(
       });
       setMutedSpaces(settings.muted_space_ids);
       setNotificationPrefsStatus("ready");
-      showToast("Notification preferences saved.");
+      showToast("Settings saved.");
     } catch (error) {
       setNotificationPrefsStatus("error");
       setNotificationPrefsError(
         error instanceof NotificationsApiError && error.status === 400
           ? "Check the notification settings and try again."
-          : "Notification preferences couldn’t be saved. Retry your action.",
+          : "Settings couldn’t be saved. Retry your action.",
       );
     }
   };

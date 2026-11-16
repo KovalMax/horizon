@@ -165,7 +165,7 @@ test("inbox displays persisted items and supports explicit read state", async ()
   );
 });
 
-test("notification channel choices are persisted", async () => {
+test("Save settings persists notification channels and profile preferences together", async () => {
   const fetchMock = await setup("/settings");
   expect(
     await screen.findByRole("heading", { name: "Notification channels" }),
@@ -174,9 +174,11 @@ test("notification channel choices are persisted", async () => {
     name: "In-app",
   })[0]!;
   fireEvent.click(assignmentInApp);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Save notification preferences" }),
-  );
+  const timeZone = screen.getByRole("combobox", { name: "Time zone" });
+  fireEvent.focus(timeZone);
+  fireEvent.change(timeZone, { target: { value: "Berlin" } });
+  fireEvent.click(screen.getByRole("option", { name: /Berlin.*GMT/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
   await waitFor(() => {
     const saveCall = fetchMock.mock.calls.find(
@@ -187,11 +189,29 @@ test("notification channel choices are persisted", async () => {
     expect(saveCall).toBeTruthy();
     const saved = JSON.parse(String(saveCall?.[1]?.body));
     expect(saved.preferences).toHaveLength(12);
+    expect(saved.time_zone).toBe("Europe/Berlin");
+    expect(saved.default_reminder_time).toBe("09:00");
     expect(
       saved.preferences.find(
         (item: { event_type: string; channel: string }) =>
           item.event_type === "task_assignment" && item.channel === "in_app",
       ).enabled,
     ).toBe(false);
+  });
+});
+
+test("time zone suggestions close when clicking outside the picker", async () => {
+  await setup("/settings");
+  const timeZone = screen.getByRole("combobox", { name: "Time zone" });
+  fireEvent.focus(timeZone);
+
+  expect(
+    await screen.findByRole("listbox", { name: "Time zones" }),
+  ).toBeTruthy();
+  fireEvent.pointerDown(document.body);
+
+  await waitFor(() => {
+    expect(timeZone.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("listbox", { name: "Time zones" })).toBeNull();
   });
 });

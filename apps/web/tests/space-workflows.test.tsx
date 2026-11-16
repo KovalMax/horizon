@@ -287,9 +287,14 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Rename Weekend prep" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "List name" }), {
-    target: { value: "Errands" },
-  });
+  fireEvent.change(
+    within(screen.getByRole("dialog")).getByRole("textbox", {
+      name: "List name",
+    }),
+    {
+      target: { value: "Errands" },
+    },
+  );
   fireEvent.click(screen.getByRole("button", { name: "Save list name" }));
   expect(await screen.findByText(/Errands · 1 open/)).toBeTruthy();
 
@@ -379,7 +384,7 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
   fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
     target: { value: "Persisted dinner" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save event" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add event" }));
 
   expect(await screen.findByText("Persisted dinner")).toBeTruthy();
   expect(fetchMock).toHaveBeenCalledWith(
@@ -628,11 +633,10 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   fireEvent.click(
     within(spacesNavigation).getByRole("link", { name: "To-dos" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: /New list/ }));
   fireEvent.change(screen.getByRole("textbox", { name: "List name" }), {
     target: { value: "Weekend prep" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Create list" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add" }));
   expect(
     await screen.findByText("To-do list saved to this Space."),
   ).toBeTruthy();
@@ -746,6 +750,12 @@ test("signed-in Members load and save Places in their selected Space", async () 
   fireEvent.click(
     within(spacesNavigation).getByRole("link", { name: "Places" }),
   );
+  expect(
+    await screen.findByRole("heading", { name: "No saved places yet" }),
+  ).toBeTruthy();
+  expect(
+    screen.getAllByRole("button", { name: "Save a place", exact: true }),
+  ).toHaveLength(1);
   fireEvent.click(screen.getAllByRole("button", { name: "Save a place" })[0]!);
   fireEvent.change(screen.getByRole("textbox", { name: "Place name" }), {
     target: { value: "Neighborhood bakery" },
@@ -763,6 +773,9 @@ test("signed-in Members load and save Places in their selected Space", async () 
   ).toBeTruthy();
   expect(screen.getByText("12 Linden Street")).toBeTruthy();
   expect(screen.getByText("Best sourdough before noon")).toBeTruthy();
+  expect(
+    screen.getAllByRole("button", { name: "Save a place", exact: true }),
+  ).toHaveLength(1);
   expect(fetchMock).toHaveBeenCalledWith(
     `/api/spaces/${space.id}/places`,
     expect.objectContaining({

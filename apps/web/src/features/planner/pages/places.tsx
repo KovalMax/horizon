@@ -2,14 +2,6 @@ import { useMemo } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button, Icon } from "../../../shared/ui";
 
-const placeCategories = [
-  "All",
-  "Food & drink",
-  "Groceries",
-  "Health",
-  "Services",
-];
-
 export function PlacesPage({
   state,
   helpers,
@@ -30,26 +22,34 @@ export function PlacesPage({
     retryPlaces,
   } = state;
   const { pageHeader } = helpers;
+  const spacePlaces = useMemo(
+    () => places.filter((place) => place.space === space.id),
+    [places, space.id],
+  );
+  const categories = useMemo(
+    () => ["All", ...new Set(spacePlaces.map((place) => place.category))],
+    [spacePlaces],
+  );
   const visiblePlaces = useMemo(
     () =>
-      places.filter(
-        (place) =>
-          place.space === space.id &&
-          (placeFilter === "All" || place.category === placeFilter),
+      spacePlaces.filter(
+        (place) => placeFilter === "All" || place.category === placeFilter,
       ),
-    [places, space.id, placeFilter],
+    [spacePlaces, placeFilter],
   );
-  const hasSavedPlaces = places.some((place) => place.space === space.id);
+  const hasSavedPlaces = spacePlaces.length > 0;
 
   return (
     <>
       {pageHeader(
         "Saved places",
         `Places saved in ${space.name}. Only this Space's places are shown.`,
-        <Button onClick={() => setModal("place")}>
-          <Icon name="plus" />
-          Save a place
-        </Button>,
+        hasSavedPlaces ? (
+          <Button onClick={() => setModal("place")}>
+            <Icon name="plus" />
+            Save a place
+          </Button>
+        ) : undefined,
       )}
       <div className="space-page-tabs">
         {[
@@ -77,32 +77,92 @@ export function PlacesPage({
           </Button>
         </div>
       )}
-      <div className="place-filters">
-        {placeCategories.map((category) => (
-          <button
-            className={placeFilter === category ? "picked" : ""}
-            key={category}
-            onClick={() => setPlaceFilter(category)}
+      <div className="place-controls">
+        <div className="place-filters">
+          {categories.map((category) => {
+            const count =
+              category === "All"
+                ? spacePlaces.length
+                : spacePlaces.filter((place) => place.category === category)
+                    .length;
+            return (
+              <button
+                className={placeFilter === category ? "picked" : ""}
+                key={category}
+                onClick={() => setPlaceFilter(category)}
+              >
+                {category} ({count})
+              </button>
+            );
+          })}
+        </div>
+        {hasSavedPlaces && (
+          <div
+            className="place-view-toggle"
+            role="group"
+            aria-label="Place view"
           >
-            {category}{" "}
-            {category === "All"
-              ? `(${places.filter((place) => place.space === space.id).length})`
-              : ""}
-          </button>
-        ))}
+            <button type="button" aria-pressed="true">
+              <Icon name="list" size={16} />
+              List
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Map view is coming soon."
+              aria-label="Map view coming soon"
+            >
+              <Icon name="map" size={16} />
+              Map
+            </button>
+          </div>
+        )}
       </div>
       {visiblePlaces.length > 0 ? (
-        <div className="places-grid">
+        <div className="saved-places-list">
           {visiblePlaces.map((place) => (
-            <article className="place-card" key={place.id ?? place.name}>
+            <article className="saved-place-card" key={place.id ?? place.name}>
               <div className="place-thumb">
                 <Icon name="pin" size={22} />
               </div>
-              <div>
-                <span className="eyebrow">{place.category}</span>
-                <h2>{place.name}</h2>
+              <div className="saved-place-content">
+                <div className="saved-place-title">
+                  <h2>{place.name}</h2>
+                  <span className="place-category-tag">{place.category}</span>
+                </div>
                 <p>{place.address}</p>
                 {place.note && <p className="place-note">{place.note}</p>}
+                <div className="saved-place-actions">
+                  <a
+                    className="place-directions"
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.address)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Icon name="arrow" size={16} />
+                    Directions
+                  </a>
+                  {place.id && (
+                    <button
+                      className="place-remove"
+                      type="button"
+                      disabled={state.removingPlaceId === place.id}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Remove “${place.name}” from ${space.name}?`,
+                          )
+                        ) {
+                          void state.removeSavedPlace(place);
+                        }
+                      }}
+                    >
+                      {state.removingPlaceId === place.id
+                        ? "Removing…"
+                        : "Remove"}
+                    </button>
+                  )}
+                </div>
               </div>
             </article>
           ))}
@@ -120,9 +180,11 @@ export function PlacesPage({
                 ? "Choose another category to see more places."
                 : `Save a useful place for everyone in ${space.name}.`}
             </p>
-            <Button variant="outline" onClick={() => setModal("place")}>
-              Save a place
-            </Button>
+            {!hasSavedPlaces && (
+              <Button variant="outline" onClick={() => setModal("place")}>
+                Save a place
+              </Button>
+            )}
           </div>
         )
       )}

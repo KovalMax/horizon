@@ -69,6 +69,12 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
         <circle cx="12" cy="10" r="2.5" />
       </>
     ),
+    map: (
+      <>
+        <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+        <path d="M9 3v15M15 6v15" />
+      </>
+    ),
     users: (
       <>
         <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />

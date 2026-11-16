@@ -69,6 +69,46 @@ impl PostgresPlacesRepository {
             .ok_or(PlaceError::NotFound)
     }
 
+    pub(super) async fn delete_for_member(
+        &self,
+        space_id: Uuid,
+        place_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), PlaceError> {
+        let deleted = sqlx::query_scalar::<_, Uuid>(
+            "DELETE FROM saved_places p USING space_memberships m \
+             WHERE p.id = $1 AND p.space_id = $2 \
+               AND m.space_id = p.space_id AND m.user_id = $3 \
+               AND m.role IN ('owner', 'editor') \
+             RETURNING p.id",
+        )
+        .bind(place_id)
+        .bind(space_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| PlaceError::Unavailable)?;
+        if deleted.is_some() {
+            return Ok(());
+        }
+        let role = sqlx::query_scalar::<_, String>(
+            "SELECT m.role FROM saved_places p \
+             JOIN space_memberships m ON m.space_id = p.space_id \
+             WHERE p.id = $1 AND p.space_id = $2 AND m.user_id = $3",
+        )
+        .bind(place_id)
+        .bind(space_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| PlaceError::Unavailable)?;
+        Err(if role.as_deref() == Some("viewer") {
+            PlaceError::Forbidden
+        } else {
+            PlaceError::NotFound
+        })
+    }
+
     async fn find_for_member(
         &self,
         place_id: Uuid,

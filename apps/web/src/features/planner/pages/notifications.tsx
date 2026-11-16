@@ -66,6 +66,10 @@ export function NotificationsPage({
   helpers: PageHelpers;
 }) {
   const { pageHeader } = helpers;
+  const newItems = state.notifications.filter((item) => item.read_at === null);
+  const earlierItems = state.notifications.filter(
+    (item) => item.read_at !== null,
+  );
   return (
     <>
       {pageHeader(
@@ -102,11 +106,34 @@ export function NotificationsPage({
         )}
       {state.notificationsStatus === "ready" &&
         state.notifications.length > 0 && (
-          <div className="notification-list" aria-label="Your notifications">
-            {state.notifications.map((item) => (
-              <NotificationRow key={item.id} item={item} state={state} />
-            ))}
-          </div>
+          <>
+            {newItems.length > 0 && (
+              <section
+                className="notification-group"
+                aria-label="New notifications"
+              >
+                <h2>New</h2>
+                <div className="notification-list">
+                  {newItems.map((item) => (
+                    <NotificationRow key={item.id} item={item} state={state} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {earlierItems.length > 0 && (
+              <section
+                className="notification-group"
+                aria-label="Earlier notifications"
+              >
+                <h2>Earlier</h2>
+                <div className="notification-list">
+                  {earlierItems.map((item) => (
+                    <NotificationRow key={item.id} item={item} state={state} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       {state.notificationsNextOffset !== null && (
         <Button

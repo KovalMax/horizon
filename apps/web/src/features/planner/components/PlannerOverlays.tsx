@@ -4,6 +4,16 @@ import { AppLink, Button, Icon } from "../../../shared/ui";
 import { SpaceSwitcher } from "./SpaceSwitcher";
 
 const eventTimeValidationMessage = "The end time must be after the start time.";
+const eventTimeZones = [
+  ["Europe/Berlin", "Berlin (CET)"],
+  ["Europe/Lisbon", "Lisbon (WET)"],
+  ["Europe/London", "London (GMT)"],
+  ["America/New_York", "New York (ET)"],
+  ["America/Los_Angeles", "Los Angeles (PT)"],
+  ["Asia/Kolkata", "Kolkata (IST)"],
+  ["Asia/Tokyo", "Tokyo (JST)"],
+  ["UTC", "UTC"],
+] as const;
 
 function handleModalKeyDown(
   event: React.KeyboardEvent<HTMLFormElement>,
@@ -194,6 +204,22 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
               </label>
             ) : (
               <>
+                {modal === "event" && (
+                  <label className="form-field">
+                    Space
+                    <select
+                      name="space"
+                      defaultValue={editingEvent?.space ?? appState.space.id}
+                      disabled={Boolean(editingEvent)}
+                    >
+                      {appState.activeSpaces.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="form-field">
                   {modal === "place" ? "Place name" : "Title"}
                   <input
@@ -206,16 +232,22 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         : editingEvent?.title
                     }
                     placeholder={
-                      modal === "task" ? "What needs doing?" : "Add a title"
+                      modal === "task"
+                        ? "What needs doing?"
+                        : modal === "event"
+                          ? "e.g. Parents' evening"
+                          : "Add a title"
                     }
                   />
                 </label>
                 {modal === "event" && (
                   <label className="setting-row event-all-day-row">
-                    <span>All day</span>
+                    <span>All-day event</span>
                     <input
                       name="allDay"
                       type="checkbox"
+                      role="switch"
+                      aria-label="All-day event"
                       defaultChecked={editingEvent?.allDay}
                       onChange={(event) =>
                         clearCorrectedEventTimeError(event, appState)
@@ -262,9 +294,33 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                 )}
                 {modal === "event" && (
                   <>
+                    <label className="form-field">
+                      Event timezone
+                      <select
+                        name="timeZone"
+                        defaultValue={
+                          editingEvent?.timeZone ?? appState.timeZone
+                        }
+                      >
+                        {eventTimeZones.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                        {!eventTimeZones.some(
+                          ([value]) =>
+                            value ===
+                            (editingEvent?.timeZone ?? appState.timeZone),
+                        ) && (
+                          <option value={appState.timeZone}>
+                            {appState.timeZone}
+                          </option>
+                        )}
+                      </select>
+                    </label>
                     {appState.eventEditScope !== "occurrence" && (
                       <label className="form-field">
-                        Repeat
+                        Repeats
                         <select
                           name="repeat"
                           defaultValue={editingEvent?.repeat ?? ""}
@@ -277,26 +333,29 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       </label>
                     )}
                     {appState.eventEditScope !== "occurrence" && (
-                      <label className="form-field">
-                        Repeat through (optional)
-                        <input
-                          name="recurrenceEndsOn"
-                          type="date"
-                          defaultValue={editingEvent?.recurrenceEndsOn}
-                        />
-                        <small>Leave blank to repeat indefinitely.</small>
-                      </label>
+                      <details className="recurrence-end-options">
+                        <summary>Set an end date (optional)</summary>
+                        <label className="form-field">
+                          Repeat through
+                          <input
+                            name="recurrenceEndsOn"
+                            type="date"
+                            defaultValue={editingEvent?.recurrenceEndsOn}
+                          />
+                          <small>Leave blank to repeat indefinitely.</small>
+                        </label>
+                      </details>
                     )}
                     <label className="form-field">
-                      Place
+                      Location (optional)
                       <input
                         name="place"
-                        placeholder="Add a place or address"
+                        placeholder="Address or place name"
                         defaultValue={editingEvent?.place}
                       />
                     </label>
                     <label className="form-field">
-                      Notes
+                      Notes (optional)
                       <textarea
                         name="notes"
                         rows={3}
@@ -463,7 +522,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                             ? "Save Task changes"
                             : "Add Task"
                           : modal === "event"
-                            ? "Save event"
+                            ? appState.editingEvent
+                              ? "Save event"
+                              : "Add event"
                             : modal === "place"
                               ? "Save place"
                               : modal === "list"
@@ -473,17 +534,17 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                                 : "Create Space"}
               </Button>
             </div>
-            <small>
-              {modal === "space"
-                ? "Your new Space is ready for planning."
-                : modal === "event"
-                  ? "This Calendar event is saved to the selected Space."
+            {modal !== "event" && (
+              <small>
+                {modal === "space"
+                  ? "Your new Space is ready for planning."
                   : modal === "task" || modal === "list"
                     ? "This To-do content is saved to the selected Space."
                     : modal === "place"
                       ? "This Saved place is saved to the selected Space."
                       : "Your changes are saved to this Space."}
-            </small>
+              </small>
+            )}
           </form>
         </div>
       )}

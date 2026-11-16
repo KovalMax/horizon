@@ -53,7 +53,8 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
             .service(auth::redeem_magic_link)
             .service(spaces::create_shared_space)
             .service(places::list_places)
-            .service(places::create_place),
+            .service(places::create_place)
+            .service(places::delete_place),
     )
     .await;
 
@@ -145,11 +146,14 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     assert_eq!(next_places.items.len(), 1);
     assert_eq!(next_places.next_offset, None);
     assert_ne!(places.items[0].id, next_places.items[0].id);
-    sqlx::query("DELETE FROM saved_places WHERE id = $1")
-        .bind(second_place.id)
-        .execute(&pool)
-        .await
-        .expect("test should clean up the additional place");
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{}/places/{}", space.id, second_place.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::NO_CONTENT
+    );
 
     sqlx::query("UPDATE space_memberships SET role = 'viewer' WHERE space_id = $1")
         .bind(space.id)
@@ -169,6 +173,14 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
         .uri(&format!("/spaces/{}/places", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
         .set_json(place_request())
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{}/places/{}", space.id, created.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
         .to_request();
     assert_eq!(
         actix_test::call_service(&app, request).await.status(),

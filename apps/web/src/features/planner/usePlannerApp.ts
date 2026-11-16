@@ -36,7 +36,12 @@ import {
   updateMyTaskReminders,
   type ApiTaskList,
 } from "./todosApi";
-import { createSavedPlace, listSavedPlaces, PlacesApiError } from "./placesApi";
+import {
+  createSavedPlace,
+  deleteSavedPlace,
+  listSavedPlaces,
+  PlacesApiError,
+} from "./placesApi";
 import {
   useCalendarCollection,
   useSavedPlaceCollection,
@@ -53,11 +58,58 @@ function dateForOffset(offset: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function localDateTimeToRfc3339(date: string, time: string): string {
-  const value = new Date(`${date}T${time}`);
-  if (Number.isNaN(value.getTime()))
-    throw new Error("Invalid local date and time");
-  return value.toISOString();
+function localDateTimeToRfc3339(
+  date: string,
+  time: string,
+  timeZone: string,
+): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const target = Date.UTC(year, month - 1, day, hour, minute);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  let instant = target;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(instant))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    const represented = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    instant += target - represented;
+  }
+  const resolved = formatter.formatToParts(new Date(instant));
+  const actual = Object.fromEntries(
+    resolved
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  if (
+    actual.year !== year ||
+    actual.month !== month ||
+    actual.day !== day ||
+    actual.hour !== hour ||
+    actual.minute !== minute
+  ) {
+    throw new Error("The selected time does not exist in this timezone");
+  }
+  return new Date(instant).toISOString();
 }
 
 export function usePlannerApp(accessToken: string) {
@@ -85,6 +137,7 @@ export function usePlannerApp(accessToken: string) {
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [editingList, setEditingList] = useState<ApiTaskList | null>(null);
   const [savingPlace, setSavingPlace] = useState(false);
+  const [removingPlaceId, setRemovingPlaceId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
   const [doneOpen, setDoneOpen] = useState(true);
@@ -391,21 +444,40 @@ export function usePlannerApp(accessToken: string) {
     const title = String(form.get("title") || "New item");
     if (modal === "event") {
       const date = String(form.get("date") || dateForOffset(calendarDay));
+      const eventSpaceId = String(
+        form.get("space") || editingEvent?.space || space.id,
+      );
       const allDay = form.get("allDay") === "on";
       const time = String(form.get("time") || "18:00");
       const endTime = String(form.get("end") || "");
       const recurrenceValue = String(form.get("repeat") || "");
       const recurrenceEndsOnValue = String(form.get("recurrenceEndsOn") || "");
-      const timeZone =
-        editingEvent?.timeZone ??
-        Intl.DateTimeFormat().resolvedOptions().timeZone ??
-        "UTC";
+      const eventTimeZone = String(
+        form.get("timeZone") || editingEvent?.timeZone || timeZone || "UTC",
+      );
+      let startsAt: string;
+      let endsAt: string | null;
+      try {
+        startsAt = localDateTimeToRfc3339(
+          date,
+          allDay ? "00:00" : time,
+          eventTimeZone,
+        );
+        endsAt =
+          !allDay && endTime
+            ? localDateTimeToRfc3339(date, endTime, eventTimeZone)
+            : null;
+      } catch {
+        setEventError(
+          "That local time doesn’t exist in this timezone. Choose another time or timezone.",
+        );
+        return;
+      }
       const input: CalendarEventInput = {
         title,
-        startsAt: localDateTimeToRfc3339(date, allDay ? "00:00" : time),
-        endsAt:
-          !allDay && endTime ? localDateTimeToRfc3339(date, endTime) : null,
-        timeZone,
+        startsAt,
+        endsAt,
+        timeZone: eventTimeZone,
         allDay,
         location: String(form.get("place") || "").trim() || null,
         notes: String(form.get("notes") || "").trim() || null,
@@ -428,7 +500,7 @@ export function usePlannerApp(accessToken: string) {
         setEventError("The end time must be after the start time.");
         return;
       }
-      if (!activeSpaces.some((item) => item.id === space.id)) {
+      if (!activeSpaces.some((item) => item.id === eventSpaceId)) {
         setEventError(
           "Choose one of your account Spaces before adding an event.",
         );
@@ -450,7 +522,7 @@ export function usePlannerApp(accessToken: string) {
                 String(editingEvent.id),
                 input,
               )
-          : await createCalendarEvent(accessToken, space.id, input);
+          : await createCalendarEvent(accessToken, eventSpaceId, input);
         if (editingEvent) {
           if (eventEditScope === "occurrence") {
             setEvents((current) =>
@@ -785,6 +857,53 @@ export function usePlannerApp(accessToken: string) {
     }
   };
 
+  const createTaskList = async (name: string): Promise<boolean> => {
+    const listName = name.trim();
+    if (!listName) return false;
+    setSavingTask(true);
+    setTaskError("");
+    try {
+      const created = await createTodoList(accessToken, space.id, listName);
+      setServerTaskLists((all) => ({
+        ...all,
+        [space.id]: [...(all[space.id] ?? []), created],
+      }));
+      setTaskLists((all) => ({
+        ...all,
+        [space.id]: [...new Set([...(all[space.id] ?? []), created.name])],
+      }));
+      setTasksStatus("ready");
+      showToast("To-do list saved to this Space.");
+      return true;
+    } catch (error) {
+      setTaskError(
+        error instanceof TodosApiError && error.status === 400
+          ? "Enter a list name with 1–80 characters."
+          : error instanceof TodosApiError && error.status === 409
+            ? "A list with that name already exists."
+            : "The list couldn’t be saved. Check your connection and retry.",
+      );
+      return false;
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
+  const removeSavedPlace = async (place: PlaceItem) => {
+    if (!place.id || removingPlaceId) return;
+    setRemovingPlaceId(place.id);
+    setPlaceError("");
+    try {
+      await deleteSavedPlace(accessToken, space.id, place.id);
+      setPlaces((current) => current.filter((item) => item.id !== place.id));
+      showToast("Saved place removed.");
+    } catch {
+      setPlaceError("The Saved place couldn’t be removed. Retry your action.");
+    } finally {
+      setRemovingPlaceId(null);
+    }
+  };
+
   const loadMoreEvents = async () => {
     if (eventsNextOffset === null || loadingMoreEvents) return;
     setLoadingMoreEvents(true);
@@ -943,6 +1062,7 @@ export function usePlannerApp(accessToken: string) {
     removeSelectedTask,
     editTaskList,
     removeTaskList,
+    createTaskList,
     placesStatus,
     placeError,
     retryPlaces: () => setPlacesReload((current) => current + 1),
@@ -950,6 +1070,8 @@ export function usePlannerApp(accessToken: string) {
     loadingMorePlaces,
     loadMorePlaces,
     savingPlace,
+    removingPlaceId,
+    removeSavedPlace,
     hidden,
     setHidden,
     filter,

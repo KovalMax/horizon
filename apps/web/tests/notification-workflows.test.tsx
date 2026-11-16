@@ -199,3 +199,19 @@ test("Save settings persists notification channels and profile preferences toget
     ).toBe(false);
   });
 });
+
+test("time zone suggestions close when clicking outside the picker", async () => {
+  await setup("/settings");
+  const timeZone = screen.getByRole("combobox", { name: "Time zone" });
+  fireEvent.focus(timeZone);
+
+  expect(
+    await screen.findByRole("listbox", { name: "Time zones" }),
+  ).toBeTruthy();
+  fireEvent.pointerDown(document.body);
+
+  await waitFor(() => {
+    expect(timeZone.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("listbox", { name: "Time zones" })).toBeNull();
+  });
+});

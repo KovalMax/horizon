@@ -5,6 +5,61 @@ import type { AuthState } from "./features/auth/useAuth";
 import { PlannerShell } from "./features/planner/PlannerShell";
 import { usePlannerApp } from "./features/planner/usePlannerApp";
 import { authDebug } from "./features/auth/authDebug";
+import {
+  listMySpaceJoinRequests,
+  requestSpaceJoin,
+  type SpaceJoinRequest,
+} from "./features/planner/membersApi";
+
+function AuthenticatedJoinRequest({ authState }: { authState: AuthState }) {
+  const [path, setPath] = useState(window.location.pathname);
+  const [joinRequests, setJoinRequests] = useState<SpaceJoinRequest[]>([]);
+  const navigate = useCallback((to: string) => {
+    window.history.pushState({}, "", to);
+    setPath(window.location.pathname);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void listMySpaceJoinRequests(authState.tokens!.accessToken)
+      .then((requests) => {
+        if (active) setJoinRequests(requests);
+      })
+      .catch(() => {
+        if (active) setJoinRequests([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authState.tokens]);
+
+  const submitRequest = async (linkId: string) => {
+    try {
+      const request = await requestSpaceJoin(
+        authState.tokens!.accessToken,
+        linkId,
+      );
+      setJoinRequests((current) => [
+        request,
+        ...current.filter((item) => item.id !== request.id),
+      ]);
+      return request;
+    } catch {
+      return null;
+    }
+  };
+
+  return (
+    <AuthScreen
+      path={path}
+      auth={authState}
+      navigate={navigate}
+      joinRequests={joinRequests}
+      requestJoinAccess={submitRequest}
+    />
+  );
+}
 
 function UnauthenticatedApp({ authState }: { authState: AuthState }) {
   const [path, setPath] = useState(window.location.pathname);
@@ -16,6 +71,7 @@ function UnauthenticatedApp({ authState }: { authState: AuthState }) {
   const navigate = useCallback((to: string) => {
     window.history.pushState({}, "", to);
     setPath(window.location.pathname);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
 
   return (
@@ -34,6 +90,15 @@ function AuthenticatedPlanner({ authState }: { authState: AuthState }) {
 
 export function App() {
   const authState = useAuth();
+  const [route, setRoute] = useState(
+    () => window.location.pathname + window.location.search,
+  );
+  useEffect(() => {
+    const updateRoute = () =>
+      setRoute(window.location.pathname + window.location.search);
+    window.addEventListener("popstate", updateRoute);
+    return () => window.removeEventListener("popstate", updateRoute);
+  }, []);
   useEffect(() => {
     authDebug("app-state", {
       mode: authState.restoring
@@ -53,8 +118,16 @@ export function App() {
       </main>
     );
   }
+  const [pathname, search] = route.split("?");
+  const isJoinRequestRoute =
+    pathname === "/welcome" &&
+    Boolean(new URLSearchParams(search ?? "").get("join"));
   return authState.tokens ? (
-    <AuthenticatedPlanner authState={authState} />
+    isJoinRequestRoute ? (
+      <AuthenticatedJoinRequest authState={authState} />
+    ) : (
+      <AuthenticatedPlanner authState={authState} />
+    )
   ) : (
     <UnauthenticatedApp authState={authState} />
   );

@@ -87,6 +87,10 @@ Favor whitespace and subtle borders over heavy shadows or strong gradients.
 - Use native controls or accessible equivalents. Give icon-only controls
   accessible names, preserve visible keyboard focus, use buttons for actions
   and links for navigation, and retain correct dialog semantics.
+- Custom comboboxes and popovers must close on both Escape and an outside
+  pointer interaction. When auditing a picker, open it, click a sibling control
+  or page surface outside the picker, and confirm the menu disappears without
+  dismissing its containing dialog.
 - Desktop dialogs are centered cards; on small screens they become bottom
   sheets. Preserve bounded height, internal scrolling, close/cancel actions,
   backdrop behavior, and Escape handling.
@@ -115,8 +119,9 @@ Favor whitespace and subtle borders over heavy shadows or strong gradients.
 2. Run relevant API tests and `cargo fmt --check` when API/Rust code changes.
 3. Use Playwright MCP to inspect changed routes at a desktop viewport and at
    390px mobile; check 320px when controls are dense.
-4. Inspect interaction states: menus, dialogs, forms, focus, success/error,
-   empty/loading states, and role-specific affordances.
+4. Inspect interaction states: open and outside-dismissed pickers, menus,
+   dialogs, forms, focus, success/error, empty/loading states, and role-specific
+   affordances.
 5. Verify there is no page-level horizontal overflow and that labels,
    navigation, focus indicators, and touch targets remain usable.
 6. Report unavailable dependencies (such as a database) separately from code

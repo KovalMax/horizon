@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button } from "../../../shared/ui";
 
@@ -58,12 +58,28 @@ export function SettingsPage({
   } = state;
   const [timeZoneSearch, setTimeZoneSearch] = useState("");
   const [timeZonePickerOpen, setTimeZonePickerOpen] = useState(false);
+  const timeZonePickerRef = useRef<HTMLDivElement>(null);
   const selectedTimeZone = timeZones.find((zone) => zone.value === timeZone);
   const visibleTimeZones = timeZones.filter((zone) =>
     `${zone.label} ${zone.value}`
       .toLocaleLowerCase()
       .includes(timeZoneSearch.trim().toLocaleLowerCase()),
   );
+  useEffect(() => {
+    if (!timeZonePickerOpen) return;
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !timeZonePickerRef.current?.contains(event.target)
+      ) {
+        setTimeZonePickerOpen(false);
+        setTimeZoneSearch("");
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+  }, [timeZonePickerOpen]);
   const { pageHeader } = helpers;
   return (
     <>
@@ -76,7 +92,7 @@ export function SettingsPage({
         <p>Changes are saved with the Save settings button below.</p>
         <div className="form-field time-zone-field">
           <label htmlFor="time-zone-search">Time zone</label>
-          <div className="time-zone-picker">
+          <div className="time-zone-picker" ref={timeZonePickerRef}>
             <input
               id="time-zone-search"
               type="search"

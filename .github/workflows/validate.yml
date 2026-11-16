@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   checks:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 40
     env:
       COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}
@@ -40,14 +40,14 @@ jobs:
 
   browser:
     needs: checks
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - name: Set up Node.js for Playwright
         uses: actions/setup-node@v7
         with:
-          node-version: lts/*
+          node-version: 26
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: Install web dependencies

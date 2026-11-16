@@ -1,5 +1,5 @@
 use actix_web::{
-    get,
+    delete, get,
     http::{header, StatusCode},
     post, web, HttpRequest, HttpResponse,
 };
@@ -159,6 +159,40 @@ pub async fn create_place(
     };
     match places.create(path.into_inner(), user_id, &body).await {
         Ok(place) => HttpResponse::Created().json(place),
+        Err(error) => place_error(error),
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/spaces/{space_id}/places/{place_id}",
+    params(
+        ("space_id" = Uuid, Path, description = "Space containing the Saved place"),
+        ("place_id" = Uuid, Path, description = "Saved place to remove")
+    ),
+    security(("accessBearer" = [])),
+    responses(
+        (status = 204, description = "Saved place removed"),
+        (status = 401, description = "Access token is invalid or missing", body = Problem),
+        (status = 403, description = "Viewer cannot remove Saved places", body = Problem),
+        (status = 404, description = "Saved place not found", body = Problem),
+        (status = 503, description = "Service unavailable", body = Problem)
+    )
+)]
+#[delete("/spaces/{space_id}/places/{place_id}")]
+pub async fn delete_place(
+    request: HttpRequest,
+    path: web::Path<(Uuid, Uuid)>,
+    auth: web::Data<AuthApplication>,
+    places: web::Data<PlacesApplication>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    let (space_id, place_id) = path.into_inner();
+    match places.delete(space_id, place_id, user_id).await {
+        Ok(()) => HttpResponse::NoContent().finish(),
         Err(error) => place_error(error),
     }
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button } from "../../../shared/ui";
 
@@ -55,6 +56,14 @@ export function SettingsPage({
     mutedSpaces,
     setMutedSpaces,
   } = state;
+  const [timeZoneSearch, setTimeZoneSearch] = useState("");
+  const [timeZonePickerOpen, setTimeZonePickerOpen] = useState(false);
+  const selectedTimeZone = timeZones.find((zone) => zone.value === timeZone);
+  const visibleTimeZones = timeZones.filter((zone) =>
+    `${zone.label} ${zone.value}`
+      .toLocaleLowerCase()
+      .includes(timeZoneSearch.trim().toLocaleLowerCase()),
+  );
   const { pageHeader } = helpers;
   return (
     <>
@@ -65,22 +74,76 @@ export function SettingsPage({
       <section className="list-card">
         <h2>Time and reminders</h2>
         <p>Changes are saved with the Save settings button below.</p>
-        <label className="form-field">
-          Time zone
-          <input
-            type="text"
-            list="horizon-time-zones"
-            value={timeZone}
-            onChange={(event) => setTimeZone(event.target.value)}
-            placeholder="Search city or region"
-            autoComplete="off"
-          />
-          <datalist id="horizon-time-zones">
-            {timeZones.map((zone) => (
-              <option key={zone.value} value={zone.value} label={zone.label} />
-            ))}
-          </datalist>
-        </label>
+        <div className="form-field time-zone-field">
+          <label htmlFor="time-zone-search">Time zone</label>
+          <div className="time-zone-picker">
+            <input
+              id="time-zone-search"
+              type="search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={timeZonePickerOpen}
+              aria-controls="time-zone-options"
+              value={
+                timeZonePickerOpen
+                  ? timeZoneSearch
+                  : (selectedTimeZone?.label ?? timeZone)
+              }
+              onFocus={() => {
+                setTimeZoneSearch("");
+                setTimeZonePickerOpen(true);
+              }}
+              onChange={(event) => {
+                setTimeZoneSearch(event.target.value);
+                setTimeZonePickerOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setTimeZonePickerOpen(false);
+                  setTimeZoneSearch("");
+                } else if (event.key === "Enter" && visibleTimeZones[0]) {
+                  event.preventDefault();
+                  setTimeZone(visibleTimeZones[0].value);
+                  setTimeZonePickerOpen(false);
+                  setTimeZoneSearch("");
+                }
+              }}
+              placeholder="Search city, region, or GMT offset"
+              autoComplete="off"
+            />
+            {timeZonePickerOpen && (
+              <div
+                className="time-zone-options"
+                id="time-zone-options"
+                role="listbox"
+                aria-label="Time zones"
+              >
+                {visibleTimeZones.length ? (
+                  visibleTimeZones.map((zone) => (
+                    <button
+                      className="time-zone-option"
+                      type="button"
+                      role="option"
+                      aria-selected={zone.value === timeZone}
+                      key={zone.value}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setTimeZone(zone.value);
+                        setTimeZonePickerOpen(false);
+                        setTimeZoneSearch("");
+                      }}
+                    >
+                      <span>{zone.label}</span>
+                      <small>{zone.value}</small>
+                    </button>
+                  ))
+                ) : (
+                  <p className="time-zone-empty">No matching time zones.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
         <label className="form-field">
           Default reminder time
           <input

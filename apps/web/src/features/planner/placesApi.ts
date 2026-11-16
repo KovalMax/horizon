@@ -78,3 +78,18 @@ export async function createSavedPlace(
   );
   return toPlace(saved);
 }
+
+export async function deleteSavedPlace(
+  accessToken: string,
+  spaceId: string,
+  placeId: string,
+): Promise<void> {
+  const response = await authenticatedFetch(
+    `/api/spaces/${spaceId}/places/${placeId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (!response.ok) throw new PlacesApiError(response.status);
+}

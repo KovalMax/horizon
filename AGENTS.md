@@ -9,6 +9,22 @@
 - Keep product contexts separate. Surface conflicts with established decisions
   instead of silently overriding them.
 
+## Local development environment
+
+- Run Horizon exclusively through the local Docker setup. Do not start services,
+  run builds, tests, formatters, migrations, or application commands directly on
+  the host.
+- The root `Makefile` is the source of truth for Docker lifecycle and
+  development commands. Use its targets for starting, stopping, restarting,
+  building, inspecting, logs, migrations, and checks; do not invoke `docker`
+  or `docker compose` directly.
+- Prefer `make check` for the full isolated build, formatting, lint, and test
+  suite. Use `make test-web` or `make test-api` for focused suites, following
+  the Makefile's service/database requirements.
+- Use `https://horizon.localhost/` as the local app URL for browser and
+  Playwright checks. Do not use `localhost:3000` or another host-served app.
+- These rules apply to all agents and subagents working in this repository.
+
 ## Architecture and organization
 
 Use domain-driven design to keep product rules explicit and SOLID as a practical

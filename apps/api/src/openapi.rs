@@ -44,6 +44,7 @@ use utoipa::{
         todos::controllers::update_my_task_reminders,
         places::controllers::list_places,
         places::controllers::create_place,
+        places::controllers::delete_place,
         members::list_members,
         members::update_member_role,
         members::remove_member,

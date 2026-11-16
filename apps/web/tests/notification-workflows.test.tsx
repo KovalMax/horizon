@@ -174,6 +174,10 @@ test("Save settings persists notification channels and profile preferences toget
     name: "In-app",
   })[0]!;
   fireEvent.click(assignmentInApp);
+  const timeZone = screen.getByRole("combobox", { name: "Time zone" });
+  fireEvent.focus(timeZone);
+  fireEvent.change(timeZone, { target: { value: "Berlin" } });
+  fireEvent.click(screen.getByRole("option", { name: /Berlin.*GMT/ }));
   fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
   await waitFor(() => {

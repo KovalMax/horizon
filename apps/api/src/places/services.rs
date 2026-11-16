@@ -54,6 +54,17 @@ impl PlacesApplication {
             .await
             .map(Into::into)
     }
+
+    pub async fn delete(
+        &self,
+        space_id: Uuid,
+        place_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), PlaceError> {
+        self.repository
+            .delete_for_member(space_id, place_id, user_id)
+            .await
+    }
 }
 
 fn validate(request: &CreatePlaceRequest) -> Result<SavedPlaceDraft, PlaceError> {

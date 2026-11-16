@@ -115,6 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(todos::update_my_task_reminders)
             .service(places::list_places)
             .service(places::create_place)
+            .service(places::delete_place)
             .service(members::list_members)
             .service(members::update_member_role)
             .service(members::remove_member)

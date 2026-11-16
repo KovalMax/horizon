@@ -3,7 +3,7 @@
 COMPOSE ?= docker compose
 SERVICE ?=
 
-.PHONY: help certs up down restart build ps logs migrate test-api test-web check
+.PHONY: help certs up down restart build ps logs migrate test-api test-web format-web check
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; print "Horizon development commands:"} /^[a-zA-Z_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -51,6 +51,9 @@ test-api: ## Run API tests (requires running API and database)
 
 test-web: ## Run frontend tests in a temporary container
 	$(COMPOSE) run --build --rm --no-deps web npm test
+
+format-web: ## Format frontend source and tests in a temporary container
+	$(COMPOSE) run --rm --no-deps web npm run format:write
 
 check: ## Run all CI checks with an isolated temporary database
 	sh scripts/check.sh

@@ -1,6 +1,42 @@
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button } from "../../../shared/ui";
 
+const supportedTimeZones: string[] =
+  typeof Intl !== "undefined" && "supportedValuesOf" in Intl
+    ? (
+        Intl as typeof Intl & {
+          supportedValuesOf: (key: "timeZone") => string[];
+        }
+      ).supportedValuesOf("timeZone")
+    : [
+        "UTC",
+        "America/Los_Angeles",
+        "America/Chicago",
+        "America/New_York",
+        "Europe/London",
+        "Europe/Berlin",
+        "Europe/Helsinki",
+        "Asia/Tokyo",
+        "Australia/Sydney",
+      ];
+function createTimeZoneLabel(zone: string): string {
+  const name =
+    zone === "UTC" ? "UTC" : zone.split("/").at(-1)!.replaceAll("_", " ");
+  const offset =
+    new Intl.DateTimeFormat("en", {
+      timeZone: zone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  return `${name} — ${offset}`;
+}
+
+const timeZones = [
+  "UTC",
+  ...supportedTimeZones.filter((zone) => zone !== "UTC"),
+].map((zone) => ({ value: zone, label: createTimeZoneLabel(zone) }));
+
 export function SettingsPage({
   state,
   helpers,
@@ -28,10 +64,18 @@ export function SettingsPage({
         <label className="form-field">
           Time zone
           <input
+            type="text"
+            list="horizon-time-zones"
             value={timeZone}
             onChange={(event) => setTimeZone(event.target.value)}
-            placeholder="Europe/Berlin"
+            placeholder="Search city or region"
+            autoComplete="off"
           />
+          <datalist id="horizon-time-zones">
+            {timeZones.map((zone) => (
+              <option key={zone.value} value={zone.value} label={zone.label} />
+            ))}
+          </datalist>
         </label>
         <label className="form-field">
           Default reminder time

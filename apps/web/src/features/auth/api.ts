@@ -22,9 +22,27 @@ let refreshInFlight: Promise<AuthTokens | null> | null = null;
 const tokenListeners = new Set<AuthTokenListener>();
 const refreshTokenStorageKey = "horizon-refresh-token";
 
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === refreshTokenStorageKey && event.newValue === null) {
+      currentTokens = null;
+      for (const listener of tokenListeners) listener(null, "signed-out");
+    }
+  });
+}
+
 function storedRefreshToken(): string | null {
   try {
-    return window.sessionStorage.getItem(refreshTokenStorageKey);
+    const persistentToken = window.localStorage.getItem(refreshTokenStorageKey);
+    if (persistentToken) return persistentToken;
+    const previousTabToken = window.sessionStorage.getItem(
+      refreshTokenStorageKey,
+    );
+    if (previousTabToken) {
+      window.localStorage.setItem(refreshTokenStorageKey, previousTabToken);
+      window.sessionStorage.removeItem(refreshTokenStorageKey);
+    }
+    return previousTabToken;
   } catch {
     return null;
   }
@@ -36,11 +54,18 @@ export function hasStoredRefreshToken(): boolean {
 
 function storeRefreshToken(token: string | null): void {
   try {
-    if (token) window.sessionStorage.setItem(refreshTokenStorageKey, token);
-    else window.sessionStorage.removeItem(refreshTokenStorageKey);
+    if (token) window.localStorage.setItem(refreshTokenStorageKey, token);
+    else window.localStorage.removeItem(refreshTokenStorageKey);
   } catch {
     // Keep the in-memory session usable when storage is disabled or unavailable.
   }
+}
+
+async function withRefreshLock<T>(operation: () => Promise<T>): Promise<T> {
+  if (navigator.locks) {
+    return navigator.locks.request("horizon-auth-refresh", operation);
+  }
+  return operation();
 }
 
 export function setAuthTokens(
@@ -65,33 +90,35 @@ export function subscribeAuthTokens(listener: AuthTokenListener): () => void {
   return () => tokenListeners.delete(listener);
 }
 
-/** Rotates the tab-scoped refresh token after a full page reload. */
+/** Rotates the persisted refresh token after a full page reload. */
 export async function restoreAuthSession(): Promise<AuthTokens | null> {
-  const refreshToken = storedRefreshToken();
-  if (!refreshToken) return null;
-  try {
-    const response = await fetch("/api/auth/token/refresh", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${refreshToken}` },
-    });
-    if (response.status === 401) {
-      storeRefreshToken(null);
+  return withRefreshLock(async () => {
+    const refreshToken = storedRefreshToken();
+    if (!refreshToken) return null;
+    try {
+      const response = await fetch("/api/auth/token/refresh", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${refreshToken}` },
+      });
+      if (response.status === 401) {
+        if (storedRefreshToken() === refreshToken) storeRefreshToken(null);
+        return null;
+      }
+      if (!response.ok) return null;
+      const responseTokens = (await response.json()) as {
+        access_token: string;
+        refresh_token: string;
+      };
+      const tokens = {
+        accessToken: responseTokens.access_token,
+        refreshToken: responseTokens.refresh_token,
+      };
+      setAuthTokens(tokens);
+      return tokens;
+    } catch {
       return null;
     }
-    if (!response.ok) return null;
-    const responseTokens = (await response.json()) as {
-      access_token: string;
-      refresh_token: string;
-    };
-    const tokens = {
-      accessToken: responseTokens.access_token,
-      refreshToken: responseTokens.refresh_token,
-    };
-    setAuthTokens(tokens);
-    return tokens;
-  } catch {
-    return null;
-  }
+  });
 }
 
 async function refreshTokensFor(
@@ -101,14 +128,15 @@ async function refreshTokensFor(
   if (refreshInFlight) return refreshInFlight;
 
   const refreshToken = currentTokens.refreshToken;
-  const pendingRefresh = (async () => {
+  const pendingRefresh = withRefreshLock(async () => {
     try {
+      const latestRefreshToken = storedRefreshToken() ?? refreshToken;
       const response = await fetch("/api/auth/token/refresh", {
         method: "POST",
-        headers: { Authorization: `Bearer ${refreshToken}` },
+        headers: { Authorization: `Bearer ${latestRefreshToken}` },
       });
       if (response.status === 401) {
-        if (currentTokens?.refreshToken === refreshToken) {
+        if (storedRefreshToken() === latestRefreshToken) {
           setAuthTokens(null, "expired");
         }
         return null;
@@ -122,13 +150,12 @@ async function refreshTokensFor(
         accessToken: responseTokens.access_token,
         refreshToken: responseTokens.refresh_token,
       };
-      if (currentTokens?.refreshToken !== refreshToken) return currentTokens;
       setAuthTokens(updatedTokens);
       return updatedTokens;
     } catch {
       return null;
     }
-  })();
+  });
   refreshInFlight = pendingRefresh;
   try {
     return await pendingRefresh;

@@ -266,8 +266,8 @@ test("keeps an existing session when a callback remount has no token", async () 
   expect(auth.redeemLink).not.toHaveBeenCalled();
 });
 
-test("restores the signed-in session after a page reload using the tab refresh token", async () => {
-  window.sessionStorage.setItem("horizon-refresh-token", "persisted-refresh");
+test("restores the signed-in session after a browser restart using the persisted refresh token", async () => {
+  window.localStorage.setItem("horizon-refresh-token", "persisted-refresh");
   const fetchMock = successfulAuthFetch();
   vi.stubGlobal("fetch", fetchMock);
 
@@ -281,7 +281,7 @@ test("restores the signed-in session after a page reload using the tab refresh t
   expect(fetchMock).toHaveBeenCalledWith("/api/account/me", {
     headers: { Authorization: "Bearer restored-access" },
   });
-  expect(window.sessionStorage.getItem("horizon-refresh-token")).toBe(
+  expect(window.localStorage.getItem("horizon-refresh-token")).toBe(
     "restored-refresh",
   );
   expect(getAuthTokens()).toEqual({
@@ -290,8 +290,22 @@ test("restores the signed-in session after a page reload using the tab refresh t
   });
 });
 
+test("migrates a refresh token from the previous tab-scoped storage", async () => {
+  window.sessionStorage.setItem("horizon-refresh-token", "legacy-refresh");
+  const fetchMock = successfulAuthFetch();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(await screen.findByText("Signed in as")).toBeTruthy();
+  expect(window.localStorage.getItem("horizon-refresh-token")).toBe(
+    "restored-refresh",
+  );
+  expect(window.sessionStorage.getItem("horizon-refresh-token")).toBeNull();
+});
+
 test("preserves a rotated session when the account lookup is temporarily unavailable", async () => {
-  window.sessionStorage.setItem("horizon-refresh-token", "persisted-refresh");
+  window.localStorage.setItem("horizon-refresh-token", "persisted-refresh");
   const successfulFetch = successfulAuthFetch();
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -307,7 +321,7 @@ test("preserves a rotated session when the account lookup is temporarily unavail
 
   expect(await screen.findByText(/couldn’t load your account/i)).toBeTruthy();
   expect(screen.getByRole("navigation", { name: "Spaces" })).toBeTruthy();
-  expect(window.sessionStorage.getItem("horizon-refresh-token")).toBe(
+  expect(window.localStorage.getItem("horizon-refresh-token")).toBe(
     "restored-refresh",
   );
   expect(getAuthTokens()).toEqual({

@@ -160,17 +160,17 @@ export function PlannerShell({
             Sign in
           </AppLink>
         )}
-        <div
-          className="api-state"
-          role={ready === "unavailable" ? "alert" : "status"}
-          aria-live={ready === "unavailable" ? "assertive" : "polite"}
-        >
-          {ready === "checking"
-            ? "Checking service…"
-            : ready === "available"
-              ? "Service is available."
+        {ready !== "available" && (
+          <div
+            className="api-state"
+            role={ready === "unavailable" ? "alert" : "status"}
+            aria-live={ready === "unavailable" ? "assertive" : "polite"}
+          >
+            {ready === "checking"
+              ? "Checking service…"
               : "Service is unavailable."}
-        </div>
+          </div>
+        )}
       </div>
     </aside>
   );

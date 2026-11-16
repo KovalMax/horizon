@@ -1329,7 +1329,25 @@ select:focus-visible {
 }
 .invite-compose {
   display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.invite-compose .join-link-field {
+  min-width: 128px;
+  margin: 16px 0;
+}
+.invite-compose .join-link-expiry {
+  width: min(300px, 100%);
+}
+.invite-compose > .button {
+  min-height: 43px;
+  margin-bottom: 16px;
+  white-space: nowrap;
+}
+.join-link-expiry small {
+  min-height: 14px;
+  font-weight: 400;
 }
 .invite-compose input {
   min-width: 0;
@@ -1451,10 +1469,10 @@ select:focus-visible {
   padding-top: 10px;
 }
 .setting-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(116px, 160px) minmax(100px, 140px);
   min-height: 48px;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   border-top: 1px solid #edf0ed;
   color: var(--muted);
@@ -1464,6 +1482,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .setting-row input {
   accent-color: var(--primary);
@@ -2079,11 +2098,9 @@ select:focus-visible {
     margin-bottom: 12px;
   }
   .setting-row {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
     padding: 8px 0;
-  }
-  .setting-row > span {
-    min-width: 100%;
   }
   .invite-row {
     flex-wrap: wrap;

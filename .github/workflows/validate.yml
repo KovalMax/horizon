@@ -7,39 +7,105 @@ permissions:
   contents: read
 
 jobs:
-  checks:
+  api-build:
+    name: API / Build
     runs-on: ubuntu-26.04
-    timeout-minutes: 40
-    env:
-      COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - name: Build API check container
         run: docker compose --file compose.checks.yaml build api
-      - name: Build API
+      - name: Compile API and test targets
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
-      - name: Start PostgreSQL for API integration tests
+
+  api-test:
+    name: API / Tests
+    needs: api-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}-api-test
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build API test container
+        run: docker compose --file compose.checks.yaml build api
+      - name: Start PostgreSQL
         run: docker compose --file compose.checks.yaml up --detach --wait db
-      - name: Run API tests
+      - name: Run Rust tests
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo test --locked
-      - name: Check API formatting
+      - name: Stop PostgreSQL and remove test containers
+        if: always()
+        run: docker compose --file compose.checks.yaml down --remove-orphans
+
+  api-format:
+    name: API / Format
+    needs: api-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build API tooling container
+        run: docker compose --file compose.checks.yaml build api
+      - name: Check Rust formatting
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
-      - name: Run API Clippy
+
+  api-clippy:
+    name: API / Clippy
+    needs: api-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build API tooling container
+        run: docker compose --file compose.checks.yaml build api
+      - name: Run Rust Clippy
         run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+
+  web-build:
+    name: Web / Build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
       - name: Build web check container
         run: docker compose --file compose.checks.yaml build web
       - name: Build web application
         run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run build
+
+  web-test:
+    name: Web / Tests
+    needs: web-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build web test container
+        run: docker compose --file compose.checks.yaml build web
       - name: Run web unit tests
         run: docker compose --file compose.checks.yaml run --rm --no-deps web npm test
+
+  web-format:
+    name: Web / Format
+    needs: web-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build web tooling container
+        run: docker compose --file compose.checks.yaml build web
       - name: Check web formatting
         run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run format:check
-      - name: Stop PostgreSQL and remove check containers
-        if: always()
-        run: docker compose --file compose.checks.yaml down --remove-orphans
 
   browser:
-    needs: checks
+    name: Playwright / E2E
+    needs:
+      - api-build
+      - api-test
+      - api-format
+      - api-clippy
+      - web-build
+      - web-test
+      - web-format
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:

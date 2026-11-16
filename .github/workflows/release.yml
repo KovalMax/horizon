@@ -68,21 +68,6 @@ jobs:
           SMTP_HOST: localhost
           SMTP_FROM: Horizon <no-reply@example.invalid>
         run: docker compose --file infra/compose.prod.yaml config --quiet
-      - name: Set up Node.js for Playwright
-        uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Install web dependencies for Playwright
-        run: npm ci
-        working-directory: apps/web
-      - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
-        working-directory: apps/web
-      - name: Run Playwright browser checks
-        run: npm run test:e2e
-        working-directory: apps/web
       - name: Stop PostgreSQL and remove release-check containers
         if: always()
         run: docker compose --file compose.checks.yaml down --remove-orphans

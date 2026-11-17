@@ -2630,6 +2630,11 @@ a {
   padding: 40px 48px;
   border-radius: 30px;
 }
+.event-modal {
+  width: min(100%, 672px);
+  padding: 28px 30px;
+  border-radius: 26px;
+}
 .task-modal > .drawer-heading,
 .event-modal > .drawer-heading {
   margin-bottom: 18px;
@@ -2638,12 +2643,19 @@ a {
 .event-modal > .drawer-heading h2 {
   font-size: 30px;
 }
+.event-modal > .drawer-heading h2 {
+  font-size: 24px;
+}
 .task-modal .form-field,
 .event-modal .form-field {
   min-width: 0;
   gap: 10px;
   margin: 0 0 24px;
   font-size: 16px;
+}
+.event-modal .form-field {
+  gap: 8px;
+  font-size: 15px;
 }
 .task-modal .form-field input,
 .task-modal .form-field select,
@@ -2663,23 +2675,38 @@ a {
   min-height: 150px;
   padding-top: 14px;
 }
+.event-modal .form-field input,
+.event-modal .form-field select,
+.event-modal .form-field textarea {
+  min-height: 52px;
+  border-radius: 12px;
+  padding-right: 14px;
+  padding-left: 14px;
+  font-size: 16px;
+}
+.event-modal .form-field textarea {
+  min-height: 104px;
+}
 .task-modal .modal-grid,
 .event-modal .modal-grid {
   gap: 28px;
+}
+.event-modal .modal-grid {
+  gap: 18px;
 }
 .event-modal .setting-row {
   min-height: 56px;
 }
 .event-modal .event-all-day-row {
-  min-height: 72px;
+  min-height: 58px;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 0 28px;
+  margin: 0 0 20px;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 0 20px;
+  border-radius: 16px;
+  padding: 0 14px;
   color: var(--ink);
-  font-size: 18px;
+  font-size: 16px;
 }
 .event-modal .event-all-day-row input[type="checkbox"] {
   appearance: none;
@@ -2747,7 +2774,7 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .event-modal .form-field {
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 .event-modal .recurrence-end-options {
   margin-bottom: 22px;

@@ -1115,6 +1115,24 @@ select:focus-visible {
   width: 32px;
   height: 32px;
   min-width: 32px;
+  border-width: 2.5px;
+  border-color: #84918c;
+  box-shadow: 0 1px 3px #1b29231f;
+}
+.task-list-card .check-circle svg {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  stroke-width: 2;
+}
+.task-list-card .check-circle.checked {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: 0 1px 3px #1b292329;
+}
+.task-list-card .check-circle:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 30%, transparent);
+  outline-offset: 3px;
 }
 .task-list-card .task-name {
   font-size: 18px;

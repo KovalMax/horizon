@@ -302,6 +302,24 @@ select:focus-visible {
   min-width: 0;
   flex: 1;
 }
+.connection-banner {
+  display: flex;
+  min-height: 42px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  border-bottom: 1px solid #eadba5;
+  padding: 8px 24px;
+  color: #5f4b17;
+  background: #fff7e5;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+.connection-banner b {
+  font-weight: 700;
+}
 .main-content {
   width: min(100%, 1024px);
   min-height: 100vh;
@@ -321,7 +339,7 @@ select:focus-visible {
 .page-header h1 {
   margin: 0;
   font-size: 30px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: -0.045em;
   line-height: 1.2;
 }
@@ -1049,28 +1067,6 @@ select:focus-visible {
   color: var(--primary);
   background: #e5f1eb;
 }
-.space-page-tabs {
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-  margin: 0 0 18px;
-}
-.space-page-tabs button {
-  flex: 0 0 auto;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 11px 2px;
-  color: var(--muted);
-  background: none;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.space-page-tabs button.current {
-  border-color: var(--primary);
-  color: var(--primary);
-}
 .calendar-day-list {
   grid-template-columns: minmax(0, 1fr);
   max-width: 700px;
@@ -1611,45 +1607,42 @@ select:focus-visible {
 }
 .notification-list {
   display: grid;
-  gap: 10px;
-  max-width: 760px;
+  gap: 6px;
 }
 .notification-group {
   display: grid;
-  gap: 12px;
-  margin-bottom: 26px;
+  max-width: 760px;
+  gap: 8px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  background: #fff;
 }
 .notification-group > h2 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 650;
   letter-spacing: -0.02em;
 }
 .notification-item {
   position: relative;
   display: flex;
-  min-height: 94px;
+  min-height: 0;
   align-items: flex-start;
-  gap: 14px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 18px;
-  background: #fff;
+  gap: 10px;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px;
+  background: transparent;
   text-align: left;
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 .notification-item.unread {
-  border-left: 4px solid var(--primary);
+  background: #edf5ef;
 }
 .notification-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--primary);
-  background: #e9f2ed;
+  display: none;
 }
 .notification-content {
   display: grid;
@@ -1676,15 +1669,40 @@ select:focus-visible {
 .notification-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 3px;
+}
+.notification-actions .button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--primary);
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 650;
+}
+.notification-actions .button:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+.notification-actions .button.quiet {
+  color: var(--muted);
 }
 .notification-item > .unread-dot {
-  width: 8px;
-  height: 8px;
-  margin: 5px 0 0 auto;
-  border-radius: 50%;
-  background: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 1px 0 0 auto;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.notification-item > .unread-dot::before {
+  color: var(--primary);
+  content: "●";
 }
 .form-field {
   display: grid;
@@ -2095,6 +2113,10 @@ select,
   }
 }
 @media (max-width: 850px) {
+  .connection-banner {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
   .sidebar {
     display: none;
   }
@@ -2406,12 +2428,6 @@ select,
   .task-meta {
     grid-column: 2;
   }
-  .space-page-tabs {
-    gap: 15px;
-  }
-  .space-page-tabs button {
-    font-size: 12px;
-  }
   .space-title {
     font-size: 16px;
   }
@@ -2644,18 +2660,18 @@ a {
 }
 .task-modal,
 .event-modal {
-  width: min(100%, 1152px);
-  padding: 40px 48px;
-  border-radius: 30px;
+  width: min(100%, 576px);
+  padding: 24px;
+  border-radius: 24px;
 }
 .task-modal {
-  width: min(100%, 760px);
-  padding: 28px 30px;
+  width: min(100%, 576px);
+  padding: 24px;
   border-radius: 24px;
 }
 .event-modal {
-  width: min(100%, 640px);
-  padding: 24px 26px;
+  width: min(100%, 576px);
+  padding: 24px;
   border-radius: 24px;
 }
 .task-modal > .drawer-heading,
@@ -2664,16 +2680,17 @@ a {
 }
 .task-modal > .drawer-heading h2,
 .event-modal > .drawer-heading h2 {
-  font-size: 30px;
+  font-size: 18px;
+  font-weight: 600;
 }
 .task-modal > .drawer-heading {
   margin-bottom: 12px;
 }
 .task-modal > .drawer-heading h2 {
-  font-size: 24px;
+  font-size: 18px;
 }
 .event-modal > .drawer-heading h2 {
-  font-size: 24px;
+  font-size: 18px;
 }
 .task-modal .form-field,
 .event-modal .form-field {
@@ -2736,6 +2753,9 @@ a {
 }
 .task-modal .modal-grid {
   gap: 18px;
+}
+.task-modal .modal-grid > .form-field {
+  margin-bottom: 0;
 }
 .event-modal .modal-grid {
   gap: 18px;
@@ -2946,13 +2966,26 @@ a {
   }
   .task-modal,
   .event-modal {
-    padding: 24px 20px;
+    padding: 20px;
   }
-  .task-modal > .drawer-heading h2 {
-    font-size: 22px;
+  .task-modal > .drawer-heading,
+  .event-modal > .drawer-heading {
+    position: relative;
+    justify-content: center;
   }
+  .task-modal > .drawer-heading h2,
   .event-modal > .drawer-heading h2 {
-    font-size: 24px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .task-modal > .drawer-heading > button,
+  .event-modal > .drawer-heading > button {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    margin: 0;
+    transform: translateY(-50%);
   }
   .modal-context {
     margin: -12px 0 22px;
@@ -3002,4 +3035,42 @@ a {
     padding: 10px 0;
     background: #fff;
   }
+}
+
+.read-only-notice {
+  margin: 0 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.confirmation-modal {
+  width: min(100%, 460px);
+  gap: 12px;
+}
+.confirmation-modal .drawer-heading {
+  align-items: flex-start;
+}
+.confirmation-modal .drawer-heading h2 {
+  font-size: 20px;
+}
+.confirmation-modal > p {
+  margin: 0;
+}
+.confirmation-modal .form-field {
+  margin: 4px 0 0;
+}
+.confirmation-modal .modal-actions {
+  margin-bottom: 0;
+}
+.button.confirmation-submit {
+  border-color: #a62f2f;
+  color: #fff;
+  background: #a62f2f;
+}
+.button.confirmation-submit:hover:not(:disabled) {
+  background: #8f2929;
 }

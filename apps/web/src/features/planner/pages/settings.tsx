@@ -76,9 +76,18 @@ export function SettingsPage({
         setTimeZoneSearch("");
       }
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setTimeZonePickerOpen(false);
+      setTimeZoneSearch("");
+    };
     document.addEventListener("pointerdown", closeOnOutsidePointerDown);
-    return () =>
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
   }, [timeZonePickerOpen]);
   const { pageHeader } = helpers;
   return (

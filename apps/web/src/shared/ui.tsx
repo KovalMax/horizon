@@ -321,7 +321,7 @@ export function BottomBar({
         <Icon name="pin" />
         Places
       </button>
-      <button onClick={onMore} aria-haspopup="dialog">
+      <button onClick={onMore} aria-haspopup="dialog" data-more-trigger>
         <Icon name="more" />
         More
       </button>

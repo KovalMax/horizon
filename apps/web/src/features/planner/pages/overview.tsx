@@ -155,8 +155,8 @@ export function OverviewPage({
           <div className="note-card">
             <Icon name="pin" />
             <p>
-              Saved places belong to one Space. Open a Space to see its places
-              and saved places.
+              Saved places belong to one Space. Open a Space to see its saved
+              places.
             </p>
           </div>
         </aside>

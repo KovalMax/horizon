@@ -136,6 +136,7 @@ test("inbox displays persisted items and supports explicit read state", async ()
   expect(
     await screen.findByRole("heading", { name: "Task assigned to you" }),
   ).toBeTruthy();
+  expect(screen.getByLabelText("New notification")).toBeTruthy();
   expect(screen.getByText("Renew home insurance")).toBeTruthy();
   expect(screen.getByText("Linden Street Home")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));

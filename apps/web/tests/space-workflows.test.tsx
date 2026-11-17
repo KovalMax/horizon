@@ -248,12 +248,20 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
     },
   );
   vi.stubGlobal("fetch", fetchMock);
-  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   render(<App />);
 
   const spacesNavigation = await screen.findByRole("navigation", {
     name: "Spaces",
   });
+  fireEvent(window, new Event("offline"));
+  expect(
+    await screen.findByText(/Changes can’t be saved or queued/),
+  ).toBeTruthy();
+  fireEvent(window, new Event("online"));
+  await waitFor(() =>
+    expect(screen.queryByText(/Changes can’t be saved or queued/)).toBeNull(),
+  );
+
   fireEvent.click(
     await within(spacesNavigation).findByRole("button", {
       name: /API household/,
@@ -261,6 +269,11 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
   );
   fireEvent.click(screen.getAllByRole("button", { name: "To-dos" })[0]!);
   fireEvent.click(await screen.findByRole("button", { name: "Buy groceries" }));
+  expect(
+    within(screen.getByRole("dialog", { name: "Buy groceries" })).getByText(
+      "No due date",
+    ),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Edit Task" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
     target: { value: "Buy groceries and fruit" },
@@ -276,8 +289,11 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
     screen.getByRole("button", { name: "Buy groceries and fruit" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Delete Task" }));
-  expect(confirm).toHaveBeenCalledWith(
-    "Delete this Task? This cannot be undone.",
+  const deleteTaskDialog = await screen.findByRole("dialog", {
+    name: "Delete this Task?",
+  });
+  fireEvent.click(
+    within(deleteTaskDialog).getByRole("button", { name: "Delete Task" }),
   );
   await waitFor(() =>
     expect(fetchMock).toHaveBeenCalledWith(
@@ -299,8 +315,13 @@ test("signed-in Owners can edit/delete Tasks and confirm cascading List deletion
   expect(await screen.findByText(/Errands · 1 open/)).toBeTruthy();
 
   fireEvent.click(screen.getByRole("button", { name: "Delete Errands" }));
-  expect(confirm).toHaveBeenCalledWith(
-    "Delete “Errands” and all Tasks in it? This cannot be undone.",
+  const deleteListDialog = await screen.findByRole("dialog", {
+    name: "Delete “Errands”?",
+  });
+  fireEvent.click(
+    within(deleteListDialog).getByRole("button", {
+      name: "Delete To-do list",
+    }),
   );
   await waitFor(() =>
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1086,7 +1107,6 @@ test("Space Owners create reusable links and approve join requests", async () =>
 test("Space Owners transfer a shared Space to an existing Member", async () => {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   const space = {
     id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
     name: "API household",
@@ -1172,6 +1192,14 @@ test("Space Owners transfer a shared Space to an existing Member", async () => {
     target: { value: "user-2" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Transfer ownership" }));
+  const transferDialog = await screen.findByRole("dialog", {
+    name: "Transfer ownership of API household?",
+  });
+  fireEvent.click(
+    within(transferDialog).getByRole("button", {
+      name: "Transfer ownership",
+    }),
+  );
 
   expect(
     await screen.findByText(
@@ -1185,15 +1213,11 @@ test("Space Owners transfer a shared Space to an existing Member", async () => {
       body: JSON.stringify({ new_owner_id: "user-2" }),
     }),
   );
-  expect(window.confirm).toHaveBeenCalledWith(
-    "Transfer ownership of API household to ruth@example.test? You will become an Editor.",
-  );
 });
 
 test("Owners delete a Space and restore it from Recently deleted", async () => {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   const space = {
     id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
     name: "Lost itinerary",
@@ -1283,9 +1307,17 @@ test("Owners delete a Space and restore it from Recently deleted", async () => {
     }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Delete Space" }));
-  expect(window.confirm).toHaveBeenCalledWith(
-    "Delete Lost itinerary? You can restore it for seven days. After that, it and its content will be permanently deleted.",
-  );
+  const deleteSpaceDialog = await screen.findByRole("dialog", {
+    name: "Delete Lost itinerary?",
+  });
+  const confirmDeleteSpace = within(deleteSpaceDialog).getByRole("button", {
+    name: "Delete Space",
+  });
+  expect(confirmDeleteSpace.hasAttribute("disabled")).toBe(true);
+  fireEvent.change(within(deleteSpaceDialog).getByRole("textbox"), {
+    target: { value: "Lost itinerary" },
+  });
+  fireEvent.click(confirmDeleteSpace);
 
   fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
   expect(await screen.findByText(/Restorable until/)).toBeTruthy();
@@ -1300,4 +1332,97 @@ test("Owners delete a Space and restore it from Recently deleted", async () => {
     `/api/spaces/${space.id}/restore`,
     expect.objectContaining({ method: "POST" }),
   );
+});
+
+test("Viewers see read-only planner pages without requesting Owner invitations", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "API household",
+    kind: "shared",
+    role: "viewer",
+    member_count: 2,
+  };
+  const place = {
+    id: "974ba0b9-1f8c-49fb-a0a8-a7774f4ad81c",
+    space_id: space.id,
+    space_name: space.name,
+    space_kind: "shared",
+    name: "Neighborhood bakery",
+    category: "Food & drink",
+    address: "12 Linden Street",
+    note: null,
+  };
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/health/ready") return new Response("", { status: 200 });
+    if (url === "/api/auth/magic-links/redeem")
+      return Response.json({
+        account: { id: "user-1", email: "maya@example.com" },
+        tokens: {
+          access_token: "access-secret",
+          refresh_token: "refresh-secret",
+        },
+      });
+    if (url === "/api/account/me")
+      return Response.json({ id: "user-1", email: "maya@example.com" });
+    if (url === "/api/spaces") return Response.json([space]);
+    if (url.startsWith("/api/events?"))
+      return Response.json({ items: [], next_offset: null });
+    if (url.startsWith("/api/tasks?"))
+      return Response.json({
+        lists: [],
+        tasks: [],
+        lists_next_offset: null,
+        tasks_next_offset: null,
+      });
+    if (url.startsWith("/api/places?"))
+      return Response.json({ items: [place], next_offset: null });
+    if (url === `/api/spaces/${space.id}/members`)
+      return Response.json([
+        { user_id: "user-1", email: "maya@example.com", role: "viewer" },
+        { user_id: "user-2", email: "ruth@example.test", role: "owner" },
+      ]);
+    if (
+      url === "/api/invitations/current" ||
+      url === "/api/join-requests/current"
+    )
+      return Response.json([]);
+    if (url === "/api/spaces/deleted") return Response.json([]);
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /API household/,
+    }),
+  );
+  expect(
+    within(spacesNavigation).getByRole("link", { name: "Calendar" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "New event" })).toBeNull();
+  expect(
+    screen.getByText(/only Editors and the Owner can change them/),
+  ).toBeTruthy();
+
+  fireEvent.click(
+    within(spacesNavigation).getByRole("link", { name: "Places" }),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Neighborhood bakery" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Save a place" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+
+  expect(
+    fetchMock.mock.calls.some(
+      ([input]) => String(input) === `/api/spaces/${space.id}/invitations`,
+    ),
+  ).toBe(false);
 });

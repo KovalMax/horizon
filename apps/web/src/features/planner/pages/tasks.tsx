@@ -39,6 +39,12 @@ export function TasksPage({
           </Button>
         ) : null,
       )}
+      {!canManage && (
+        <p className="read-only-notice">
+          You can view To-dos in this Space, but only Editors and the Owner can
+          change them.
+        </p>
+      )}
       {tasksStatus === "loading" && <p role="status">Loading To-dos…</p>}
       {tasksStatus === "error" && (
         <div role="alert">

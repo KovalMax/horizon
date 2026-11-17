@@ -185,6 +185,7 @@ export function PlannerShell({
         <header className="mobile-header">
           <button
             className="mobile-space-switch"
+            data-space-switcher-trigger
             aria-expanded={spaceSwitcherOpen}
             aria-haspopup="dialog"
             onClick={() => setSpaceSwitcherOpen(!spaceSwitcherOpen)}
@@ -209,6 +210,12 @@ export function PlannerShell({
             </AppLink>
           </div>
         </header>
+        {appState.isOffline && (
+          <div className="connection-banner" role="alert" aria-live="assertive">
+            <b>Connection lost</b>
+            <span>Changes can’t be saved or queued while you’re offline.</span>
+          </div>
+        )}
         <main
           className={`main-content ${isOverview ? "overview-content" : ""}`}
         >

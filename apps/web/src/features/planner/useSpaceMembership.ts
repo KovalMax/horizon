@@ -84,7 +84,9 @@ export function useSpaceMembership({
         ? listSpaceMembers(accessToken, currentSpaceId)
         : Promise.resolve([]),
       currentSpaceId
-        ? listSpaceInvitations(accessToken, currentSpaceId).catch(() => [])
+        ? canManageCurrentSpace
+          ? listSpaceInvitations(accessToken, currentSpaceId).catch(() => [])
+          : Promise.resolve([])
         : Promise.resolve([]),
       listMyInvitations(accessToken),
       currentSpaceId && canManageCurrentSpace

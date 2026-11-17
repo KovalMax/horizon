@@ -1,8 +1,35 @@
 use chrono::{DateTime, Duration, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::responses::{DeletedSpaceResponse, SpaceResponse, TransferOwnershipResponse};
+
+async fn lock_owner_space_quota(
+    transaction: &mut Transaction<'_, Postgres>,
+    owner_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("active-owned-shared-spaces:{owner_id}"))
+        .execute(&mut **transaction)
+        .await?;
+    Ok(())
+}
+
+async fn active_owned_shared_space_count(
+    transaction: &mut Transaction<'_, Postgres>,
+    owner_id: Uuid,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT \
+         FROM spaces \
+         JOIN space_memberships ON space_memberships.space_id = spaces.id \
+         WHERE spaces.kind = 'shared' AND spaces.deleted_at IS NULL \
+           AND space_memberships.user_id = $1 AND space_memberships.role = 'owner'",
+    )
+    .bind(owner_id)
+    .fetch_one(&mut **transaction)
+    .await
+}
 
 #[derive(Clone)]
 pub(super) struct PostgresSpacesRepository {
@@ -47,8 +74,14 @@ impl PostgresSpacesRepository {
         &self,
         name: &str,
         owner_id: Uuid,
-    ) -> Result<SpaceResponse, sqlx::Error> {
+    ) -> Result<SpaceResponse, super::services::CreateSpaceError> {
         let mut transaction = self.pool.begin().await?;
+        lock_owner_space_quota(&mut transaction, owner_id).await?;
+        if active_owned_shared_space_count(&mut transaction, owner_id).await?
+            >= super::services::MAX_ACTIVE_OWNED_SHARED_SPACES
+        {
+            return Err(super::services::CreateSpaceError::LimitReached);
+        }
         let space_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO spaces (id, name, kind, personal_owner_id) VALUES ($1, $2, 'shared', NULL)",
@@ -127,6 +160,20 @@ impl PostgresSpacesRepository {
         .map_err(|_| SpaceLifecycleError::Unavailable)?;
         if target_role.is_none() {
             return Err(SpaceLifecycleError::TargetNotMember);
+        }
+        let mut quota_owners = [owner_id, new_owner_id];
+        quota_owners.sort_unstable();
+        for quota_owner_id in quota_owners {
+            lock_owner_space_quota(&mut transaction, quota_owner_id)
+                .await
+                .map_err(|_| SpaceLifecycleError::Unavailable)?;
+        }
+        if active_owned_shared_space_count(&mut transaction, new_owner_id)
+            .await
+            .map_err(|_| SpaceLifecycleError::Unavailable)?
+            >= super::services::MAX_ACTIVE_OWNED_SHARED_SPACES
+        {
+            return Err(SpaceLifecycleError::LimitReached);
         }
         sqlx::query(
             "UPDATE space_memberships SET role = 'editor' WHERE space_id = $1 AND user_id = $2",
@@ -278,6 +325,9 @@ impl PostgresSpacesRepository {
             .begin()
             .await
             .map_err(|_| SpaceLifecycleError::Unavailable)?;
+        lock_owner_space_quota(&mut transaction, owner_id)
+            .await
+            .map_err(|_| SpaceLifecycleError::Unavailable)?;
         let row = sqlx::query_as::<_, (String, String)>(
             "SELECT name, kind FROM spaces \
              WHERE id = $1 AND deleted_by = $2 AND deleted_at > $3 - interval '7 days' \
@@ -290,6 +340,14 @@ impl PostgresSpacesRepository {
         .await
         .map_err(|_| SpaceLifecycleError::Unavailable)?
         .ok_or(SpaceLifecycleError::NotFound)?;
+        if row.1 == "shared"
+            && active_owned_shared_space_count(&mut transaction, owner_id)
+                .await
+                .map_err(|_| SpaceLifecycleError::Unavailable)?
+                >= super::services::MAX_ACTIVE_OWNED_SHARED_SPACES
+        {
+            return Err(SpaceLifecycleError::LimitReached);
+        }
         sqlx::query(
             "INSERT INTO space_memberships (space_id, user_id, role, created_at) \
              SELECT space_id, user_id, role, membership_created_at \

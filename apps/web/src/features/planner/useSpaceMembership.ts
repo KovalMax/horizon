@@ -320,7 +320,10 @@ export function useSpaceMembership({
       setMembershipError(
         error instanceof SpacesApiError && error.status === 403
           ? "Only the current Owner can transfer this Space."
-          : "Ownership couldn’t be transferred. Refresh and try again.",
+          : error instanceof SpacesApiError &&
+              error.code === "space_limit_reached"
+            ? "The selected Member already owns 10 active shared Spaces. They must delete one or transfer ownership before receiving another."
+            : "Ownership couldn’t be transferred. Refresh and try again.",
       );
       return false;
     }
@@ -356,9 +359,11 @@ export function useSpaceMembership({
         `${restored.name} was restored. Previous invitations and links remain invalid.`,
       );
       return true;
-    } catch {
+    } catch (error) {
       setSpacesError(
-        "This Space can no longer be restored. Refresh and try again.",
+        error instanceof SpacesApiError && error.code === "space_limit_reached"
+          ? "You can own up to 10 active shared Spaces. Delete one or transfer ownership before restoring this Space."
+          : "This Space can no longer be restored. Refresh and try again.",
       );
       return false;
     }

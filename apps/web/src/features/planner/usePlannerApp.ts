@@ -659,7 +659,10 @@ export function usePlannerApp(accessToken: string) {
         setSpacesError(
           error instanceof SpacesApiError && error.status === 400
             ? "Enter a Space name with 1–80 characters."
-            : "The Space couldn’t be created. Check your connection and try again.",
+            : error instanceof SpacesApiError &&
+                error.code === "space_limit_reached"
+              ? "You can own up to 10 active shared Spaces. Delete one or transfer ownership before creating another."
+              : "The Space couldn’t be created. Check your connection and try again.",
         );
       } finally {
         setCreatingSpace(false);

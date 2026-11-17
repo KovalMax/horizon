@@ -537,10 +537,12 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       </label>
                     </div>
                     <section className="task-reminders">
-                      <h3>Reminders</h3>
+                      <h3 id="task-reminders-heading">Reminders</h3>
                       {taskDueDate ? (
-                        <fieldset className="form-field">
-                          <legend>Remind recipient</legend>
+                        <fieldset
+                          className="form-field"
+                          aria-labelledby="task-reminders-heading"
+                        >
                           {[
                             { value: 1440, label: "1 day before" },
                             { value: 60, label: "1 hour before" },

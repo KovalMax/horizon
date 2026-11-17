@@ -99,6 +99,57 @@ test("signed-in users list API Spaces and create a persisted shared Space", asyn
   );
 });
 
+test("shared Space creation explains the active Space limit", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/health/ready") return new Response("", { status: 200 });
+      if (url === "/api/auth/magic-links/redeem")
+        return Response.json({
+          account: { id: "user-1", email: "maya@example.com" },
+          tokens: {
+            access_token: "access-secret",
+            refresh_token: "refresh-secret",
+          },
+        });
+      if (url === "/api/account/me")
+        return Response.json({ id: "user-1", email: "maya@example.com" });
+      if (url === "/api/spaces" && !init?.method) return Response.json([]);
+      if (url === "/api/spaces" && init?.method === "POST")
+        return Response.json(
+          {
+            type: "about:blank",
+            title: "Active shared Space limit reached",
+            status: 409,
+            code: "space_limit_reached",
+          },
+          { status: 409 },
+        );
+      if (url === "/api/join-requests/current") return Response.json([]);
+      if (url.includes("/join-links")) return Response.json([]);
+      if (url.includes("/join-requests")) return Response.json([]);
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  await screen.findByText("Signed in as");
+  fireEvent.click(screen.getByRole("button", { name: "New shared Space" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Space name" }), {
+    target: { value: "Another household" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create Space" }));
+
+  expect(
+    await screen.findByText(
+      "You can own up to 10 active shared Spaces. Delete one or transfer ownership before creating another.",
+    ),
+  ).toBeTruthy();
+});
+
 test("Space listing errors can be retried", async () => {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -755,7 +806,7 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
     within(listTaskDialog).getByText("Add a due date to set reminders."),
   ).toBeTruthy();
   expect(
-    within(listTaskDialog).queryByRole("group", { name: "Remind recipient" }),
+    within(listTaskDialog).queryByRole("group", { name: "Reminders" }),
   ).toBeNull();
   fireEvent.click(
     within(listTaskDialog).getByRole("button", { name: "Cancel" }),
@@ -772,7 +823,7 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
     { target: { value: "2026-11-20" } },
   );
   expect(
-    within(newTaskDialog).getByRole("group", { name: "Remind recipient" }),
+    within(newTaskDialog).getByRole("group", { name: "Reminders" }),
   ).toBeTruthy();
   fireEvent.change(
     within(newTaskDialog).getByRole("combobox", {

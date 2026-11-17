@@ -18,9 +18,30 @@ export type DeletedSpace = {
 };
 
 export class SpacesApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly code?: string,
+  ) {
     super("Spaces could not be loaded or saved.");
   }
+}
+
+async function throwSpacesApiError(response: Response): Promise<never> {
+  let code: string | undefined;
+  try {
+    const problem: unknown = await response.json();
+    if (
+      typeof problem === "object" &&
+      problem !== null &&
+      "code" in problem &&
+      typeof problem.code === "string"
+    ) {
+      code = problem.code;
+    }
+  } catch {
+    // Some error responses, such as gateway failures, have no JSON body.
+  }
+  throw new SpacesApiError(response.status, code);
 }
 
 function toSpace(space: ApiSpace): Space {
@@ -39,7 +60,7 @@ export async function listSpaces(accessToken: string): Promise<Space[]> {
   const response = await authenticatedFetch("/api/spaces", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
   const result = (await response.json()) as ApiSpace[];
   return result.map(toSpace);
 }
@@ -56,7 +77,7 @@ export async function createSharedSpace(
     },
     body: JSON.stringify({ name }),
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
   return toSpace((await response.json()) as ApiSpace);
 }
 
@@ -73,7 +94,7 @@ export async function transferSpaceOwnership(
     },
     body: JSON.stringify({ new_owner_id: newOwnerId }),
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
 }
 
 export async function deleteSpace(
@@ -84,7 +105,7 @@ export async function deleteSpace(
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
   return (await response.json()) as DeletedSpace;
 }
 
@@ -94,7 +115,7 @@ export async function listDeletedSpaces(
   const response = await authenticatedFetch("/api/spaces/deleted", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
   return (await response.json()) as DeletedSpace[];
 }
 
@@ -106,6 +127,6 @@ export async function restoreSpace(
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new SpacesApiError(response.status);
+  if (!response.ok) await throwSpacesApiError(response);
   return toSpace((await response.json()) as ApiSpace);
 }

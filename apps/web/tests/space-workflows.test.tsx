@@ -542,6 +542,84 @@ test("signed-in Members can cancel one expanded recurring occurrence", async () 
   );
 });
 
+test("To-dos errors replace list controls with a retry state", async () => {
+  window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const space = {
+    id: "17982261-8323-42bf-94bb-6fba68f6b2d1",
+    name: "API household",
+    kind: "shared",
+    role: "owner",
+    member_count: 1,
+  };
+  let failTodos = true;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/health/ready") return new Response("", { status: 200 });
+    if (url === "/api/auth/magic-links/redeem")
+      return Response.json({
+        account: { id: "user-1", email: "maya@example.com" },
+        tokens: {
+          access_token: "access-secret",
+          refresh_token: "refresh-secret",
+        },
+      });
+    if (url === "/api/account/me")
+      return Response.json({ id: "user-1", email: "maya@example.com" });
+    if (url === "/api/spaces") return Response.json([space]);
+    if (url === `/api/spaces/${space.id}/members`)
+      return Response.json([
+        { user_id: "user-1", email: "maya@example.com", role: "owner" },
+      ]);
+    if (url.startsWith("/api/events?"))
+      return Response.json({ items: [], next_offset: null });
+    if (url.startsWith("/api/tasks?")) {
+      return failTodos
+        ? new Response("Unavailable", { status: 503 })
+        : Response.json({
+            lists: [],
+            tasks: [],
+            lists_next_offset: null,
+            tasks_next_offset: null,
+          });
+    }
+    if (url === "/api/invitations/current") return Response.json([]);
+    if (url.includes("/invitations")) return Response.json([]);
+    if (url.includes("/join-links")) return Response.json([]);
+    if (url.includes("/join-requests")) return Response.json([]);
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<App />);
+
+  const spacesNavigation = await screen.findByRole("navigation", {
+    name: "Spaces",
+  });
+  fireEvent.click(
+    await within(spacesNavigation).findByRole("button", {
+      name: /API household/,
+    }),
+  );
+  fireEvent.click(
+    within(spacesNavigation).getByRole("link", { name: "To-dos" }),
+  );
+
+  expect(
+    await screen.findByRole("heading", { name: "To-dos couldn’t load" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "New list" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "New Task" })).toBeNull();
+  failTodos = false;
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+  expect(await screen.findByRole("heading", { name: "New list" })).toBeTruthy();
+  expect(
+    fetchMock.mock.calls.filter(([input]) =>
+      String(input).startsWith("/api/tasks?"),
+    ).length,
+  ).toBeGreaterThan(2);
+});
+
 test("signed-in To-dos load persisted lists and Tasks and save completion changes", async () => {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -654,7 +732,7 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   fireEvent.click(
     within(spacesNavigation).getByRole("link", { name: "To-dos" }),
   );
-  fireEvent.change(screen.getByRole("textbox", { name: "List name" }), {
+  fireEvent.change(await screen.findByRole("textbox", { name: "List name" }), {
     target: { value: "Weekend prep" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Add" }));
@@ -948,6 +1026,9 @@ test("signed-in Owners see real Members and send Viewer invitations", async () =
   expect(
     (await screen.findAllByText("maya@example.com")).length,
   ).toBeGreaterThan(0);
+  expect(
+    await screen.findByRole("heading", { name: "What each role can do" }),
+  ).toBeTruthy();
   fireEvent.change(
     screen.getByRole("textbox", { name: "Email address to invite" }),
     {

@@ -74,9 +74,9 @@ Use a `700` weight for page headings.
 
 - Desktop sidebar: approximately `288px`; main content max width: `1024px`,
   centered in the remaining column, with `40px` horizontal and top padding.
-- The sidebar collapses at the existing `850px` breakpoint. At mobile widths,
-  the sticky top bar and fixed five-item bottom navigation replace desktop
-  navigation.
+- The sidebar collapses below `1024px` (the mobile breakpoint is `1023px`).
+  At mobile widths, the sticky top bar and fixed five-item bottom navigation
+  replace desktop navigation.
 - Mobile main content uses `16px` horizontal gutters and `20px` top padding;
   account for the bottom navigation and safe-area insets.
 - Preserve the existing `1100px` intermediate breakpoint and inspect layouts
@@ -162,9 +162,9 @@ did not establish that every route or state is at parity:
 
 ### Unresolved audit observations
 
-- The prototype switches navigation at 1024px; Horizon's existing guidance is
-  850px. Keep the current 850px behavior until that conflict is explicitly
-  resolved.
+- The prototype switches to mobile navigation below 1024px. Horizon now uses
+  the same breakpoint; retain the existing 1100px intermediate layout above
+  that threshold.
 - The prototype parses Maps links locally, while functional map/geocoding
   support is deferred in Horizon. Do not add the import flow until its scope is
   explicitly decided.

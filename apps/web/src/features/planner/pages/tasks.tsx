@@ -23,6 +23,7 @@ export function TasksPage({
   const [expandedCompletedLists, setExpandedCompletedLists] = useState<
     Set<string>
   >(() => new Set());
+  const tasksReady = tasksStatus === "ready";
   return (
     <>
       <div className="space-context-tag">
@@ -32,7 +33,7 @@ export function TasksPage({
       {pageHeader(
         "To-dos",
         "Shared lists for this Space. Each Task can have one assignee.",
-        canManage ? (
+        canManage && tasksReady ? (
           <Button onClick={() => setModal("task")}>
             <Icon name="plus" />
             New Task
@@ -47,15 +48,19 @@ export function TasksPage({
       )}
       {tasksStatus === "loading" && <p role="status">Loading To-dos…</p>}
       {tasksStatus === "error" && (
-        <div role="alert">
-          <p>{taskError}</p>
-          <Button variant="outline" onClick={retryTasks}>
-            Retry
-          </Button>
-        </div>
+        <section
+          className="tasks-error-card"
+          aria-labelledby="tasks-error-title"
+        >
+          <div>
+            <h2 id="tasks-error-title">To-dos couldn’t load</h2>
+            <p role="alert">{taskError}</p>
+          </div>
+          <Button onClick={retryTasks}>Try again</Button>
+        </section>
       )}
       {taskError && tasksStatus !== "error" && <p role="alert">{taskError}</p>}
-      <div className="tasks-page-grid">
+      <div className="tasks-page-grid" hidden={!tasksReady}>
         {(taskLists[space.id] ?? []).map((list) => {
           const rows = tasks.filter(
             (t) => t.space === space.id && t.list === list,
@@ -168,7 +173,7 @@ export function TasksPage({
           </section>
         )}
       </div>
-      <div className="task-pagination">
+      <div className="task-pagination" hidden={!tasksReady}>
         {state.tasksNextOffset !== null && (
           <Button
             variant="outline"

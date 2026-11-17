@@ -74,22 +74,20 @@ export function MembersPage({
             <p className="empty-inline">No Members found in this Space.</p>
           )}
       </section>
-      {space.role === "Editor" && (
-        <section className="list-card role-guidance">
-          <h2>About Space roles</h2>
-          <p>
-            <b>Owner:</b> Manages Members and ownership, and can do everything
-            Editors can.
-          </p>
-          <p>
-            <b>Editor:</b> Can create, edit, and delete Calendar events, Tasks,
-            and Saved places.
-          </p>
-          <p>
-            <b>Viewer:</b> Can read shared content but cannot change it.
-          </p>
-        </section>
-      )}
+      <section className="list-card role-guidance">
+        <h2>What each role can do</h2>
+        <p>
+          <b>Owner:</b> Manages Members and ownership, and can do everything
+          Editors can.
+        </p>
+        <p>
+          <b>Editor:</b> Can create, edit, and delete Calendar events, Tasks,
+          and Saved places.
+        </p>
+        <p>
+          <b>Viewer:</b> Can read shared content but cannot change it.
+        </p>
+      </section>
       {space.role === "Owner" && (
         <>
           <section className="list-card">

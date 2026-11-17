@@ -79,6 +79,18 @@ macro_rules! authenticate {
     }};
 }
 
+macro_rules! create_shared_space_request {
+    ($token:expr, $name:expr) => {
+        actix_test::TestRequest::post()
+            .uri("/spaces")
+            .insert_header((AUTHORIZATION, format!("Bearer {}", $token)))
+            .set_json(CreateSpaceRequest {
+                name: ($name).to_owned(),
+            })
+            .to_request()
+    };
+}
+
 #[actix_web::test]
 async fn ownership_transfer_deletion_restoration_and_expiry_follow_lifecycle_policy() {
     let pool = PgPoolOptions::new()
@@ -143,13 +155,7 @@ async fn ownership_transfer_deletion_restoration_and_expiry_follow_lifecycle_pol
             .await
             .unwrap();
 
-    let request = actix_test::TestRequest::post()
-        .uri("/spaces")
-        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
-        .set_json(CreateSpaceRequest {
-            name: "Lifecycle household".to_owned(),
-        })
-        .to_request();
+    let request = create_shared_space_request!(&owner_token, "Lifecycle household");
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let space: SpaceResponse = actix_test::read_body_json(response).await;
@@ -179,6 +185,144 @@ async fn ownership_transfer_deletion_restoration_and_expiry_follow_lifecycle_pol
     .await
     .expect("test member should join the Space");
 
+    let mut quota_space_id = Uuid::nil();
+    for number in 2..=10 {
+        let response = actix_test::call_service(
+            &app,
+            create_shared_space_request!(&owner_token, format!("Quota Space {number}")),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created: SpaceResponse = actix_test::read_body_json(response).await;
+        quota_space_id = created.id;
+    }
+    sqlx::query(
+        "INSERT INTO space_memberships (space_id, user_id, role) \
+         SELECT owner_membership.space_id, $2, 'viewer' \
+         FROM space_memberships owner_membership \
+         JOIN spaces ON spaces.id = owner_membership.space_id \
+         WHERE owner_membership.user_id = $1 AND owner_membership.role = 'owner' \
+           AND spaces.kind = 'shared' AND spaces.deleted_at IS NULL \
+         ON CONFLICT (space_id, user_id) DO NOTHING",
+    )
+    .bind(owner_id)
+    .bind(member_id)
+    .execute(&pool)
+    .await
+    .expect("member should join every active owner Space");
+    let mut member_owned_space_ids = Vec::new();
+    for number in 1..=10 {
+        let response = actix_test::call_service(
+            &app,
+            create_shared_space_request!(&member_token, format!("Member Space {number}")),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created: SpaceResponse = actix_test::read_body_json(response).await;
+        member_owned_space_ids.push(created.id);
+    }
+    let over_quota = actix_test::call_service(
+        &app,
+        create_shared_space_request!(&owner_token, "Over quota"),
+    )
+    .await;
+    assert_eq!(over_quota.status(), StatusCode::CONFLICT);
+    let problem: serde_json::Value = actix_test::read_body_json(over_quota).await;
+    assert_eq!(problem["code"], "space_limit_reached");
+
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{quota_space_id}"))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
+
+    let (first_create, second_create) = tokio::join!(
+        actix_test::call_service(
+            &app,
+            create_shared_space_request!(&owner_token, "Concurrent Space A"),
+        ),
+        actix_test::call_service(
+            &app,
+            create_shared_space_request!(&owner_token, "Concurrent Space B"),
+        ),
+    );
+    let (created_response, rejected_response) = if first_create.status() == StatusCode::CREATED {
+        (first_create, second_create)
+    } else {
+        (second_create, first_create)
+    };
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    assert_eq!(rejected_response.status(), StatusCode::CONFLICT);
+    let concurrent_space: SpaceResponse = actix_test::read_body_json(created_response).await;
+
+    let restore_at_limit = actix_test::TestRequest::post()
+        .uri(&format!("/spaces/{quota_space_id}/restore"))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .to_request();
+    let restore_at_limit = actix_test::call_service(&app, restore_at_limit).await;
+    assert_eq!(restore_at_limit.status(), StatusCode::CONFLICT);
+    let problem: serde_json::Value = actix_test::read_body_json(restore_at_limit).await;
+    assert_eq!(problem["code"], "space_limit_reached");
+
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{}", concurrent_space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
+    let restore_after_delete = actix_test::TestRequest::post()
+        .uri(&format!("/spaces/{quota_space_id}/restore"))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, restore_after_delete)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{quota_space_id}"))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
+    sqlx::query(
+        "UPDATE spaces SET deleted_at = now() - interval '8 days' \
+         WHERE id IN ($1, $2)",
+    )
+    .bind(quota_space_id)
+    .bind(concurrent_space.id)
+    .execute(&pool)
+    .await
+    .expect("quota test Spaces should age beyond the recovery window");
+    assert_eq!(spaces_app.purge_expired_deleted_spaces().await.unwrap(), 2);
+
+    let request = actix_test::TestRequest::patch()
+        .uri(&format!("/spaces/{}/owner", space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .set_json(TransferOwnershipRequest {
+            new_owner_id: member_id,
+        })
+        .to_request();
+    let transfer_at_limit = actix_test::call_service(&app, request).await;
+    assert_eq!(transfer_at_limit.status(), StatusCode::CONFLICT);
+    let problem: serde_json::Value = actix_test::read_body_json(transfer_at_limit).await;
+    assert_eq!(problem["code"], "space_limit_reached");
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/spaces/{}", member_owned_space_ids[0]))
+        .insert_header((AUTHORIZATION, format!("Bearer {member_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
     let request = actix_test::TestRequest::patch()
         .uri(&format!("/spaces/{}/owner", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))

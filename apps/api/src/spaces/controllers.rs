@@ -86,6 +86,17 @@ fn invalid_name() -> HttpResponse {
         })
 }
 
+fn space_limit_reached() -> HttpResponse {
+    HttpResponse::Conflict()
+        .content_type("application/problem+json")
+        .json(Problem {
+            r#type: "about:blank",
+            title: "Active shared Space limit reached",
+            status: StatusCode::CONFLICT.as_u16(),
+            code: "space_limit_reached",
+        })
+}
+
 fn lifecycle_error(error: SpaceLifecycleError) -> HttpResponse {
     let (status, title, code) = match error {
         SpaceLifecycleError::OwnerRequired => (
@@ -107,6 +118,11 @@ fn lifecycle_error(error: SpaceLifecycleError) -> HttpResponse {
             StatusCode::CONFLICT,
             "Personal Spaces cannot transfer ownership",
             "personal_space_transfer_unsupported",
+        ),
+        SpaceLifecycleError::LimitReached => (
+            StatusCode::CONFLICT,
+            "Active shared Space limit reached",
+            "space_limit_reached",
         ),
         SpaceLifecycleError::NotFound => (
             StatusCode::NOT_FOUND,
@@ -164,6 +180,7 @@ pub async fn list_spaces(
         (status = 201, description = "Shared Space created with the caller as Owner", body = super::responses::SpaceResponse),
         (status = 400, description = "Space name must contain 1 to 80 characters", body = Problem),
         (status = 401, description = "Access token is invalid or missing", body = Problem),
+        (status = 409, description = "The caller already owns 10 active shared Spaces", body = Problem),
         (status = 503, description = "Service unavailable", body = Problem)
     )
 )]
@@ -181,6 +198,7 @@ pub async fn create_shared_space(
     match spaces.create_shared(&body.name, user_id).await {
         Ok(space) => HttpResponse::Created().json(space),
         Err(CreateSpaceError::InvalidName) => invalid_name(),
+        Err(CreateSpaceError::LimitReached) => space_limit_reached(),
         Err(CreateSpaceError::Unavailable(_)) => unavailable(),
     }
 }
@@ -197,7 +215,7 @@ pub async fn create_shared_space(
         (status = 401, body = Problem),
         (status = 403, body = Problem),
         (status = 404, body = Problem),
-        (status = 409, body = Problem)
+        (status = 409, description = "The selected Member already owns 10 active shared Spaces", body = Problem)
     )
 )]
 #[patch("/spaces/{space_id}/owner")]
@@ -272,7 +290,7 @@ pub async fn list_deleted_spaces(
     path = "/spaces/{space_id}/restore",
     params(("space_id" = Uuid, Path)),
     security(("accessBearer" = [])),
-    responses((status = 200, body = super::responses::SpaceResponse), (status = 401, body = Problem), (status = 404, body = Problem))
+    responses((status = 200, body = super::responses::SpaceResponse), (status = 401, body = Problem), (status = 404, body = Problem), (status = 409, description = "The caller already owns 10 active shared Spaces", body = Problem))
 )]
 #[post("/spaces/{space_id}/restore")]
 pub async fn restore_space(

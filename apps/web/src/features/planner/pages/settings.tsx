@@ -76,9 +76,18 @@ export function SettingsPage({
         setTimeZoneSearch("");
       }
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setTimeZonePickerOpen(false);
+      setTimeZoneSearch("");
+    };
     document.addEventListener("pointerdown", closeOnOutsidePointerDown);
-    return () =>
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
   }, [timeZonePickerOpen]);
   const { pageHeader } = helpers;
   return (
@@ -181,44 +190,57 @@ export function SettingsPage({
         {state.notificationPrefsStatus === "error" && (
           <p role="alert">{state.notificationPrefsError}</p>
         )}
-        {[
-          "Task assignments",
-          "Event changes",
-          "Membership changes",
-          "Join requests",
-          "Join request results",
-          "Due reminders",
-        ].map((label) => (
-          <div className="setting-row" key={label}>
-            <span>{label}</span>
-            <label>
-              <input
-                type="checkbox"
-                checked={notificationPrefs[`${label}:In-app`] ?? false}
-                onChange={(event) =>
-                  setNotificationPrefs((current) => ({
-                    ...current,
-                    [`${label}:In-app`]: event.target.checked,
-                  }))
-                }
-              />{" "}
-              In-app
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={notificationPrefs[`${label}:Email`] ?? false}
-                onChange={(event) =>
-                  setNotificationPrefs((current) => ({
-                    ...current,
-                    [`${label}:Email`]: event.target.checked,
-                  }))
-                }
-              />{" "}
-              Email
-            </label>
-          </div>
-        ))}
+        <table className="notification-channel-table">
+          <thead>
+            <tr>
+              <th scope="col">Type</th>
+              <th scope="col">In-app</th>
+              <th scope="col">Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              "Task assignments",
+              "Event changes",
+              "Membership changes",
+              "Join requests",
+              "Join request results",
+              "Due reminders",
+            ].map((label) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                <td>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label={`${label} in-app notifications`}
+                    checked={notificationPrefs[`${label}:In-app`] ?? false}
+                    onChange={(event) =>
+                      setNotificationPrefs((current) => ({
+                        ...current,
+                        [`${label}:In-app`]: event.target.checked,
+                      }))
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label={`${label} email notifications`}
+                    checked={notificationPrefs[`${label}:Email`] ?? false}
+                    onChange={(event) =>
+                      setNotificationPrefs((current) => ({
+                        ...current,
+                        [`${label}:Email`]: event.target.checked,
+                      }))
+                    }
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
         {state.notificationPrefsError &&
           state.notificationPrefsStatus !== "error" && (
             <p role="alert">{state.notificationPrefsError}</p>
@@ -227,15 +249,16 @@ export function SettingsPage({
       <section className="list-card">
         <h2>Muted Spaces</h2>
         <p>
-          In-app notifications from muted Spaces aren’t delivered, and unmuting
-          won’t backfill them. Save your changes with the Save settings button
-          below.
+          No in-app or email notifications from muted Spaces. Unmuting won’t
+          backfill past notifications. Save your changes below.
         </p>
         {state.activeSpaces.map((s) => (
-          <label className="setting-row" key={s.id}>
+          <label className="setting-row muted-space-row" key={s.id}>
             <span>{s.name}</span>
             <input
               type="checkbox"
+              role="switch"
+              aria-label={`Mute ${s.name} notifications`}
               checked={mutedSpaces.includes(s.id)}
               onChange={(event) =>
                 setMutedSpaces((current) =>

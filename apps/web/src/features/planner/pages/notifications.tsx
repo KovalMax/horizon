@@ -53,7 +53,11 @@ function NotificationRow({
           </Button>
         </div>
       </div>
-      {isUnread && <span className="unread-dot" aria-label="Unread" />}
+      {isUnread && (
+        <span className="unread-dot" aria-label="New notification">
+          New
+        </span>
+      )}
     </article>
   );
 }

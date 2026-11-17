@@ -1,9 +1,12 @@
+import { useEffect, useRef, useState } from "react";
 import { dateLabel } from "../domain";
 import type { PlannerAppState } from "../usePlannerApp";
 import { AppLink, Button, Icon } from "../../../shared/ui";
 import { SpaceSwitcher } from "./SpaceSwitcher";
 
 const eventTimeValidationMessage = "The end time must be after the start time.";
+const dialogFocusableSelector =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const eventTimeZones = [
   ["Europe/Berlin", "Berlin (CET)"],
   ["Europe/Lisbon", "Lisbon (WET)"],
@@ -14,34 +17,6 @@ const eventTimeZones = [
   ["Asia/Tokyo", "Tokyo (JST)"],
   ["UTC", "UTC"],
 ] as const;
-
-function handleModalKeyDown(
-  event: React.KeyboardEvent<HTMLFormElement>,
-  closeModal: () => void,
-) {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeModal();
-    return;
-  }
-  if (event.key !== "Tab") return;
-
-  const focusable = Array.from(
-    event.currentTarget.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((element) => element.getAttribute("aria-hidden") !== "true");
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (!first || !last) return;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
 
 function clearCorrectedEventTimeError(
   event: React.ChangeEvent<HTMLInputElement>,
@@ -74,6 +49,8 @@ function taskDateAtOffset(offset: number): string {
 }
 
 export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [confirmationText, setConfirmationText] = useState("");
   const {
     mobileMenu,
     setMobileMenu,
@@ -81,6 +58,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
     showToast,
     modal,
     closeModal,
+    confirmation,
+    dismissConfirmation,
+    confirmPendingAction,
     submitModal,
     selected,
     setSelected,
@@ -100,11 +80,122 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
     editSelectedTask,
     removeSelectedTask,
   } = appState;
+  const overlayStateRef = useRef({
+    appState,
+    closeModal,
+    confirmation,
+    dismissConfirmation,
+    mobileMenu,
+    modal,
+    selected,
+    setMobileMenu,
+  });
+  overlayStateRef.current = {
+    appState,
+    closeModal,
+    confirmation,
+    dismissConfirmation,
+    mobileMenu,
+    modal,
+    selected,
+    setMobileMenu,
+  };
+  const closeMoreMenu = () => {
+    setMobileMenu(false);
+    window.setTimeout(
+      () => document.querySelector<HTMLElement>("[data-more-trigger]")?.focus(),
+      0,
+    );
+  };
+  useEffect(() => {
+    if (modal !== "task") return;
+    setTaskDueDate(
+      appState.editingTask?.day === undefined
+        ? ""
+        : taskDateAtOffset(appState.editingTask.day),
+    );
+  }, [modal, appState.editingTask]);
+  useEffect(() => {
+    setConfirmationText("");
+  }, [confirmation]);
+  useEffect(() => {
+    const current = overlayStateRef.current;
+    const surface = current.confirmation
+      ? document.querySelector<HTMLElement>(
+          ".confirmation-modal[role='dialog']",
+        )
+      : current.selected
+        ? document.querySelector<HTMLElement>(".detail-modal[role='dialog']")
+        : current.modal
+          ? document.querySelector<HTMLElement>(".modal[role='dialog']")
+          : current.mobileMenu
+            ? document.querySelector<HTMLElement>(".more-drawer[role='dialog']")
+            : current.appState.spaceSwitcherOpen
+              ? document.querySelector<HTMLElement>(
+                  ".space-switcher[role='dialog']",
+                )
+              : null;
+    if (!surface) return;
+    const focusable = Array.from(
+      surface.querySelectorAll<HTMLElement>(dialogFocusableSelector),
+    ).filter((element) => element.getAttribute("aria-hidden") !== "true");
+    const initialFocus =
+      surface.querySelector<HTMLElement>("[autofocus]") ?? focusable[0];
+    initialFocus?.focus();
+
+    const trapAndDismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        const latest = overlayStateRef.current;
+        if (latest.confirmation) latest.dismissConfirmation();
+        else if (latest.selected) latest.appState.setSelected(null);
+        else if (latest.modal) latest.closeModal();
+        else if (latest.mobileMenu) {
+          latest.setMobileMenu(false);
+          window.setTimeout(
+            () =>
+              document
+                .querySelector<HTMLElement>("[data-more-trigger]")
+                ?.focus(),
+            0,
+          );
+        } else if (latest.appState.spaceSwitcherOpen) {
+          latest.appState.setSpaceSwitcherOpen(false);
+          window.setTimeout(
+            () =>
+              document
+                .querySelector<HTMLElement>("[data-space-switcher-trigger]")
+                ?.focus(),
+            0,
+          );
+        }
+        return;
+      }
+      if (event.key !== "Tab" || focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    surface.addEventListener("keydown", trapAndDismiss);
+    return () => surface.removeEventListener("keydown", trapAndDismiss);
+  }, [
+    appState.spaceSwitcherOpen,
+    confirmation?.title,
+    mobileMenu,
+    modal,
+    selected?.id,
+  ]);
   return (
     <>
       <SpaceSwitcher appState={appState} />
       {mobileMenu && (
-        <div className="drawer-backdrop" onClick={() => setMobileMenu(false)}>
+        <div className="drawer-backdrop" onClick={closeMoreMenu}>
           <section
             aria-labelledby="more-drawer-title"
             aria-modal="true"
@@ -114,7 +205,13 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
           >
             <div className="drawer-heading">
               <h2 id="more-drawer-title">More</h2>
-              <button onClick={() => setMobileMenu(false)}>×</button>
+              <button
+                type="button"
+                aria-label="Close More menu"
+                onClick={closeMoreMenu}
+              >
+                ×
+              </button>
             </div>
             <nav aria-label="More" className="more-links">
               <AppLink
@@ -142,10 +239,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-edit-dialog-title"
-            className="modal"
+            className={`modal ${modal}-modal`}
             onSubmit={submitModal}
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(event) => handleModalKeyDown(event, closeModal)}
           >
             <div className="drawer-heading">
               <h2 id="create-edit-dialog-title">
@@ -175,6 +271,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                 ×
               </button>
             </div>
+            {modal === "task" && (
+              <p className="modal-context">In {appState.space.name}</p>
+            )}
             {modal === "space" ? (
               <>
                 <p>
@@ -212,11 +311,13 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       defaultValue={editingEvent?.space ?? appState.space.id}
                       disabled={Boolean(editingEvent)}
                     >
-                      {appState.activeSpaces.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
+                      {appState.activeSpaces
+                        .filter((item) => item.role !== "Viewer")
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
                     </select>
                   </label>
                 )}
@@ -373,8 +474,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                           name="list"
                           defaultValue={
                             appState.editingTask?.list ??
-                            appState.taskLists[appState.space.id]?.[0] ??
-                            "To-do"
+                            (appState.taskListDefault ||
+                              appState.taskLists[appState.space.id]?.[0] ||
+                              "To-do")
                           }
                         >
                           {(
@@ -385,7 +487,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         </select>
                       </label>
                       <label className="form-field">
-                        Assigned to
+                        Assignee (optional, one person)
                         <select
                           name="assignee"
                           defaultValue={appState.editingTask?.assigneeId ?? ""}
@@ -410,7 +512,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     </div>
                     <div className="modal-grid">
                       <label className="form-field">
-                        Due date
+                        Due date (optional)
                         <input
                           name="dueDate"
                           type="date"
@@ -419,38 +521,50 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                               ? ""
                               : taskDateAtOffset(appState.editingTask.day)
                           }
+                          onChange={(event) =>
+                            setTaskDueDate(event.currentTarget.value)
+                          }
                         />
                       </label>
                       <label className="form-field">
-                        Time (optional)
+                        Due time (optional)
                         <input
                           name="taskTime"
                           type="time"
+                          disabled={!taskDueDate}
                           defaultValue={appState.editingTask?.time ?? ""}
                         />
                       </label>
                     </div>
-                    <fieldset className="form-field">
-                      <legend>Remind recipient</legend>
-                      {[
-                        { value: 1440, label: "1 day before" },
-                        { value: 60, label: "1 hour before" },
-                      ].map((offset) => (
-                        <label className="setting-row" key={offset.value}>
-                          <span>{offset.label}</span>
-                          <input
-                            type="checkbox"
-                            name="reminderOffset"
-                            value={offset.value}
-                            defaultChecked={(
-                              appState.editingTask?.reminderOffsetsMinutes ?? [
-                                1440, 60,
-                              ]
-                            ).includes(offset.value)}
-                          />
-                        </label>
-                      ))}
-                    </fieldset>
+                    <section className="task-reminders">
+                      <h3 id="task-reminders-heading">Reminders</h3>
+                      {taskDueDate ? (
+                        <fieldset
+                          className="form-field"
+                          aria-labelledby="task-reminders-heading"
+                        >
+                          {[
+                            { value: 1440, label: "1 day before" },
+                            { value: 60, label: "1 hour before" },
+                          ].map((offset) => (
+                            <label className="setting-row" key={offset.value}>
+                              <span>{offset.label}</span>
+                              <input
+                                type="checkbox"
+                                name="reminderOffset"
+                                value={offset.value}
+                                defaultChecked={(
+                                  appState.editingTask
+                                    ?.reminderOffsetsMinutes ?? [1440, 60]
+                                ).includes(offset.value)}
+                              />
+                            </label>
+                          ))}
+                        </fieldset>
+                      ) : (
+                        <p>Add a due date to set reminders.</p>
+                      )}
+                    </section>
                   </>
                 )}
                 {modal === "place" && (
@@ -552,6 +666,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <section
             className="modal detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="selected-item-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="drawer-heading">
@@ -564,14 +681,22 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     "Space")
                   : ""}
               </span>
-              <button onClick={() => setSelected(null)}>×</button>
+              <button
+                type="button"
+                aria-label="Close details"
+                onClick={() => setSelected(null)}
+              >
+                ×
+              </button>
             </div>
-            <h2>{selected.title}</h2>
+            <h2 id="selected-item-title">{selected.title}</h2>
             {"time" in selected && (
               <p>
-                {selected.time
-                  ? `${selected.time}${"end" in selected && selected.end ? `–${selected.end}` : ""} · ${dateLabel(selected.day ?? 0, true)}`
-                  : dateLabel(selected.day ?? 0, true)}
+                {"list" in selected && selected.day === undefined
+                  ? "No due date"
+                  : selected.time
+                    ? `${selected.time}${"end" in selected && selected.end ? `–${selected.end}` : ""} · ${dateLabel(selected.day ?? 0, true)}`
+                    : dateLabel(selected.day ?? 0, true)}
               </p>
             )}
             {"place" in selected && selected.place && <p>{selected.place}</p>}
@@ -658,6 +783,10 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                 )}
               {"time" in selected &&
               !("list" in selected) &&
+              appState.activeSpaces.some(
+                (space) =>
+                  space.id === selected.space && space.role !== "Viewer",
+              ) &&
               selected.repeat &&
               selected.occurrenceDate ? (
                 <>
@@ -687,20 +816,25 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   </Button>
                 </>
               ) : "time" in selected && !("list" in selected) ? (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => editSelectedEvent("series")}
-                  >
-                    Edit event
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => removeSelectedEvent("series")}
-                  >
-                    Delete event
-                  </Button>
-                </>
+                appState.activeSpaces.some(
+                  (space) =>
+                    space.id === selected.space && space.role !== "Viewer",
+                ) ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => editSelectedEvent("series")}
+                    >
+                      Edit event
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => removeSelectedEvent("series")}
+                    >
+                      Delete event
+                    </Button>
+                  </>
+                ) : null
               ) : null}
             </div>
             {eventError && <p role="alert">{eventError}</p>}
@@ -708,6 +842,58 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
             <small>
               {"list" in selected ? "Saved Task." : "Saved Calendar event."}
             </small>
+          </section>
+        </div>
+      )}
+      {confirmation && (
+        <div
+          className="modal-backdrop confirmation-backdrop"
+          onClick={dismissConfirmation}
+        >
+          <section
+            className="modal confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirmation-title"
+            aria-describedby="confirmation-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="drawer-heading">
+              <h2 id="confirmation-title">{confirmation.title}</h2>
+              <button
+                type="button"
+                aria-label="Close confirmation"
+                onClick={dismissConfirmation}
+              >
+                ×
+              </button>
+            </div>
+            <p id="confirmation-description">{confirmation.description}</p>
+            {confirmation.requiredText && (
+              <label className="form-field">
+                Type <b>{confirmation.requiredText}</b> to confirm
+                <input
+                  autoFocus
+                  value={confirmationText}
+                  onChange={(event) => setConfirmationText(event.target.value)}
+                />
+              </label>
+            )}
+            <div className="modal-actions">
+              <Button variant="outline" onClick={dismissConfirmation}>
+                Cancel
+              </Button>
+              <Button
+                className="confirmation-submit"
+                onClick={confirmPendingAction}
+                disabled={
+                  confirmation.requiredText !== undefined &&
+                  confirmationText !== confirmation.requiredText
+                }
+              >
+                {confirmation.confirmLabel}
+              </Button>
+            </div>
           </section>
         </div>
       )}

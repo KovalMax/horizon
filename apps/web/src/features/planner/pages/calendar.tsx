@@ -21,6 +21,7 @@ export function CalendarPage({
     retryEvents,
   } = state;
   const { pageHeader, eventRow } = helpers;
+  const canManage = space.role !== "Viewer";
   const dateStripRef = useRef<HTMLDivElement>(null);
   const dateForOffset = (offset: number) => {
     const date = new Date();
@@ -76,10 +77,18 @@ export function CalendarPage({
       {pageHeader(
         "Calendar",
         "Times follow each event’s time zone",
-        <Button onClick={() => setModal("event")}>
-          <Icon name="plus" />
-          New event
-        </Button>,
+        canManage ? (
+          <Button onClick={() => setModal("event")}>
+            <Icon name="plus" />
+            New event
+          </Button>
+        ) : null,
+      )}
+      {!canManage && (
+        <p className="read-only-notice">
+          You can view Calendar events in this Space, but only Editors and the
+          Owner can change them.
+        </p>
       )}
       <div className="calendar-layout">
         <div className="calendar-main-column">
@@ -280,7 +289,7 @@ export function CalendarPage({
                     A free day{calendarDay < 0 ? "" : " so far"} — nothing on
                     the {space.name} calendar.
                   </span>
-                  {calendarDay >= 0 && (
+                  {canManage && calendarDay >= 0 && (
                     <Button variant="outline" onClick={() => setModal("event")}>
                       <Icon name="plus" /> Add on{" "}
                       {dateLabel(calendarDay, true).split(",")[0]}
@@ -288,7 +297,7 @@ export function CalendarPage({
                   )}
                 </div>
               )}
-              {selectedEvents.length > 0 && calendarDay >= 0 && (
+              {canManage && selectedEvents.length > 0 && calendarDay >= 0 && (
                 <Button variant="quiet" onClick={() => setModal("event")}>
                   <Icon name="plus" /> Add another on{" "}
                   {dateLabel(calendarDay, true).split(",")[0]}

@@ -52,6 +52,18 @@ import { useSpaceMembership } from "./useSpaceMembership";
 
 type ModalKind = "event" | "task" | "place" | "space" | "list" | "";
 
+type ConfirmationRequest = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  requiredText?: string;
+  onConfirm: () => void | Promise<unknown>;
+  returnFocus: HTMLElement | null;
+};
+
+const taskPermissionError =
+  "Only an Editor or Owner can change To-dos in this Space.";
+
 function dateForOffset(offset: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offset);
@@ -116,6 +128,7 @@ export function usePlannerApp(accessToken: string) {
   const [ready, setReady] = useState<"checking" | "available" | "unavailable">(
     "checking",
   );
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [path, setPath] = useState(window.location.pathname);
   const [serverSpaces, setServerSpaces] = useState<Space[]>([]);
   const [spacesStatus, setSpacesStatus] = useState<
@@ -140,8 +153,43 @@ export function usePlannerApp(accessToken: string) {
   const [removingPlaceId, setRemovingPlaceId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
-  const [doneOpen, setDoneOpen] = useState(true);
+  const [taskListDefault, setTaskListDefault] = useState("");
   const [modal, setModalState] = useState<ModalKind>("");
+  const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(
+    null,
+  );
+  const requestConfirmation = (
+    request: Omit<ConfirmationRequest, "returnFocus">,
+  ) => {
+    setConfirmation({
+      ...request,
+      returnFocus:
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null,
+    });
+  };
+  const restoreConfirmationFocus = (target: HTMLElement | null) => {
+    window.setTimeout(() => {
+      if (target?.isConnected) {
+        target.focus();
+        return;
+      }
+      document.querySelector<HTMLElement>(".main-content h1")?.focus();
+    }, 0);
+  };
+  const dismissConfirmation = () => {
+    const target = confirmation?.returnFocus ?? null;
+    setConfirmation(null);
+    restoreConfirmationFocus(target);
+  };
+  const confirmPendingAction = () => {
+    if (!confirmation) return;
+    const pending = confirmation;
+    setConfirmation(null);
+    void pending.onConfirm();
+    restoreConfirmationFocus(pending.returnFocus);
+  };
   const [selected, setSelectedState] = useState<EventItem | TaskItem | null>(
     null,
   );
@@ -202,6 +250,7 @@ export function usePlannerApp(accessToken: string) {
     notificationPrefsError,
     mutedSpaces,
     setMutedSpaces,
+    setSpaceMuted,
     unread,
     notifications,
     notificationsStatus,
@@ -276,6 +325,17 @@ export function usePlannerApp(accessToken: string) {
         if (!controller.signal.aborted) setReady("unavailable");
       });
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const onOffline = () => setIsOffline(true);
+    const onOnline = () => setIsOffline(false);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
 
   useEffect(() => {
@@ -388,14 +448,24 @@ export function usePlannerApp(accessToken: string) {
   const toggleTask = (id: TaskItem["id"]) => {
     const task = tasks.find((item) => item.id === id);
     if (!task) return;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === task.space && item.role !== "Viewer",
+      )
+    ) {
+      setTaskError(taskPermissionError);
+      return;
+    }
     setTaskError("");
     updateTodoCompletion(accessToken, id, !task.done)
       .then((updated) =>
         setTasks((all) => all.map((item) => (item.id === id ? updated : item))),
       )
-      .catch(() =>
+      .catch((error) =>
         setTaskError(
-          "The Task couldn’t be updated. Check your connection and retry.",
+          error instanceof TodosApiError && error.status === 403
+            ? taskPermissionError
+            : "The Task couldn’t be updated. Check your connection and retry.",
         ),
       );
   };
@@ -426,6 +496,7 @@ export function usePlannerApp(accessToken: string) {
     setEventEditScope("series");
     setEditingTask(null);
     setEditingList(null);
+    setTaskListDefault("");
     setEventError("");
     setTaskError("");
     setPlaceError("");
@@ -500,9 +571,16 @@ export function usePlannerApp(accessToken: string) {
         setEventError("The end time must be after the start time.");
         return;
       }
-      if (!activeSpaces.some((item) => item.id === eventSpaceId)) {
+      const eventSpace = activeSpaces.find((item) => item.id === eventSpaceId);
+      if (!eventSpace) {
         setEventError(
           "Choose one of your account Spaces before adding an event.",
+        );
+        return;
+      }
+      if (!editingEvent && eventSpace.role === "Viewer") {
+        setEventError(
+          "Only an Editor or Owner can add Calendar events to this Space.",
         );
         return;
       }
@@ -542,7 +620,8 @@ export function usePlannerApp(accessToken: string) {
             );
           }
         } else {
-          setEvents((current) => [saved, ...current]);
+          if (saved.repeat) setEventsReload((current) => current + 1);
+          else setEvents((current) => [saved, ...current]);
         }
         setEventsStatus("ready");
         closeModal();
@@ -555,9 +634,11 @@ export function usePlannerApp(accessToken: string) {
         );
       } catch (error) {
         setEventError(
-          error instanceof CalendarEventsApiError && error.status === 400
-            ? "Check the event details and try again."
-            : "The event couldn’t be saved. Check your connection and retry.",
+          error instanceof CalendarEventsApiError && error.status === 403
+            ? "Only an Editor or Owner can change Calendar events in this Space."
+            : error instanceof CalendarEventsApiError && error.status === 400
+              ? "Check the event details and try again."
+              : "The event couldn’t be saved. Check your connection and retry.",
         );
       } finally {
         setSavingEvent(false);
@@ -578,7 +659,10 @@ export function usePlannerApp(accessToken: string) {
         setSpacesError(
           error instanceof SpacesApiError && error.status === 400
             ? "Enter a Space name with 1–80 characters."
-            : "The Space couldn’t be created. Check your connection and try again.",
+            : error instanceof SpacesApiError &&
+                error.code === "space_limit_reached"
+              ? "You can own up to 10 active shared Spaces. Delete one or transfer ownership before creating another."
+              : "The Space couldn’t be created. Check your connection and try again.",
         );
       } finally {
         setCreatingSpace(false);
@@ -586,6 +670,16 @@ export function usePlannerApp(accessToken: string) {
       return;
     }
     if (modal === "task") {
+      const taskSpaceId = editingTask?.space ?? space.id;
+      const taskSpace = activeSpaces.find((item) => item.id === taskSpaceId);
+      if (!taskSpace) {
+        setTaskError("Choose one of your account Spaces before saving a Task.");
+        return;
+      }
+      if (taskSpace.role === "Viewer") {
+        setTaskError(taskPermissionError);
+        return;
+      }
       setSavingTask(true);
       setTaskError("");
       try {
@@ -636,9 +730,11 @@ export function usePlannerApp(accessToken: string) {
         showToast(editingTask ? "Task updated." : "Task saved to this Space.");
       } catch (error) {
         setTaskError(
-          error instanceof TodosApiError && error.status === 400
-            ? "Check the Task details and try again."
-            : "The Task couldn’t be saved. Check your connection and retry.",
+          error instanceof TodosApiError && error.status === 403
+            ? taskPermissionError
+            : error instanceof TodosApiError && error.status === 400
+              ? "Check the Task details and try again."
+              : "The Task couldn’t be saved. Check your connection and retry.",
         );
       } finally {
         setSavingTask(false);
@@ -653,10 +749,15 @@ export function usePlannerApp(accessToken: string) {
         note: String(form.get("note") || "") || undefined,
         space: space.id,
       };
-      if (!activeSpaces.some((item) => item.id === space.id)) {
+      const placeSpace = activeSpaces.find((item) => item.id === space.id);
+      if (!placeSpace) {
         setPlaceError(
           "Choose one of your account Spaces before saving a place.",
         );
+        return;
+      }
+      if (placeSpace.role === "Viewer") {
+        setPlaceError("Only an Editor or Owner can save places in this Space.");
         return;
       }
       setSavingPlace(true);
@@ -669,9 +770,11 @@ export function usePlannerApp(accessToken: string) {
         showToast("Saved place added to this Space.");
       } catch (error) {
         setPlaceError(
-          error instanceof PlacesApiError && error.status === 400
-            ? "Check the place name, category, and address."
-            : "The place couldn’t be saved. Check your connection and retry.",
+          error instanceof PlacesApiError && error.status === 403
+            ? "Only an Editor or Owner can save places in this Space."
+            : error instanceof PlacesApiError && error.status === 400
+              ? "Check the place name, category, and address."
+              : "The place couldn’t be saved. Check your connection and retry.",
         );
       } finally {
         setSavingPlace(false);
@@ -679,6 +782,10 @@ export function usePlannerApp(accessToken: string) {
       return;
     }
     if (modal === "list") {
+      if (space.role === "Viewer") {
+        setTaskError(taskPermissionError);
+        return;
+      }
       const listName = title.trim();
       setSavingTask(true);
       setTaskError("");
@@ -726,11 +833,13 @@ export function usePlannerApp(accessToken: string) {
         showToast("To-do list saved to this Space.");
       } catch (error) {
         setTaskError(
-          error instanceof TodosApiError && error.status === 400
-            ? "Enter a list name with 1–80 characters."
-            : error instanceof TodosApiError && error.status === 409
-              ? "A list with that name already exists."
-              : "The list couldn’t be saved. Check your connection and retry.",
+          error instanceof TodosApiError && error.status === 403
+            ? taskPermissionError
+            : error instanceof TodosApiError && error.status === 400
+              ? "Enter a list name with 1–80 characters."
+              : error instanceof TodosApiError && error.status === 409
+                ? "A list with that name already exists."
+                : "The list couldn’t be saved. Check your connection and retry.",
         );
       } finally {
         setSavingTask(false);
@@ -742,6 +851,14 @@ export function usePlannerApp(accessToken: string) {
 
   const editSelectedEvent = (scope: "occurrence" | "series" = "series") => {
     if (!selected || "list" in selected) return;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === selected.space && item.role !== "Viewer",
+      )
+    ) {
+      setEventError("Only an Editor or Owner can change Calendar events.");
+      return;
+    }
     setEditingEvent(selected);
     setEventEditScope(scope);
     setSelectedState(null);
@@ -753,6 +870,14 @@ export function usePlannerApp(accessToken: string) {
     scope: "occurrence" | "series" = "series",
   ) => {
     if (!selected || "list" in selected) return;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === selected.space && item.role !== "Viewer",
+      )
+    ) {
+      setEventError("Only an Editor or Owner can change Calendar events.");
+      return;
+    }
     if (typeof selected.id === "string") {
       try {
         if (scope === "occurrence" && selected.occurrenceDate) {
@@ -764,9 +889,11 @@ export function usePlannerApp(accessToken: string) {
         } else {
           await deleteCalendarEvent(accessToken, selected.id);
         }
-      } catch {
+      } catch (error) {
         setEventError(
-          "The Calendar event couldn’t be canceled. Check your connection and retry.",
+          error instanceof CalendarEventsApiError && error.status === 403
+            ? "Only an Editor or Owner can change Calendar events in this Space."
+            : "The Calendar event couldn’t be canceled. Check your connection and retry.",
         );
         return;
       }
@@ -792,6 +919,14 @@ export function usePlannerApp(accessToken: string) {
 
   const editSelectedTask = () => {
     if (!selected || !("list" in selected)) return;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === selected.space && item.role !== "Viewer",
+      )
+    ) {
+      setTaskError(taskPermissionError);
+      return;
+    }
     setEditingTask(selected);
     setSelectedState(null);
     setTaskError("");
@@ -800,23 +935,44 @@ export function usePlannerApp(accessToken: string) {
 
   const removeSelectedTask = async () => {
     if (!selected || !("list" in selected)) return;
-    if (!window.confirm("Delete this Task? This cannot be undone.")) return;
-    try {
-      await deleteTodoTask(accessToken, String(selected.id));
-      setTasks((current) => current.filter((task) => task.id !== selected.id));
-      setSelected(null);
-      setTasksReload((current) => current + 1);
-      showToast("Task deleted.");
-    } catch {
-      setTaskError(
-        "The Task couldn’t be deleted. Check your connection and retry.",
-      );
+    const task = selected;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === task.space && item.role !== "Viewer",
+      )
+    ) {
+      setTaskError(taskPermissionError);
+      return;
     }
+    requestConfirmation({
+      title: "Delete this Task?",
+      description: "This cannot be undone.",
+      confirmLabel: "Delete Task",
+      onConfirm: async () => {
+        try {
+          await deleteTodoTask(accessToken, String(task.id));
+          setTasks((current) => current.filter((item) => item.id !== task.id));
+          setSelected(null);
+          setTasksReload((current) => current + 1);
+          showToast("Task deleted.");
+        } catch (error) {
+          setTaskError(
+            error instanceof TodosApiError && error.status === 403
+              ? taskPermissionError
+              : "The Task couldn’t be deleted. Check your connection and retry.",
+          );
+        }
+      },
+    });
   };
 
   const editTaskList = (listId: string) => {
     const list = serverTaskLists[space.id]?.find((item) => item.id === listId);
     if (!list) return;
+    if (space.role === "Viewer") {
+      setTaskError(taskPermissionError);
+      return;
+    }
     setEditingList(list);
     setTaskError("");
     setModal("list");
@@ -825,41 +981,53 @@ export function usePlannerApp(accessToken: string) {
   const removeTaskList = async (listId: string) => {
     const list = serverTaskLists[space.id]?.find((item) => item.id === listId);
     if (!list) return;
-    if (
-      !window.confirm(
-        `Delete “${list.name}” and all Tasks in it? This cannot be undone.`,
-      )
-    ) {
+    if (space.role === "Viewer") {
+      setTaskError(taskPermissionError);
       return;
     }
-    setTaskError("");
-    try {
-      await deleteTodoList(accessToken, listId);
-      setTasks((current) => current.filter((task) => task.listId !== listId));
-      setServerTaskLists((current) => ({
-        ...current,
-        [space.id]: (current[space.id] ?? []).filter(
-          (item) => item.id !== listId,
-        ),
-      }));
-      setTaskLists((current) => ({
-        ...current,
-        [space.id]: (current[space.id] ?? []).filter(
-          (name) => name !== list.name,
-        ),
-      }));
-      setTasksReload((current) => current + 1);
-      showToast("To-do list and its Tasks deleted.");
-    } catch {
-      setTaskError(
-        "The To-do list couldn’t be deleted. Check your connection and retry.",
-      );
-    }
+    requestConfirmation({
+      title: `Delete “${list.name}”?`,
+      description: "This will also delete all Tasks in this To-do list.",
+      confirmLabel: "Delete To-do list",
+      onConfirm: async () => {
+        setTaskError("");
+        try {
+          await deleteTodoList(accessToken, listId);
+          setTasks((current) =>
+            current.filter((task) => task.listId !== listId),
+          );
+          setServerTaskLists((current) => ({
+            ...current,
+            [space.id]: (current[space.id] ?? []).filter(
+              (item) => item.id !== listId,
+            ),
+          }));
+          setTaskLists((current) => ({
+            ...current,
+            [space.id]: (current[space.id] ?? []).filter(
+              (name) => name !== list.name,
+            ),
+          }));
+          setTasksReload((current) => current + 1);
+          showToast("To-do list and its Tasks deleted.");
+        } catch (error) {
+          setTaskError(
+            error instanceof TodosApiError && error.status === 403
+              ? taskPermissionError
+              : "The To-do list couldn’t be deleted. Check your connection and retry.",
+          );
+        }
+      },
+    });
   };
 
   const createTaskList = async (name: string): Promise<boolean> => {
     const listName = name.trim();
     if (!listName) return false;
+    if (space.role === "Viewer") {
+      setTaskError(taskPermissionError);
+      return false;
+    }
     setSavingTask(true);
     setTaskError("");
     try {
@@ -877,11 +1045,13 @@ export function usePlannerApp(accessToken: string) {
       return true;
     } catch (error) {
       setTaskError(
-        error instanceof TodosApiError && error.status === 400
-          ? "Enter a list name with 1–80 characters."
-          : error instanceof TodosApiError && error.status === 409
-            ? "A list with that name already exists."
-            : "The list couldn’t be saved. Check your connection and retry.",
+        error instanceof TodosApiError && error.status === 403
+          ? taskPermissionError
+          : error instanceof TodosApiError && error.status === 400
+            ? "Enter a list name with 1–80 characters."
+            : error instanceof TodosApiError && error.status === 409
+              ? "A list with that name already exists."
+              : "The list couldn’t be saved. Check your connection and retry.",
       );
       return false;
     } finally {
@@ -891,14 +1061,26 @@ export function usePlannerApp(accessToken: string) {
 
   const removeSavedPlace = async (place: PlaceItem) => {
     if (!place.id || removingPlaceId) return;
+    if (
+      !activeSpaces.some(
+        (item) => item.id === space.id && item.role !== "Viewer",
+      )
+    ) {
+      setPlaceError("Only an Editor or Owner can remove places in this Space.");
+      return;
+    }
     setRemovingPlaceId(place.id);
     setPlaceError("");
     try {
       await deleteSavedPlace(accessToken, space.id, place.id);
       setPlaces((current) => current.filter((item) => item.id !== place.id));
       showToast("Saved place removed.");
-    } catch {
-      setPlaceError("The Saved place couldn’t be removed. Retry your action.");
+    } catch (error) {
+      setPlaceError(
+        error instanceof PlacesApiError && error.status === 403
+          ? "Only an Editor or Owner can remove places in this Space."
+          : "The Saved place couldn’t be removed. Retry your action.",
+      );
     } finally {
       setRemovingPlaceId(null);
     }
@@ -1007,6 +1189,7 @@ export function usePlannerApp(accessToken: string) {
   return {
     ...membershipState,
     ready,
+    isOffline,
     activeSpaces,
     spacesStatus,
     spacesError,
@@ -1029,6 +1212,7 @@ export function usePlannerApp(accessToken: string) {
     saveMyTaskReminders,
     mutedSpaces,
     setMutedSpaces,
+    setSpaceMuted,
     events,
     setEvents,
     eventsStatus,
@@ -1076,10 +1260,14 @@ export function usePlannerApp(accessToken: string) {
     setHidden,
     filter,
     setFilter,
-    doneOpen,
-    setDoneOpen,
+    taskListDefault,
+    setTaskListDefault,
     modal,
     setModal,
+    confirmation,
+    requestConfirmation,
+    dismissConfirmation,
+    confirmPendingAction,
     selected,
     setSelected,
     placeFilter,

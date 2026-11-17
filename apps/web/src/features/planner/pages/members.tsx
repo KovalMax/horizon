@@ -10,9 +10,15 @@ export function MembersPage({
 }) {
   const { space, showToast } = state;
   const { pageHeader } = helpers;
+  const isOwner = space.role === "Owner";
   return (
     <>
-      {pageHeader("Members & sharing", `Manage access to ${space.name}.`)}
+      {pageHeader(
+        "Members & sharing",
+        isOwner
+          ? `Manage access to ${space.name}.`
+          : `Only the Owner can manage membership for ${space.name}.`,
+      )}
       <div className="space-title">{space.name}</div>
       {state.membershipStatus === "loading" && (
         <p role="status">Loading Space Members…</p>
@@ -46,15 +52,14 @@ export function MembersPage({
                 </select>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Remove ${member.email} from ${space.name}?`,
-                      )
-                    ) {
-                      void state.removeMember(member.user_id);
-                    }
-                  }}
+                  onClick={() =>
+                    state.requestConfirmation({
+                      title: `Remove ${member.email}?`,
+                      description: `They will lose access to ${space.name}.`,
+                      confirmLabel: "Remove Member",
+                      onConfirm: () => state.removeMember(member.user_id),
+                    })
+                  }
                 >
                   Remove
                 </Button>
@@ -68,6 +73,20 @@ export function MembersPage({
           state.spaceMembers.length === 0 && (
             <p className="empty-inline">No Members found in this Space.</p>
           )}
+      </section>
+      <section className="list-card role-guidance">
+        <h2>What each role can do</h2>
+        <p>
+          <b>Owner:</b> Manages Members and ownership, and can do everything
+          Editors can.
+        </p>
+        <p>
+          <b>Editor:</b> Can create, edit, and delete Calendar events, Tasks,
+          and Saved places.
+        </p>
+        <p>
+          <b>Viewer:</b> Can read shared content but cannot change it.
+        </p>
       </section>
       {space.role === "Owner" && (
         <>
@@ -123,17 +142,26 @@ export function MembersPage({
                 const email = String(
                   new FormData(form).get("email") || "",
                 ).trim();
+                const sendInvitation = async () => {
+                  if (await state.inviteMember(email)) form.reset();
+                };
                 if (space.tone === "personal") {
                   const warningKey = `horizon-personal-space-share-warning:${space.id}`;
                   if (!window.localStorage.getItem(warningKey)) {
-                    const confirmed = window.confirm(
-                      `Sharing ${space.name} gives new Members access to its existing calendar events, to-dos, and saved places. Continue?`,
-                    );
-                    if (!confirmed) return;
-                    window.localStorage.setItem(warningKey, "confirmed");
+                    state.requestConfirmation({
+                      title: `Share ${space.name}?`,
+                      description:
+                        "New Members will get access to its existing Calendar events, To-dos, and Saved places.",
+                      confirmLabel: "Continue",
+                      onConfirm: async () => {
+                        window.localStorage.setItem(warningKey, "confirmed");
+                        await sendInvitation();
+                      },
+                    });
+                    return;
                   }
                 }
-                if (await state.inviteMember(email)) form.reset();
+                await sendInvitation();
               }}
             >
               <input
@@ -178,28 +206,37 @@ export function MembersPage({
               event.preventDefault();
               const form = event.currentTarget;
               const data = new FormData(form);
+              const createLink = async () => {
+                const expiryValue = String(data.get("joinLinkExpiresAt") ?? "");
+                const expiresAt = expiryValue
+                  ? new Date(expiryValue).toISOString()
+                  : null;
+                if (
+                  await state.createJoinLink(
+                    String(data.get("joinLinkRole")) as "viewer" | "editor",
+                    expiresAt,
+                  )
+                ) {
+                  form.reset();
+                }
+              };
               if (space.tone === "personal") {
                 const warningKey = `horizon-personal-space-share-warning:${space.id}`;
                 if (!window.localStorage.getItem(warningKey)) {
-                  const confirmed = window.confirm(
-                    `Sharing ${space.name} gives new Members access to its existing calendar events, to-dos, and saved places. Continue?`,
-                  );
-                  if (!confirmed) return;
-                  window.localStorage.setItem(warningKey, "confirmed");
+                  state.requestConfirmation({
+                    title: `Share ${space.name}?`,
+                    description:
+                      "Anyone using this link can request access to its existing Calendar events, To-dos, and Saved places. You must approve each request.",
+                    confirmLabel: "Continue",
+                    onConfirm: async () => {
+                      window.localStorage.setItem(warningKey, "confirmed");
+                      await createLink();
+                    },
+                  });
+                  return;
                 }
               }
-              const expiryValue = String(data.get("joinLinkExpiresAt") ?? "");
-              const expiresAt = expiryValue
-                ? new Date(expiryValue).toISOString()
-                : null;
-              if (
-                await state.createJoinLink(
-                  String(data.get("joinLinkRole")) as "viewer" | "editor",
-                  expiresAt,
-                )
-              ) {
-                form.reset();
-              }
+              await createLink();
             }}
           >
             <label className="form-field join-link-field">

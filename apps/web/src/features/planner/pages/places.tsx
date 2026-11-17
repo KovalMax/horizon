@@ -11,8 +11,6 @@ export function PlacesPage({
 }) {
   const {
     setModal,
-    routeSection,
-    goSpace,
     space,
     placeFilter,
     setPlaceFilter,
@@ -22,6 +20,7 @@ export function PlacesPage({
     retryPlaces,
   } = state;
   const { pageHeader } = helpers;
+  const canManage = space.role !== "Viewer";
   const spacePlaces = useMemo(
     () => places.filter((place) => place.space === space.id),
     [places, space.id],
@@ -44,30 +43,19 @@ export function PlacesPage({
       {pageHeader(
         "Saved places",
         `Places saved in ${space.name}. Only this Space's places are shown.`,
-        hasSavedPlaces ? (
+        hasSavedPlaces && canManage ? (
           <Button onClick={() => setModal("place")}>
             <Icon name="plus" />
             Save a place
           </Button>
         ) : undefined,
       )}
-      <div className="space-page-tabs">
-        {[
-          ["calendar", "Calendar"],
-          ["tasks", "To-dos"],
-          ["places", "Places"],
-          ["members", "Members"],
-          ["settings", "Space settings"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            className={routeSection === key ? "current" : ""}
-            onClick={() => goSpace(space.id, key!)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {!canManage && (
+        <p className="read-only-notice">
+          You can view Saved places in this Space, but only Editors and the
+          Owner can change them.
+        </p>
+      )}
       {placesStatus === "loading" && <p role="status">Loading Saved places…</p>}
       {placesStatus === "error" && (
         <div role="alert">
@@ -142,20 +130,19 @@ export function PlacesPage({
                     <Icon name="arrow" size={16} />
                     Directions
                   </a>
-                  {place.id && (
+                  {canManage && place.id && (
                     <button
                       className="place-remove"
                       type="button"
                       disabled={state.removingPlaceId === place.id}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Remove “${place.name}” from ${space.name}?`,
-                          )
-                        ) {
-                          void state.removeSavedPlace(place);
-                        }
-                      }}
+                      onClick={() =>
+                        state.requestConfirmation({
+                          title: `Remove “${place.name}”?`,
+                          description: `This will remove the Saved place from ${space.name}.`,
+                          confirmLabel: "Remove Saved place",
+                          onConfirm: () => state.removeSavedPlace(place),
+                        })
+                      }
                     >
                       {state.removingPlaceId === place.id
                         ? "Removing…"
@@ -180,7 +167,7 @@ export function PlacesPage({
                 ? "Choose another category to see more places."
                 : `Save a useful place for everyone in ${space.name}.`}
             </p>
-            {!hasSavedPlaces && (
+            {!hasSavedPlaces && canManage && (
               <Button variant="outline" onClick={() => setModal("place")}>
                 Save a place
               </Button>

@@ -7,6 +7,8 @@ use super::{
     responses::{DeletedSpaceResponse, SpaceResponse, TransferOwnershipResponse},
 };
 
+pub const MAX_ACTIVE_OWNED_SHARED_SPACES: i64 = 10;
+
 #[derive(Clone)]
 pub struct SpacesApplication {
     repository: PostgresSpacesRepository,
@@ -32,10 +34,7 @@ impl SpacesApplication {
         if name.is_empty() || name.chars().count() > 80 {
             return Err(CreateSpaceError::InvalidName);
         }
-        self.repository
-            .create_shared(name, owner_id)
-            .await
-            .map_err(CreateSpaceError::Unavailable)
+        self.repository.create_shared(name, owner_id).await
     }
 
     pub async fn transfer_ownership(
@@ -85,7 +84,14 @@ impl SpacesApplication {
 
 pub enum CreateSpaceError {
     InvalidName,
+    LimitReached,
     Unavailable(sqlx::Error),
+}
+
+impl From<sqlx::Error> for CreateSpaceError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Unavailable(error)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -94,6 +100,7 @@ pub enum SpaceLifecycleError {
     TargetNotMember,
     InvalidTransfer,
     PersonalTransferUnsupported,
+    LimitReached,
     NotFound,
     Unavailable,
 }

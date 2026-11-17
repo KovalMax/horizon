@@ -10,35 +10,58 @@ export function SpaceSettingsPage({
 }) {
   const {
     space,
-    routeSection,
-    goSpace,
     spaceMembers,
     membershipStatus,
     membershipError,
     transferOwnership,
     deleteCurrentSpace,
+    mutedSpaces,
+    notificationPrefsStatus,
+    notificationPrefsError,
+    setSpaceMuted,
   } = state;
   const { pageHeader } = helpers;
   return (
     <>
-      {pageHeader("Space settings", `Manage ${space.name}.`)}
-      <div className="space-page-tabs">
-        {[
-          ["calendar", "Calendar"],
-          ["tasks", "To-dos"],
-          ["places", "Places"],
-          ["members", "Members"],
-          ["settings", "Space settings"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            className={routeSection === key ? "current" : ""}
-            onClick={() => goSpace(space.id, key!)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {pageHeader(
+        "Space settings",
+        space.role === "Owner"
+          ? `Manage ${space.name}.`
+          : `Only the Owner can transfer ownership or delete ${space.name}.`,
+      )}
+      <section className="list-card">
+        <h2>Notifications</h2>
+        <label className="space-mute-row">
+          <span>
+            <b>Mute this Space</b>
+            <small>
+              No in-app or email notifications from {space.name}. You can still
+              open it any time.
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label={`Mute ${space.name} notifications`}
+            checked={mutedSpaces.includes(space.id)}
+            disabled={
+              notificationPrefsStatus === "loading" ||
+              notificationPrefsStatus === "saving" ||
+              notificationPrefsStatus === "error"
+            }
+            onChange={(event) =>
+              void setSpaceMuted(space.id, event.currentTarget.checked)
+            }
+          />
+        </label>
+        {notificationPrefsStatus === "loading" && (
+          <p role="status">Loading notification preferences…</p>
+        )}
+        {notificationPrefsStatus === "saving" && (
+          <p role="status">Saving notification preference…</p>
+        )}
+        {notificationPrefsError && <p role="alert">{notificationPrefsError}</p>}
+      </section>
       <section className="list-card">
         <h2>Ownership & leaving</h2>
         {space.role === "Owner" && space.tone === "personal" ? (
@@ -62,13 +85,12 @@ export function SpaceSettingsPage({
                   (member) => member.user_id === newOwnerId,
                 );
                 if (!newOwner) return;
-                if (
-                  !window.confirm(
-                    `Transfer ownership of ${space.name} to ${newOwner.email}? You will become an Editor.`,
-                  )
-                )
-                  return;
-                await transferOwnership(newOwnerId);
+                state.requestConfirmation({
+                  title: `Transfer ownership of ${space.name}?`,
+                  description: `${newOwner.email} will become the Owner. You will become an Editor.`,
+                  confirmLabel: "Transfer ownership",
+                  onConfirm: () => transferOwnership(newOwnerId),
+                });
               }}
             >
               <label className="form-field">
@@ -103,8 +125,8 @@ export function SpaceSettingsPage({
           </>
         ) : (
           <p>
-            The current Owner must transfer ownership before this Space can be
-            left.
+            Only the Owner can transfer ownership or delete this Space. Ask the
+            Owner to remove you if you need to leave.
           </p>
         )}
       </section>
@@ -120,13 +142,13 @@ export function SpaceSettingsPage({
           <Button
             variant="outline"
             onClick={() => {
-              if (
-                window.confirm(
-                  `Delete ${space.name}? You can restore it for seven days. After that, it and its content will be permanently deleted.`,
-                )
-              ) {
-                void deleteCurrentSpace();
-              }
+              state.requestConfirmation({
+                title: `Delete ${space.name}?`,
+                description: `Access will be removed immediately. You can restore this Space for seven days; after that, it and its content will be permanently deleted. Pending invitations and join links will be invalidated.`,
+                confirmLabel: "Delete Space",
+                requiredText: space.name,
+                onConfirm: () => deleteCurrentSpace(),
+              });
             }}
           >
             Delete Space

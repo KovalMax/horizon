@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button, Icon, SpaceGlyph } from "../../../shared/ui";
 
@@ -12,8 +13,6 @@ export function TasksPage({
     setModal,
     space,
     tasks,
-    doneOpen,
-    setDoneOpen,
     taskLists,
     tasksStatus,
     taskError,
@@ -21,6 +20,10 @@ export function TasksPage({
   } = state;
   const { pageHeader, taskRow } = helpers;
   const canManage = space.role !== "Viewer";
+  const [expandedCompletedLists, setExpandedCompletedLists] = useState<
+    Set<string>
+  >(() => new Set());
+  const tasksReady = tasksStatus === "ready";
   return (
     <>
       <div className="space-context-tag">
@@ -30,68 +33,110 @@ export function TasksPage({
       {pageHeader(
         "To-dos",
         "Shared lists for this Space. Each Task can have one assignee.",
-        canManage ? (
+        canManage && tasksReady ? (
           <Button onClick={() => setModal("task")}>
             <Icon name="plus" />
             New Task
           </Button>
         ) : null,
       )}
+      {!canManage && (
+        <p className="read-only-notice">
+          You can view To-dos in this Space, but only Editors and the Owner can
+          change them.
+        </p>
+      )}
       {tasksStatus === "loading" && <p role="status">Loading To-dos…</p>}
       {tasksStatus === "error" && (
-        <div role="alert">
-          <p>{taskError}</p>
-          <Button variant="outline" onClick={retryTasks}>
-            Retry
-          </Button>
-        </div>
+        <section
+          className="tasks-error-card"
+          aria-labelledby="tasks-error-title"
+        >
+          <div>
+            <h2 id="tasks-error-title">To-dos couldn’t load</h2>
+            <p role="alert">{taskError}</p>
+          </div>
+          <Button onClick={retryTasks}>Try again</Button>
+        </section>
       )}
       {taskError && tasksStatus !== "error" && <p role="alert">{taskError}</p>}
-      <div className="tasks-page-grid">
+      <div className="tasks-page-grid" hidden={!tasksReady}>
         {(taskLists[space.id] ?? []).map((list) => {
           const rows = tasks.filter(
             (t) => t.space === space.id && t.list === list,
           );
           const openCount = rows.filter((t) => !t.done).length;
+          const completedOpen = expandedCompletedLists.has(list);
           return (
             <section className="list-card task-list-card" key={list}>
               <div className="list-heading">
                 <h2>
                   {list} · {openCount} open
                 </h2>
-                {canManage &&
-                  (() => {
-                    const savedList = state.serverTaskLists[space.id]?.find(
-                      (item) => item.name === list,
-                    );
-                    return savedList ? (
-                      <span className="list-actions">
-                        <button
-                          aria-label={`Rename ${list}`}
-                          onClick={() => state.editTaskList(savedList.id)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          aria-label={`Delete ${list}`}
-                          onClick={() => state.removeTaskList(savedList.id)}
-                        >
-                          Delete
-                        </button>
-                      </span>
-                    ) : null;
-                  })()}
+                <div className="list-heading-actions">
+                  {canManage && (
+                    <button
+                      className="task-list-add"
+                      aria-label={`Add Task to ${list}`}
+                      title={`Add Task to ${list}`}
+                      onClick={() => {
+                        state.setTaskListDefault(list);
+                        setModal("task");
+                      }}
+                    >
+                      <Icon name="plus" size={22} />
+                    </button>
+                  )}
+                  {canManage &&
+                    (() => {
+                      const savedList = state.serverTaskLists[space.id]?.find(
+                        (item) => item.name === list,
+                      );
+                      return savedList ? (
+                        <span className="list-actions">
+                          <button
+                            className="task-list-icon-action"
+                            aria-label={`Rename ${list}`}
+                            title={`Rename ${list}`}
+                            onClick={() => state.editTaskList(savedList.id)}
+                          >
+                            <Icon name="edit" size={17} />
+                          </button>
+                          <button
+                            className="task-list-icon-action danger"
+                            aria-label={`Delete ${list}`}
+                            title={`Delete ${list}`}
+                            onClick={() => state.removeTaskList(savedList.id)}
+                          >
+                            <Icon name="trash" size={17} />
+                          </button>
+                        </span>
+                      ) : null;
+                    })()}
+                </div>
               </div>
               {rows.filter((t) => !t.done).map((t) => taskRow(t))}
               {rows.some((t) => t.done) && (
                 <>
                   <button
                     className="completed-toggle"
-                    onClick={() => setDoneOpen(!doneOpen)}
+                    aria-expanded={completedOpen}
+                    onClick={() =>
+                      setExpandedCompletedLists((current) => {
+                        const next = new Set(current);
+                        if (next.has(list)) next.delete(list);
+                        else next.add(list);
+                        return next;
+                      })
+                    }
                   >
+                    <Icon
+                      name={completedOpen ? "chevron-up" : "chevron-down"}
+                      size={17}
+                    />
                     Completed ({rows.filter((t) => t.done).length})
                   </button>
-                  {doneOpen &&
+                  {completedOpen &&
                     rows.filter((t) => t.done).map((t) => taskRow(t))}
                 </>
               )}
@@ -128,7 +173,7 @@ export function TasksPage({
           </section>
         )}
       </div>
-      <div className="task-pagination">
+      <div className="task-pagination" hidden={!tasksReady}>
         {state.tasksNextOffset !== null && (
           <Button
             variant="outline"

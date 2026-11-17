@@ -35,8 +35,18 @@ export function SpaceSwitcher({ appState }: { appState: PlannerAppState }) {
         <div className="drawer-heading">
           <h2 id="space-switcher-title">Switch Space</h2>
           <button
+            type="button"
             aria-label="Close Space switcher"
-            onClick={() => setSpaceSwitcherOpen(false)}
+            onClick={() => {
+              setSpaceSwitcherOpen(false);
+              window.setTimeout(
+                () =>
+                  document
+                    .querySelector<HTMLElement>("[data-space-switcher-trigger]")
+                    ?.focus(),
+                0,
+              );
+            }}
           >
             ×
           </button>

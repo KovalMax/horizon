@@ -136,6 +136,7 @@ test("inbox displays persisted items and supports explicit read state", async ()
   expect(
     await screen.findByRole("heading", { name: "Task assigned to you" }),
   ).toBeTruthy();
+  expect(screen.getByLabelText("New notification")).toBeTruthy();
   expect(screen.getByText("Renew home insurance")).toBeTruthy();
   expect(screen.getByText("Linden Street Home")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
@@ -170,9 +171,9 @@ test("Save settings persists notification channels and profile preferences toget
   expect(
     await screen.findByRole("heading", { name: "Notification channels" }),
   ).toBeTruthy();
-  const assignmentInApp = screen.getAllByRole("checkbox", {
-    name: "In-app",
-  })[0]!;
+  const assignmentInApp = screen.getByRole("switch", {
+    name: "Task assignments in-app notifications",
+  });
   fireEvent.click(assignmentInApp);
   const timeZone = screen.getByRole("combobox", { name: "Time zone" });
   fireEvent.focus(timeZone);

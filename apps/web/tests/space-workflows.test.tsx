@@ -1197,6 +1197,12 @@ test("Space Owners transfer a shared Space to an existing Member", async () => {
   };
   let ownerRole = "owner";
   let memberRole = "viewer";
+  let notificationSettings: Record<string, unknown> = {
+    preferences: [],
+    muted_space_ids: [],
+    default_reminder_time: "09:00",
+    time_zone: "UTC",
+  };
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1213,6 +1219,12 @@ test("Space Owners transfer a shared Space to an existing Member", async () => {
         return Response.json({ id: "user-1", email: "maya@example.com" });
       if (url === "/api/spaces")
         return Response.json([{ ...space, role: ownerRole }]);
+      if (url === "/api/notifications/preferences" && !init?.method)
+        return Response.json(notificationSettings);
+      if (url === "/api/notifications/preferences" && init?.method === "PUT") {
+        notificationSettings = JSON.parse(String(init.body));
+        return Response.json(notificationSettings);
+      }
       if (url.startsWith("/api/events?"))
         return Response.json({ items: [], next_offset: null });
       if (url.startsWith("/api/tasks?"))
@@ -1269,6 +1281,15 @@ test("Space Owners transfer a shared Space to an existing Member", async () => {
       name: "Space settings",
     }),
   );
+  const muteSpace = await screen.findByRole("switch", {
+    name: `Mute ${space.name} notifications`,
+  });
+  await waitFor(() => expect(muteSpace.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(muteSpace);
+  await waitFor(() =>
+    expect(notificationSettings.muted_space_ids).toEqual([space.id]),
+  );
+  expect((muteSpace as HTMLInputElement).checked).toBe(true);
   fireEvent.change(await screen.findByRole("combobox", { name: "New Owner" }), {
     target: { value: "user-2" },
   });

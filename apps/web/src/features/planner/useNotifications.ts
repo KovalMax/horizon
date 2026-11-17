@@ -197,7 +197,10 @@ export function useNotifications(
     }
   };
 
-  const savePreferences = async () => {
+  const savePreferences = async (
+    mutedSpaceIds: string[] = mutedSpaces,
+    successMessage = "Settings saved.",
+  ): Promise<boolean> => {
     setNotificationPrefsStatus("saving");
     setNotificationPrefsError("");
     const preferences = Object.entries(notificationCategories).flatMap(
@@ -217,13 +220,14 @@ export function useNotifications(
     try {
       const settings = await saveNotificationSettings(accessToken, {
         preferences,
-        muted_space_ids: mutedSpaces,
+        muted_space_ids: mutedSpaceIds,
         default_reminder_time: reminderTime,
         time_zone: timeZone,
       });
       setMutedSpaces(settings.muted_space_ids);
       setNotificationPrefsStatus("ready");
-      showToast("Settings saved.");
+      showToast(successMessage);
+      return true;
     } catch (error) {
       setNotificationPrefsStatus("error");
       setNotificationPrefsError(
@@ -231,7 +235,29 @@ export function useNotifications(
           ? "Check the notification settings and try again."
           : "Settings couldn’t be saved. Retry your action.",
       );
+      return false;
     }
+  };
+
+  const setSpaceMuted = async (
+    spaceId: string,
+    muted: boolean,
+  ): Promise<boolean> => {
+    if (notificationPrefsStatus !== "ready") return false;
+    const previousMutedSpaces = mutedSpaces;
+    const nextMutedSpaces = muted
+      ? [...new Set([...mutedSpaces, spaceId])]
+      : mutedSpaces.filter((id) => id !== spaceId);
+    setMutedSpaces(nextMutedSpaces);
+    const saved = await savePreferences(
+      nextMutedSpaces,
+      muted ? "Space muted." : "Space unmuted.",
+    );
+    if (!saved) {
+      setMutedSpaces(previousMutedSpaces);
+      setNotificationPrefsStatus("ready");
+    }
+    return saved;
   };
 
   return {
@@ -245,6 +271,7 @@ export function useNotifications(
     notificationPrefsError,
     mutedSpaces,
     setMutedSpaces,
+    setSpaceMuted,
     unread,
     setUnread,
     notifications,

@@ -171,9 +171,9 @@ test("Save settings persists notification channels and profile preferences toget
   expect(
     await screen.findByRole("heading", { name: "Notification channels" }),
   ).toBeTruthy();
-  const assignmentInApp = screen.getAllByRole("checkbox", {
-    name: "In-app",
-  })[0]!;
+  const assignmentInApp = screen.getByRole("switch", {
+    name: "Task assignments in-app notifications",
+  });
   fireEvent.click(assignmentInApp);
   const timeZone = screen.getByRole("combobox", { name: "Time zone" });
   fireEvent.focus(timeZone);

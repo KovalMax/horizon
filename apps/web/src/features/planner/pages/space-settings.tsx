@@ -15,6 +15,10 @@ export function SpaceSettingsPage({
     membershipError,
     transferOwnership,
     deleteCurrentSpace,
+    mutedSpaces,
+    notificationPrefsStatus,
+    notificationPrefsError,
+    setSpaceMuted,
   } = state;
   const { pageHeader } = helpers;
   return (
@@ -25,6 +29,39 @@ export function SpaceSettingsPage({
           ? `Manage ${space.name}.`
           : `Only the Owner can transfer ownership or delete ${space.name}.`,
       )}
+      <section className="list-card">
+        <h2>Notifications</h2>
+        <label className="space-mute-row">
+          <span>
+            <b>Mute this Space</b>
+            <small>
+              No in-app or email notifications from {space.name}. You can still
+              open it any time.
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-label={`Mute ${space.name} notifications`}
+            checked={mutedSpaces.includes(space.id)}
+            disabled={
+              notificationPrefsStatus === "loading" ||
+              notificationPrefsStatus === "saving" ||
+              notificationPrefsStatus === "error"
+            }
+            onChange={(event) =>
+              void setSpaceMuted(space.id, event.currentTarget.checked)
+            }
+          />
+        </label>
+        {notificationPrefsStatus === "loading" && (
+          <p role="status">Loading notification preferences…</p>
+        )}
+        {notificationPrefsStatus === "saving" && (
+          <p role="status">Saving notification preference…</p>
+        )}
+        {notificationPrefsError && <p role="alert">{notificationPrefsError}</p>}
+      </section>
       <section className="list-card">
         <h2>Ownership & leaving</h2>
         {space.role === "Owner" && space.tone === "personal" ? (

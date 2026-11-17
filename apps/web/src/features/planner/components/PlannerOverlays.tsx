@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { dateLabel } from "../domain";
 import type { PlannerAppState } from "../usePlannerApp";
 import { AppLink, Button, Icon } from "../../../shared/ui";
@@ -74,6 +75,7 @@ function taskDateAtOffset(offset: number): string {
 }
 
 export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
+  const [taskDueDate, setTaskDueDate] = useState("");
   const {
     mobileMenu,
     setMobileMenu,
@@ -100,6 +102,14 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
     editSelectedTask,
     removeSelectedTask,
   } = appState;
+  useEffect(() => {
+    if (modal !== "task") return;
+    setTaskDueDate(
+      appState.editingTask?.day === undefined
+        ? ""
+        : taskDateAtOffset(appState.editingTask.day),
+    );
+  }, [modal, appState.editingTask]);
   return (
     <>
       <SpaceSwitcher appState={appState} />
@@ -142,7 +152,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-edit-dialog-title"
-            className="modal"
+            className={`modal ${modal}-modal`}
             onSubmit={submitModal}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(event) => handleModalKeyDown(event, closeModal)}
@@ -175,6 +185,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                 ×
               </button>
             </div>
+            {modal === "task" && (
+              <p className="modal-context">In {appState.space.name}</p>
+            )}
             {modal === "space" ? (
               <>
                 <p>
@@ -373,8 +386,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                           name="list"
                           defaultValue={
                             appState.editingTask?.list ??
-                            appState.taskLists[appState.space.id]?.[0] ??
-                            "To-do"
+                            (appState.taskListDefault ||
+                              appState.taskLists[appState.space.id]?.[0] ||
+                              "To-do")
                           }
                         >
                           {(
@@ -385,7 +399,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         </select>
                       </label>
                       <label className="form-field">
-                        Assigned to
+                        Assignee (optional, one person)
                         <select
                           name="assignee"
                           defaultValue={appState.editingTask?.assigneeId ?? ""}
@@ -410,7 +424,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     </div>
                     <div className="modal-grid">
                       <label className="form-field">
-                        Due date
+                        Due date (optional)
                         <input
                           name="dueDate"
                           type="date"
@@ -419,38 +433,48 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                               ? ""
                               : taskDateAtOffset(appState.editingTask.day)
                           }
+                          onChange={(event) =>
+                            setTaskDueDate(event.currentTarget.value)
+                          }
                         />
                       </label>
                       <label className="form-field">
-                        Time (optional)
+                        Due time (optional)
                         <input
                           name="taskTime"
                           type="time"
+                          disabled={!taskDueDate}
                           defaultValue={appState.editingTask?.time ?? ""}
                         />
                       </label>
                     </div>
-                    <fieldset className="form-field">
-                      <legend>Remind recipient</legend>
-                      {[
-                        { value: 1440, label: "1 day before" },
-                        { value: 60, label: "1 hour before" },
-                      ].map((offset) => (
-                        <label className="setting-row" key={offset.value}>
-                          <span>{offset.label}</span>
-                          <input
-                            type="checkbox"
-                            name="reminderOffset"
-                            value={offset.value}
-                            defaultChecked={(
-                              appState.editingTask?.reminderOffsetsMinutes ?? [
-                                1440, 60,
-                              ]
-                            ).includes(offset.value)}
-                          />
-                        </label>
-                      ))}
-                    </fieldset>
+                    <section className="task-reminders">
+                      <h3>Reminders</h3>
+                      {taskDueDate ? (
+                        <fieldset className="form-field">
+                          <legend>Remind recipient</legend>
+                          {[
+                            { value: 1440, label: "1 day before" },
+                            { value: 60, label: "1 hour before" },
+                          ].map((offset) => (
+                            <label className="setting-row" key={offset.value}>
+                              <span>{offset.label}</span>
+                              <input
+                                type="checkbox"
+                                name="reminderOffset"
+                                value={offset.value}
+                                defaultChecked={(
+                                  appState.editingTask
+                                    ?.reminderOffsetsMinutes ?? [1440, 60]
+                                ).includes(offset.value)}
+                              />
+                            </label>
+                          ))}
+                        </fieldset>
+                      ) : (
+                        <p>Add a due date to set reminders.</p>
+                      )}
+                    </section>
                   </>
                 )}
                 {modal === "place" && (

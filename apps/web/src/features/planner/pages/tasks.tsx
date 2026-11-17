@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button, Icon, SpaceGlyph } from "../../../shared/ui";
 
@@ -12,8 +13,6 @@ export function TasksPage({
     setModal,
     space,
     tasks,
-    doneOpen,
-    setDoneOpen,
     taskLists,
     tasksStatus,
     taskError,
@@ -21,6 +20,9 @@ export function TasksPage({
   } = state;
   const { pageHeader, taskRow } = helpers;
   const canManage = space.role !== "Viewer";
+  const [expandedCompletedLists, setExpandedCompletedLists] = useState<
+    Set<string>
+  >(() => new Set());
   return (
     <>
       <div className="space-context-tag">
@@ -53,45 +55,73 @@ export function TasksPage({
             (t) => t.space === space.id && t.list === list,
           );
           const openCount = rows.filter((t) => !t.done).length;
+          const completedOpen = expandedCompletedLists.has(list);
           return (
             <section className="list-card task-list-card" key={list}>
               <div className="list-heading">
                 <h2>
                   {list} · {openCount} open
                 </h2>
-                {canManage &&
-                  (() => {
-                    const savedList = state.serverTaskLists[space.id]?.find(
-                      (item) => item.name === list,
-                    );
-                    return savedList ? (
-                      <span className="list-actions">
-                        <button
-                          aria-label={`Rename ${list}`}
-                          onClick={() => state.editTaskList(savedList.id)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          aria-label={`Delete ${list}`}
-                          onClick={() => state.removeTaskList(savedList.id)}
-                        >
-                          Delete
-                        </button>
-                      </span>
-                    ) : null;
-                  })()}
+                <div className="list-heading-actions">
+                  {canManage && (
+                    <button
+                      className="task-list-add"
+                      aria-label={`Add Task to ${list}`}
+                      title={`Add Task to ${list}`}
+                      onClick={() => {
+                        state.setTaskListDefault(list);
+                        setModal("task");
+                      }}
+                    >
+                      <Icon name="plus" size={22} />
+                    </button>
+                  )}
+                  {canManage &&
+                    (() => {
+                      const savedList = state.serverTaskLists[space.id]?.find(
+                        (item) => item.name === list,
+                      );
+                      return savedList ? (
+                        <span className="list-actions">
+                          <button
+                            aria-label={`Rename ${list}`}
+                            onClick={() => state.editTaskList(savedList.id)}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            aria-label={`Delete ${list}`}
+                            onClick={() => state.removeTaskList(savedList.id)}
+                          >
+                            Delete
+                          </button>
+                        </span>
+                      ) : null;
+                    })()}
+                </div>
               </div>
               {rows.filter((t) => !t.done).map((t) => taskRow(t))}
               {rows.some((t) => t.done) && (
                 <>
                   <button
                     className="completed-toggle"
-                    onClick={() => setDoneOpen(!doneOpen)}
+                    aria-expanded={completedOpen}
+                    onClick={() =>
+                      setExpandedCompletedLists((current) => {
+                        const next = new Set(current);
+                        if (next.has(list)) next.delete(list);
+                        else next.add(list);
+                        return next;
+                      })
+                    }
                   >
+                    <Icon
+                      name={completedOpen ? "chevron-up" : "chevron-down"}
+                      size={17}
+                    />
                     Completed ({rows.filter((t) => t.done).length})
                   </button>
-                  {doneOpen &&
+                  {completedOpen &&
                     rows.filter((t) => t.done).map((t) => taskRow(t))}
                 </>
               )}

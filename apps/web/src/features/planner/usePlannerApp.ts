@@ -140,7 +140,7 @@ export function usePlannerApp(accessToken: string) {
   const [removingPlaceId, setRemovingPlaceId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [filter, setFilter] = useState("all");
-  const [doneOpen, setDoneOpen] = useState(true);
+  const [taskListDefault, setTaskListDefault] = useState("");
   const [modal, setModalState] = useState<ModalKind>("");
   const [selected, setSelectedState] = useState<EventItem | TaskItem | null>(
     null,
@@ -426,6 +426,7 @@ export function usePlannerApp(accessToken: string) {
     setEventEditScope("series");
     setEditingTask(null);
     setEditingList(null);
+    setTaskListDefault("");
     setEventError("");
     setTaskError("");
     setPlaceError("");
@@ -1076,8 +1077,8 @@ export function usePlannerApp(accessToken: string) {
     setHidden,
     filter,
     setFilter,
-    doneOpen,
-    setDoneOpen,
+    taskListDefault,
+    setTaskListDefault,
     modal,
     setModal,
     selected,

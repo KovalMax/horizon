@@ -664,14 +664,24 @@ select:focus-visible {
 }
 .check-circle {
   display: grid;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
   place-items: center;
+  margin: 0;
   border: 2px solid #83918b;
   border-radius: 50%;
+  padding: 0;
   background: #fff;
   color: #fff;
+  line-height: 0;
   cursor: pointer;
+}
+.check-circle svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
 }
 .check-circle:hover {
   border-color: var(--primary);
@@ -1086,6 +1096,34 @@ select:focus-visible {
   margin: 0 0 16px;
   padding: 20px 22px;
 }
+.task-list-card {
+  border-radius: 26px;
+  padding: 28px 32px;
+}
+.task-list-card .list-heading h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 19px;
+}
+.task-list-card .task-row {
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
+  padding: 16px 6px;
+}
+.task-list-card .check-circle {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+.task-list-card .task-name {
+  font-size: 18px;
+}
+.task-list-card .task-meta {
+  margin-top: 6px;
+  gap: 8px 14px;
+  font-size: 14px;
+}
 .list-card > p,
 .list-card div > p {
   color: var(--muted);
@@ -1096,13 +1134,19 @@ select:focus-visible {
   padding-left: 3px;
 }
 .completed-toggle {
-  margin: 8px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
   border: 0;
-  padding: 8px 3px;
+  padding: 8px 0;
   color: var(--muted);
   background: transparent;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
+}
+.completed-toggle svg {
+  flex: 0 0 auto;
 }
 .place-controls {
   display: flex;
@@ -2248,6 +2292,32 @@ select,
   .list-card {
     padding: 16px;
   }
+  .task-list-card {
+    border-radius: 20px;
+    padding: 20px;
+  }
+  .task-list-card .task-name {
+    font-size: 16px;
+  }
+  .task-list-card .task-meta {
+    font-size: 12px;
+  }
+  .task-list-card .list-heading {
+    align-items: flex-start;
+  }
+  .task-list-card .list-heading-actions {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+  .task-list-card .list-actions {
+    gap: 6px;
+  }
+  .task-list-card .list-actions button {
+    font-size: 12px;
+  }
+  .task-modal .modal-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .request-row {
     flex-wrap: wrap;
   }
@@ -2480,19 +2550,40 @@ a {
   gap: 12px;
 }
 .list-heading h2 {
-  margin-bottom: 9px;
+  margin: 0;
+}
+.list-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.task-list-add {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+}
+.task-list-add:hover {
+  color: var(--primary);
+  background: #edf3ef;
 }
 .list-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
-  padding-bottom: 9px;
 }
 .list-actions button {
   border: 0;
   padding: 4px 2px;
   color: var(--muted);
   background: transparent;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
 }
 .list-actions button:hover {
@@ -2533,38 +2624,64 @@ a {
 .modal > .drawer-heading > button:hover {
   background: #f1f4f1;
 }
-.modal .form-field {
+.task-modal,
+.event-modal {
+  width: min(100%, 1152px);
+  padding: 40px 48px;
+  border-radius: 30px;
+}
+.task-modal > .drawer-heading,
+.event-modal > .drawer-heading {
+  margin-bottom: 18px;
+}
+.task-modal > .drawer-heading h2,
+.event-modal > .drawer-heading h2 {
+  font-size: 30px;
+}
+.task-modal .form-field,
+.event-modal .form-field {
   min-width: 0;
-  gap: 8px;
-  margin: 0 0 20px;
+  gap: 10px;
+  margin: 0 0 24px;
+  font-size: 16px;
 }
-.modal .form-field input,
-.modal .form-field select,
-.modal .form-field textarea {
-  min-height: 44px;
-  border-color: var(--border);
-  border-radius: 10px;
+.task-modal .form-field input,
+.task-modal .form-field select,
+.task-modal .form-field textarea,
+.event-modal .form-field input,
+.event-modal .form-field select,
+.event-modal .form-field textarea {
+  min-height: 56px;
+  border-color: var(--control);
+  border-radius: 15px;
+  padding-right: 18px;
+  padding-left: 18px;
+  font-size: 18px;
 }
-.modal .form-field textarea {
-  min-height: 80px;
+.task-modal .form-field textarea,
+.event-modal .form-field textarea {
+  min-height: 150px;
+  padding-top: 14px;
 }
-.modal .modal-grid {
-  gap: 14px;
+.task-modal .modal-grid,
+.event-modal .modal-grid {
+  gap: 28px;
 }
-.modal .setting-row {
-  min-height: 44px;
+.event-modal .setting-row {
+  min-height: 56px;
 }
-.modal .event-all-day-row {
-  min-height: 50px;
+.event-modal .event-all-day-row {
+  min-height: 72px;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 0 20px;
+  margin: 0 0 28px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0 14px;
+  border-radius: 18px;
+  padding: 0 20px;
   color: var(--ink);
+  font-size: 18px;
 }
-.modal .event-all-day-row input[type="checkbox"] {
+.event-modal .event-all-day-row input[type="checkbox"] {
   appearance: none;
   width: 44px;
   height: 24px;
@@ -2601,6 +2718,40 @@ a {
 .modal fieldset.form-field {
   border: 0;
   padding: 0;
+}
+.task-modal .task-reminders {
+  margin: 2px 0 22px;
+}
+.task-modal .task-reminders h3 {
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  font-size: 16px;
+}
+.task-modal .task-reminders > p {
+  margin: 0;
+  font-size: 16px;
+}
+.task-modal .task-reminders fieldset.form-field {
+  margin: 0;
+}
+.modal-context {
+  margin: -16px 0 30px;
+  color: var(--muted);
+  font-size: 20px !important;
+}
+.task-modal .form-field input[name="title"] {
+  font-weight: 600;
+}
+.task-modal .modal-grid:not(.event-date-grid) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.event-modal .form-field {
+  margin-bottom: 28px;
+}
+.event-modal .recurrence-end-options {
+  margin-bottom: 22px;
+  font-size: 16px;
 }
 .modal .setting-row input[type="checkbox"] {
   width: 18px;
@@ -2690,6 +2841,43 @@ a {
   .modal {
     max-height: 92dvh;
     padding: 20px;
+    border-radius: 26px 26px 0 0;
+  }
+  .task-modal,
+  .event-modal {
+    padding: 24px 20px;
+  }
+  .task-modal > .drawer-heading h2,
+  .event-modal > .drawer-heading h2 {
+    font-size: 24px;
+  }
+  .modal-context {
+    margin: -12px 0 22px;
+    font-size: 17px !important;
+  }
+  .task-modal .form-field,
+  .event-modal .form-field {
+    margin-bottom: 18px;
+    font-size: 14px;
+  }
+  .task-modal .form-field input,
+  .task-modal .form-field select,
+  .task-modal .form-field textarea,
+  .event-modal .form-field input,
+  .event-modal .form-field select,
+  .event-modal .form-field textarea {
+    min-height: 48px;
+    font-size: 16px;
+  }
+  .task-modal .modal-grid,
+  .event-modal .modal-grid {
+    gap: 12px;
+  }
+  .task-modal .modal-grid:not(.event-date-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .event-modal .modal-grid.event-date-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
   .modal .setting-row {
     flex-wrap: nowrap;

@@ -116,6 +116,7 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
       </>
     ),
     "chevron-down": <path d="m6 9 6 6 6-6" />,
+    "chevron-up": <path d="m6 15 6-6 6 6" />,
     repeat: (
       <>
         <path d="m17 2 4 4-4 4" />

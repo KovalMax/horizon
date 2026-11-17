@@ -6,6 +6,13 @@ host ports 80/443, TLS certificates, and a Docker network named `public-edge`.
 Horizon's production `web` and `api` services join that external network using
 the unique aliases `horizon-web` and `horizon-api`.
 
+The Horizon API routes share a Traefik per-client-IP token bucket: 120 requests
+per minute, with a burst of 30. The same router covers both the same-origin
+`/api` path and the direct API hostname, so switching hosts does not reset the
+allowance. Traefik stores this limiter in memory per instance; if the edge is
+scaled to multiple Traefik instances, configure distributed rate limiting with
+Redis or the instances will enforce independent buckets.
+
 The edge Traefik file provider must watch the host directory
 `~/traefik/dynamic/`, mounted read-only into the Traefik container as a
 directory. This repository owns `infra/traefik/dynamic.yml`; its release

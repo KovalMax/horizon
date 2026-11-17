@@ -1,13 +1,6 @@
 # Horizon production routes for the shared Traefik file provider.
 http:
   routers:
-    horizon-same-origin-api:
-      rule: Host(`horizon.false.tel`) && (Path(`/api`) || PathPrefix(`/api/`))
-      entryPoints: [websecure]
-      service: horizon-api
-      middlewares: [horizon-security-headers, horizon-strip-api]
-      tls:
-        certResolver: letsencrypt
     horizon-web:
       rule: Host(`horizon.false.tel`)
       entryPoints: [websecure]
@@ -16,10 +9,11 @@ http:
       tls:
         certResolver: letsencrypt
     horizon-api:
-      rule: Host(`api.horizon.false.tel`)
+      rule: (Host(`horizon.false.tel`) && (Path(`/api`) || PathPrefix(`/api/`))) || Host(`api.horizon.false.tel`)
       entryPoints: [websecure]
+      priority: 100
       service: horizon-api
-      middlewares: [horizon-security-headers, horizon-api-cors]
+      middlewares: [horizon-security-headers, horizon-api-cors, horizon-api-rate-limit, horizon-strip-api]
       tls:
         certResolver: letsencrypt
   services:
@@ -32,6 +26,12 @@ http:
         servers:
           - url: http://horizon-api:8000
   middlewares:
+    # One IP-based bucket shared by both public API routes.
+    horizon-api-rate-limit:
+      rateLimit:
+        average: 120
+        period: 1m
+        burst: 30
     horizon-security-headers:
       headers:
         contentSecurityPolicy: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; upgrade-insecure-requests"
@@ -57,6 +57,8 @@ http:
         accessControlAllowHeaders:
           - Content-Type
           - Authorization
+        accessControlExposeHeaders:
+          - Retry-After
         accessControlAllowCredentials: false
         accessControlMaxAge: 600
         addVaryHeader: true

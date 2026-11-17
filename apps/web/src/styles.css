@@ -2631,9 +2631,9 @@ a {
   border-radius: 30px;
 }
 .event-modal {
-  width: min(100%, 672px);
-  padding: 28px 30px;
-  border-radius: 26px;
+  width: min(100%, 640px);
+  padding: 24px 26px;
+  border-radius: 24px;
 }
 .task-modal > .drawer-heading,
 .event-modal > .drawer-heading {
@@ -2654,8 +2654,8 @@ a {
   font-size: 16px;
 }
 .event-modal .form-field {
-  gap: 8px;
-  font-size: 15px;
+  gap: 7px;
+  font-size: 14px;
 }
 .task-modal .form-field input,
 .task-modal .form-field select,
@@ -2678,14 +2678,14 @@ a {
 .event-modal .form-field input,
 .event-modal .form-field select,
 .event-modal .form-field textarea {
-  min-height: 52px;
-  border-radius: 12px;
-  padding-right: 14px;
-  padding-left: 14px;
-  font-size: 16px;
+  min-height: 48px;
+  border-radius: 11px;
+  padding-right: 12px;
+  padding-left: 12px;
+  font-size: 15px;
 }
 .event-modal .form-field textarea {
-  min-height: 104px;
+  min-height: 88px;
 }
 .task-modal .modal-grid,
 .event-modal .modal-grid {
@@ -2698,10 +2698,11 @@ a {
   min-height: 56px;
 }
 .event-modal .event-all-day-row {
-  min-height: 58px;
+  display: flex;
+  min-height: 54px;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 0 14px;
@@ -2774,7 +2775,7 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .event-modal .form-field {
-  margin-bottom: 22px;
+  margin-bottom: 17px;
 }
 .event-modal .recurrence-end-options {
   margin-bottom: 22px;
@@ -2787,10 +2788,10 @@ a {
   margin: 0 4px 0 auto;
 }
 .modal .event-all-day-row input[type="checkbox"] {
+  margin: 0;
   width: 44px;
   min-height: 24px;
   flex-basis: 44px;
-  margin-right: 0;
 }
 .modal .modal-actions {
   margin: 4px 0 16px;

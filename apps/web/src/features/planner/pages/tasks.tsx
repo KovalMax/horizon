@@ -84,16 +84,20 @@ export function TasksPage({
                       return savedList ? (
                         <span className="list-actions">
                           <button
+                            className="task-list-icon-action"
                             aria-label={`Rename ${list}`}
+                            title={`Rename ${list}`}
                             onClick={() => state.editTaskList(savedList.id)}
                           >
-                            Rename
+                            <Icon name="edit" size={17} />
                           </button>
                           <button
+                            className="task-list-icon-action danger"
                             aria-label={`Delete ${list}`}
+                            title={`Delete ${list}`}
                             onClick={() => state.removeTaskList(savedList.id)}
                           >
-                            Delete
+                            <Icon name="trash" size={17} />
                           </button>
                         </span>
                       ) : null;

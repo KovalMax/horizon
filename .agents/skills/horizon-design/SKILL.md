@@ -53,6 +53,22 @@ The base radius is `14px`; use the existing card, pill, and control radii
 according to their component roles. Use `--shadow` for low-emphasis elevation.
 Favor whitespace and subtle borders over heavy shadows or strong gradients.
 
+### Dialog and control scale
+
+- Keep desktop create/edit dialogs content-sized and compact; do not use
+  viewport-wide widths for ordinary forms. The Task dialog should cap near
+  `760px`, with a `24px` heading, `14px` labels, `48px` inputs, and restrained
+  field gaps. Calendar event dialogs are narrower still.
+- Keep dialogs bounded by the viewport and scroll internally only when their
+  content requires it. On mobile, use the existing full-width bottom-sheet
+  treatment with compact horizontal padding.
+- To-do completion controls should be `24px` circles, not `32px`. Use a clear
+  muted outline and subtle shadow when open; completed Tasks use a filled
+  primary circle with a centered white checkmark.
+- Prefer compact icon actions for To-do list rename/delete: pencil for rename
+  and a red trash icon for delete. Icon-only actions must retain descriptive
+  accessible names and visible focus.
+
 ## Layout and responsive behavior
 
 - Desktop sidebar: approximately `288px`; main content max width: `1024px`,

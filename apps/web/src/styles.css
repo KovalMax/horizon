@@ -1106,24 +1106,24 @@ select:focus-visible {
   font-size: 19px;
 }
 .task-list-card .task-row {
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   column-gap: 16px;
   padding: 16px 6px;
 }
 .task-list-card .check-circle {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  border-width: 2.5px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-width: 2px;
   border-color: #84918c;
   box-shadow: 0 1px 3px #1b29231f;
 }
 .task-list-card .check-circle svg {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
-  stroke-width: 2;
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+  stroke-width: 2.2;
 }
 .task-list-card .check-circle.checked {
   border-color: var(--primary);
@@ -2648,6 +2648,11 @@ a {
   padding: 40px 48px;
   border-radius: 30px;
 }
+.task-modal {
+  width: min(100%, 760px);
+  padding: 28px 30px;
+  border-radius: 24px;
+}
 .event-modal {
   width: min(100%, 640px);
   padding: 24px 26px;
@@ -2661,6 +2666,12 @@ a {
 .event-modal > .drawer-heading h2 {
   font-size: 30px;
 }
+.task-modal > .drawer-heading {
+  margin-bottom: 12px;
+}
+.task-modal > .drawer-heading h2 {
+  font-size: 24px;
+}
 .event-modal > .drawer-heading h2 {
   font-size: 24px;
 }
@@ -2670,6 +2681,11 @@ a {
   gap: 10px;
   margin: 0 0 24px;
   font-size: 16px;
+}
+.task-modal .form-field {
+  gap: 7px;
+  margin-bottom: 16px;
+  font-size: 14px;
 }
 .event-modal .form-field {
   gap: 7px;
@@ -2687,6 +2703,15 @@ a {
   padding-right: 18px;
   padding-left: 18px;
   font-size: 18px;
+}
+.task-modal .form-field input,
+.task-modal .form-field select,
+.task-modal .form-field textarea {
+  min-height: 48px;
+  border-radius: 12px;
+  padding-right: 12px;
+  padding-left: 12px;
+  font-size: 15px;
 }
 .task-modal .form-field textarea,
 .event-modal .form-field textarea {
@@ -2708,6 +2733,9 @@ a {
 .task-modal .modal-grid,
 .event-modal .modal-grid {
   gap: 28px;
+}
+.task-modal .modal-grid {
+  gap: 18px;
 }
 .event-modal .modal-grid {
   gap: 18px;
@@ -2772,11 +2800,11 @@ a {
   margin: 0 0 10px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
-  font-size: 16px;
+  font-size: 14px;
 }
 .task-modal .task-reminders > p {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
 }
 .task-modal .task-reminders fieldset.form-field {
   margin: 0;
@@ -2786,11 +2814,38 @@ a {
   color: var(--muted);
   font-size: 20px !important;
 }
+.task-modal .modal-context {
+  margin: -4px 0 20px;
+  font-size: 16px !important;
+}
 .task-modal .form-field input[name="title"] {
   font-weight: 600;
 }
 .task-modal .modal-grid:not(.event-date-grid) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.task-list-icon-action {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.task-list-icon-action:hover {
+  color: var(--ink);
+  background: #f1f4f1;
+}
+.task-list-icon-action.danger {
+  color: #c34848;
+}
+.task-list-icon-action.danger:hover {
+  color: #a62f2f;
+  background: #fff0ef;
 }
 .event-modal .form-field {
   margin-bottom: 17px;
@@ -2893,7 +2948,9 @@ a {
   .event-modal {
     padding: 24px 20px;
   }
-  .task-modal > .drawer-heading h2,
+  .task-modal > .drawer-heading h2 {
+    font-size: 22px;
+  }
   .event-modal > .drawer-heading h2 {
     font-size: 24px;
   }
@@ -2905,6 +2962,9 @@ a {
   .event-modal .form-field {
     margin-bottom: 18px;
     font-size: 14px;
+  }
+  .task-modal .form-field {
+    margin-bottom: 14px;
   }
   .task-modal .form-field input,
   .task-modal .form-field select,
@@ -2918,6 +2978,9 @@ a {
   .task-modal .modal-grid,
   .event-modal .modal-grid {
     gap: 12px;
+  }
+  .task-modal .modal-grid {
+    gap: 10px;
   }
   .task-modal .modal-grid:not(.event-date-grid) {
     grid-template-columns: minmax(0, 1fr);

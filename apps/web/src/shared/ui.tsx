@@ -87,6 +87,16 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
         <path d="M12 5v14M5 12h14" />
       </>
     ),
+    edit: (
+      <>
+        <path d="m15 5 4 4M4 20l4-.8L19 8a2.1 2.1 0 0 0-3-3L5 16l-1 4Z" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3" />
+      </>
+    ),
     arrow: (
       <>
         <path d="M5 12h14M13 6l6 6-6 6" />

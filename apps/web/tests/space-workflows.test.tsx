@@ -641,17 +641,57 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
     await screen.findByText("To-do list saved to this Space."),
   ).toBeTruthy();
 
+  fireEvent.click(
+    screen.getByRole("button", { name: "Add Task to Weekend prep" }),
+  );
+  const listTaskDialog = await screen.findByRole("dialog");
+  expect(
+    (
+      within(listTaskDialog).getByRole("combobox", {
+        name: "List",
+      }) as HTMLSelectElement
+    ).value,
+  ).toBe("Weekend prep");
+  expect(
+    within(listTaskDialog).getByText("Add a due date to set reminders."),
+  ).toBeTruthy();
+  expect(
+    within(listTaskDialog).queryByRole("group", { name: "Remind recipient" }),
+  ).toBeNull();
+  fireEvent.click(
+    within(listTaskDialog).getByRole("button", { name: "Cancel" }),
+  );
+
   fireEvent.click(screen.getByRole("button", { name: "New Task" }));
+  const newTaskDialog = await screen.findByRole("dialog");
+  expect(within(newTaskDialog).getByText("In API household")).toBeTruthy();
+  expect(
+    within(newTaskDialog).getByText("Add a due date to set reminders."),
+  ).toBeTruthy();
   fireEvent.change(
-    await screen.findByRole("combobox", { name: "Assigned to" }),
+    within(newTaskDialog).getByLabelText("Due date (optional)"),
+    { target: { value: "2026-11-20" } },
+  );
+  expect(
+    within(newTaskDialog).getByRole("group", { name: "Remind recipient" }),
+  ).toBeTruthy();
+  fireEvent.change(
+    within(newTaskDialog).getByRole("combobox", {
+      name: "Assignee (optional, one person)",
+    }),
     {
       target: { value: "member-2" },
     },
   );
-  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
-    target: { value: "Buy groceries" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Add Task" }));
+  fireEvent.change(
+    within(newTaskDialog).getByRole("textbox", { name: "Title" }),
+    {
+      target: { value: "Buy groceries" },
+    },
+  );
+  fireEvent.click(
+    within(newTaskDialog).getByRole("button", { name: "Add Task" }),
+  );
   expect(
     await screen.findByRole("button", { name: "Buy groceries" }),
   ).toBeTruthy();
@@ -667,6 +707,14 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   fireEvent.click(
     screen.getByRole("button", { name: "Complete Buy groceries" }),
   );
+  await waitFor(() =>
+    expect(
+      screen
+        .getByRole("button", { name: "Completed (1)" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Completed (1)" }));
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "Mark Buy groceries open" }),

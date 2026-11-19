@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod events;
 pub mod health;
+pub mod logging;
 pub mod members;
 pub mod notifications;
 pub mod pagination;

@@ -220,7 +220,10 @@ impl AuthRepository for PostgresAuthRepository {
         .fetch_optional(&self.pool)
         .await
         .map(|row| row.map(|(id, email)| super::models::Account { id, email }))
-        .map_err(|_| super::models::AuthError::Unavailable)
+        .map_err(|error| {
+            log::error!(target: "horizon_api::database", "auth.find_active_account failed: {error}");
+            super::models::AuthError::Unavailable
+        })
     }
 
     async fn revoke_refresh_session(

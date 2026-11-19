@@ -62,7 +62,10 @@ impl PostgresEventsRepository {
         .fetch_all(&self.pool)
         .await
         .map(|rows| rows.into_iter().map(Into::into).collect())
-        .map_err(|_| EventError::Unavailable)
+        .map_err(|error| {
+            log::error!(target: "horizon_api::database", "events.list_series_for_member failed: {error}");
+            EventError::Unavailable
+        })
     }
 
     pub(super) async fn overrides_for_member(
@@ -90,7 +93,10 @@ impl PostgresEventsRepository {
         .fetch_all(&self.pool)
         .await
         .map(|rows| rows.into_iter().map(Into::into).collect())
-        .map_err(|_| EventError::Unavailable)
+        .map_err(|error| {
+            log::error!(target: "horizon_api::database", "events.overrides_for_member failed: {error}");
+            EventError::Unavailable
+        })
     }
 
     pub(super) async fn set_occurrence_override(

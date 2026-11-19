@@ -1,9 +1,9 @@
-use actix_web::{web, App, HttpServer};
+use actix_web::{dev::Service as _, middleware::Logger, web, App, HttpServer};
 #[cfg(debug_assertions)]
 use horizon_api::openapi::ApiDoc;
 use horizon_api::{
-    auth, database_connection_options, events, health, members, notifications, places, spaces,
-    task_reminders, todos,
+    auth, database_connection_options, events, health, logging, members, notifications, places,
+    spaces, task_reminders, todos,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::{env, time::Duration};
@@ -14,6 +14,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    logging::init();
+    log::info!(target: "horizon_api", "API process starting");
+
     let pool = PgPoolOptions::new()
         .acquire_timeout(Duration::from_secs(2))
         .connect_lazy_with(database_connection_options());
@@ -37,13 +40,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             interval.tick().await;
             if let Err(error) = purge_spaces.purge_expired_deleted_spaces().await {
-                eprintln!("Failed to purge expired deleted Spaces: {error}");
+                log::error!("Failed to purge expired deleted Spaces: {error}");
             }
             if let Err(error) = purge_notifications.purge_expired().await {
-                eprintln!("Failed to purge expired notifications: {error}");
+                log::error!("Failed to purge expired notifications: {error}");
             }
             if let Err(error) = reminders.purge_stuck_claims().await {
-                eprintln!("Failed to recover stuck Task reminder jobs: {error}");
+                log::error!("Failed to recover stuck Task reminder jobs: {error}");
             }
         }
     });
@@ -52,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             interval.tick().await;
             if let Err(error) = reminder_worker.run_once().await {
-                eprintln!("Failed to process Task reminders: {error}");
+                log::error!("Failed to process Task reminders: {error}");
             }
         }
     });
@@ -68,8 +71,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool.clone(),
         auth_state.public_url(),
     ));
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         let app = App::new()
+            .wrap_fn(|request, service| {
+                let method = request.method().clone();
+                let path = request.path().to_owned();
+                let future = service.call(request);
+                async move {
+                    let response = future.await?;
+                    let status = response.status();
+                    if status.is_server_error() {
+                        log::error!(
+                            target: "horizon_api::http",
+                            "{method} {path} returned {status}"
+                        );
+                    }
+                    Ok(response)
+                }
+            })
+            .wrap(Logger::new("%m %U %s %Dms").log_target("horizon_api::http"))
             .app_data(web::Data::new(pool.clone()))
             .app_data(auth_state.clone())
             .app_data(spaces_state.clone())
@@ -137,8 +157,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", ApiDoc::openapi()));
         app
     })
-    .bind(("0.0.0.0", 8000))?
-    .run()
-    .await?;
+    .bind(("0.0.0.0", 8000))?;
+    log::info!(target: "horizon_api", "API listening on 0.0.0.0:8000");
+    server.run().await?;
     Ok(())
 }

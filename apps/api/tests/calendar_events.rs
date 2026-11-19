@@ -133,6 +133,37 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     assert_eq!(created.space_id, space.id);
     assert_eq!(created.time_zone, "Europe/Berlin");
 
+    let mut legacy_time_zone_request = create_request();
+    legacy_time_zone_request.title = "Kyiv timezone alias".to_owned();
+    legacy_time_zone_request.time_zone = "Europe/Kiev".to_owned();
+    let request = actix_test::TestRequest::post()
+        .uri(&format!("/spaces/{}/events", space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(&legacy_time_zone_request)
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let legacy_time_zone_event: EventResponse = actix_test::read_body_json(response).await;
+    assert_eq!(legacy_time_zone_event.time_zone, "Europe/Kyiv");
+
+    let request = actix_test::TestRequest::get()
+        .uri("/events?start_date=2026-12-10&end_date=2026-12-10")
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
+
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!("/events/{}", legacy_time_zone_event.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/events", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))

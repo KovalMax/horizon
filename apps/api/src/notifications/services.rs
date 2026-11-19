@@ -106,6 +106,7 @@ impl NotificationsApplication {
         {
             return Err(NotificationError::InvalidPreferences);
         }
+        let time_zone = crate::time_zones::canonicalize_legacy_alias(time_zone);
         if chrono::NaiveTime::parse_from_str(default_reminder_time, "%H:%M").is_err()
             || time_zone.parse::<chrono_tz::Tz>().is_err()
         {

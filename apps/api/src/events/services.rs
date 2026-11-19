@@ -194,15 +194,16 @@ fn validate(request: &CreateEventRequest) -> Result<EventDraft, EventError> {
         return Err(EventError::Invalid);
     }
 
-    let time_zone = request.time_zone.trim();
-    if time_zone.is_empty()
-        || time_zone.len() > 64
-        || !time_zone
+    let requested_time_zone = request.time_zone.trim();
+    if requested_time_zone.is_empty()
+        || requested_time_zone.len() > 64
+        || !requested_time_zone
             .bytes()
             .all(|character| character.is_ascii_alphanumeric() || b"/_+-".contains(&character))
     {
         return Err(EventError::Invalid);
     }
+    let time_zone = crate::time_zones::canonicalize_legacy_alias(requested_time_zone);
     let zone = time_zone
         .parse::<chrono_tz::Tz>()
         .map_err(|_| EventError::Invalid)?;

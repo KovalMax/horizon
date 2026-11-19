@@ -126,7 +126,10 @@ impl AuthApplication {
         let email = normalized_email(email).ok_or(AuthError::InvalidRequest)?;
         let time_zone = time_zone
             .and_then(|value| value.parse::<chrono_tz::Tz>().ok())
-            .map(|zone| zone.to_string())
+            .map(|zone| {
+                let zone_name = zone.to_string();
+                crate::time_zones::canonicalize_legacy_alias(&zone_name).to_owned()
+            })
             .unwrap_or_else(|| "UTC".to_owned());
         let secret = self.token_service.create_secret();
         let challenge_id = Uuid::new_v4();

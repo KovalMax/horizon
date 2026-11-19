@@ -8,6 +8,7 @@ pub mod pagination;
 pub mod places;
 pub mod spaces;
 pub mod task_reminders;
+pub mod time_zones;
 pub mod todos;
 
 #[cfg(debug_assertions)]

@@ -27,8 +27,11 @@ pub async fn readiness(pool: web::Data<PgPool>) -> impl Responder {
         Ok(_) => HttpResponse::Ok()
             .content_type("text/plain; charset=utf-8")
             .body("Database is available"),
-        Err(_) => HttpResponse::ServiceUnavailable()
-            .content_type("text/plain; charset=utf-8")
-            .body("Database is unavailable"),
+        Err(error) => {
+            log::error!(target: "horizon_api::database", "readiness query failed: {error}");
+            HttpResponse::ServiceUnavailable()
+                .content_type("text/plain; charset=utf-8")
+                .body("Database is unavailable")
+        }
     }
 }

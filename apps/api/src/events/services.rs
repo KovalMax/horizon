@@ -39,7 +39,10 @@ impl EventsApplication {
                     next_offset: page.next_offset,
                 }
             })
-            .map_err(|_| EventError::Unavailable)
+            .map_err(|error| {
+                log::error!(target: "horizon_api::database", "events.list_for_member failed: {error}");
+                EventError::Unavailable
+            })
     }
 
     pub async fn list_occurrences_for_member(

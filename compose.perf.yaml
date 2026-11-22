@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      dockerfile: Dockerfile.prod
+    command: []
+    environment:
+      HORIZON_PROFILE_CALENDAR_RANGE: "1"
+
+  db:
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "track_io_timing=on"]
+
+  perf:
+    extends:
+      file: compose.browser.yaml
+      service: browser
+    network_mode: service:traefik
+    environment:
+      PERF_SAMPLES: ${PERF_SAMPLES:-100}
+      PERF_MIXED_SECONDS: ${PERF_MIXED_SECONDS:-65}
+      PERF_REVISION: ${PERF_REVISION:-unknown}
+    volumes:
+      - ./scripts/perf:/perf:ro
+      - ./apps/api/src:/api-source:ro
+    command: ["sh", "-ec", "node --test /perf/metrics.test.mjs && exec node /perf/baseline.mjs"]

@@ -138,6 +138,7 @@ export function MembersPage({
               className="invite-compose"
               onSubmit={async (event) => {
                 event.preventDefault();
+                if (state.membershipStatus === "loading") return;
                 const form = event.currentTarget;
                 const email = String(
                   new FormData(form).get("email") || "",
@@ -171,7 +172,12 @@ export function MembersPage({
                 placeholder="name@example.com"
                 required
               />
-              <Button type="submit" disabled={state.savingInvitation}>
+              <Button
+                type="submit"
+                disabled={
+                  state.savingInvitation || state.membershipStatus === "loading"
+                }
+              >
                 {state.savingInvitation ? "Sending…" : "＋ Invite"}
               </Button>
             </form>
@@ -204,6 +210,7 @@ export function MembersPage({
             className="invite-compose join-link-compose"
             onSubmit={async (event) => {
               event.preventDefault();
+              if (state.membershipStatus === "loading") return;
               const form = event.currentTarget;
               const data = new FormData(form);
               const createLink = async () => {
@@ -253,7 +260,12 @@ export function MembersPage({
                 Leave blank for no expiration. Your local time is used.
               </small>
             </label>
-            <Button type="submit" disabled={state.savingJoinLink}>
+            <Button
+              type="submit"
+              disabled={
+                state.savingJoinLink || state.membershipStatus === "loading"
+              }
+            >
               {state.savingJoinLink ? "Creating…" : "Create join link"}
             </Button>
           </form>

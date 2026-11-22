@@ -39,12 +39,10 @@ import {
 import {
   createSavedPlace,
   deleteSavedPlace,
-  listSavedPlaces,
   PlacesApiError,
 } from "./placesApi";
 import {
   useCalendarCollection,
-  useSavedPlaceCollection,
   useTaskCollection,
 } from "./usePlannerCollections";
 import { useNotifications } from "./useNotifications";
@@ -146,6 +144,7 @@ export function usePlannerApp(accessToken: string) {
   const [eventEditScope, setEventEditScope] = useState<"occurrence" | "series">(
     "series",
   );
+  const [removingEvent, setRemovingEvent] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [editingList, setEditingList] = useState<ApiTaskList | null>(null);
@@ -197,8 +196,7 @@ export function usePlannerApp(accessToken: string) {
   const restoreFocus = () => {
     const target = focusReturnTarget.current;
     focusReturnTarget.current = null;
-    if (target)
-      window.setTimeout(() => target.isConnected && target.focus(), 0);
+    if (target) restoreConfirmationFocus(target);
   };
   const setModal = (next: ModalKind) => {
     if (
@@ -223,7 +221,8 @@ export function usePlannerApp(accessToken: string) {
     setSelectedState(next);
     if (!next && !modal) restoreFocus();
   };
-  const [placeFilter, setPlaceFilter] = useState("All");
+  const [placesRevision, setPlacesRevision] = useState(0);
+  const [placeError, setPlaceError] = useState("");
   const [calendarDay, setCalendarDay] = useState(0);
   const [toast, setToast] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -231,13 +230,25 @@ export function usePlannerApp(accessToken: string) {
   const currentSpaceId =
     path.match(/^\/spaces\/([^/]+)/)?.[1] ?? serverSpaces[0]?.id ?? "";
   const routeSection = path.split("/")[3] ?? "calendar";
+  const isSpacePage = path.startsWith("/spaces/");
   const showOverview = path === "/";
+  const showDeletedSpaces = path === "/settings";
+  const currentSpaceIsOwned = serverSpaces.some(
+    (item) => item.id === currentSpaceId && item.role === "Owner",
+  );
+  const showMembers = isSpacePage && routeSection === "members";
+  const memberSpaceId =
+    modal === "task"
+      ? (editingTask?.space ?? currentSpaceId)
+      : showMembers ||
+          (isSpacePage && routeSection === "settings" && currentSpaceIsOwned)
+        ? currentSpaceId
+        : "";
   const showCalendar =
     showOverview ||
     (path.startsWith("/spaces/") && routeSection === "calendar");
   const showTasks =
     showOverview || (path.startsWith("/spaces/") && routeSection === "tasks");
-  const showPlaces = path.startsWith("/spaces/") && routeSection === "places";
   const showToast = (message: string) => setToast(message);
   const {
     reminderTime,
@@ -300,20 +311,6 @@ export function usePlannerApp(accessToken: string) {
     serverTaskLists,
     setServerTaskLists,
   } = useTaskCollection(accessToken, showTasks);
-  const {
-    places,
-    setPlaces,
-    placesStatus,
-    setPlacesStatus,
-    placesReload,
-    setPlacesReload,
-    placeError,
-    setPlaceError,
-    placesNextOffset,
-    setPlacesNextOffset,
-    loadingMorePlaces,
-    setLoadingMorePlaces,
-  } = useSavedPlaceCollection(accessToken, showPlaces);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -359,6 +356,7 @@ export function usePlannerApp(accessToken: string) {
   }, [accessToken, spacesReload]);
 
   useEffect(() => {
+    if (!showDeletedSpaces) return;
     let active = true;
     setDeletedSpacesStatus("loading");
     listDeletedSpaces(accessToken)
@@ -374,7 +372,7 @@ export function usePlannerApp(accessToken: string) {
     return () => {
       active = false;
     };
-  }, [accessToken, spacesReload]);
+  }, [accessToken, spacesReload, showDeletedSpaces]);
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
@@ -398,7 +396,10 @@ export function usePlannerApp(accessToken: string) {
   const membershipState = useSpaceMembership({
     accessToken,
     currentSpaceId,
-    serverSpaces,
+    memberSpaceId,
+    loadOwnerManagement: showMembers && currentSpaceIsOwned,
+    showInvitations: showOverview,
+    showOwnJoinRequests: path === "/welcome",
     setServerSpaces,
     setSpacesReload,
     setSpacesError,
@@ -422,7 +423,6 @@ export function usePlannerApp(accessToken: string) {
     ...baseSpace,
     name: baseSpace.name,
   };
-  const isSpacePage = path.startsWith("/spaces/");
   const belongsToCurrentSpaces = (spaceId: string) =>
     activeSpaces.some((item) => item.id === spaceId);
   const filteredEvents = events.filter(
@@ -689,7 +689,9 @@ export function usePlannerApp(accessToken: string) {
           listName,
           dueDate: String(form.get("dueDate") || "") || null,
           dueTime: String(form.get("taskTime") || "") || null,
-          assigneeId: String(form.get("assignee") || "") || null,
+          assigneeId: form.has("assignee")
+            ? String(form.get("assignee") || "") || null
+            : (editingTask?.assigneeId ?? null),
           reminderOffsetsMinutes: form.getAll("reminderOffset").map(Number),
         };
         const saved = editingTask
@@ -763,9 +765,8 @@ export function usePlannerApp(accessToken: string) {
       setSavingPlace(true);
       setPlaceError("");
       try {
-        const saved = await createSavedPlace(accessToken, space.id, place);
-        setPlaces((all) => [saved, ...all]);
-        setPlacesStatus("ready");
+        await createSavedPlace(accessToken, space.id, place);
+        setPlacesRevision((value) => value + 1);
         closeModal();
         showToast("Saved place added to this Space.");
       } catch (error) {
@@ -866,10 +867,8 @@ export function usePlannerApp(accessToken: string) {
     setModal("event");
   };
 
-  const removeSelectedEvent = async (
-    scope: "occurrence" | "series" = "series",
-  ) => {
-    if (!selected || "list" in selected) return;
+  const removeSelectedEvent = (scope: "occurrence" | "series" = "series") => {
+    if (!selected || "list" in selected || removingEvent) return;
     if (
       !activeSpaces.some(
         (item) => item.id === selected.space && item.role !== "Viewer",
@@ -878,43 +877,67 @@ export function usePlannerApp(accessToken: string) {
       setEventError("Only an Editor or Owner can change Calendar events.");
       return;
     }
-    if (typeof selected.id === "string") {
-      try {
-        if (scope === "occurrence" && selected.occurrenceDate) {
-          await cancelCalendarOccurrence(
-            accessToken,
-            selected.id,
-            selected.occurrenceDate,
+    const event = selected;
+    const occurrenceDate =
+      scope === "occurrence" ? event.occurrenceDate : undefined;
+    if (scope === "occurrence" && !occurrenceDate) return;
+    const isSeries = !occurrenceDate && Boolean(event.repeat);
+    requestConfirmation({
+      title: occurrenceDate
+        ? "Cancel this occurrence?"
+        : isSeries
+          ? "Delete this series?"
+          : "Delete this Calendar event?",
+      description: occurrenceDate
+        ? `Only this occurrence of “${event.title}” will be canceled. The rest of the series will stay on the Calendar.`
+        : isSeries
+          ? `This will delete every occurrence of “${event.title}”, including individual changes. This cannot be undone.`
+          : `“${event.title}” will be removed from the Calendar. This cannot be undone.`,
+      confirmLabel: occurrenceDate
+        ? "Cancel occurrence"
+        : isSeries
+          ? "Delete series"
+          : "Delete event",
+      onConfirm: async () => {
+        setRemovingEvent(true);
+        setEventError("");
+        try {
+          if (typeof event.id === "string") {
+            if (occurrenceDate) {
+              await cancelCalendarOccurrence(
+                accessToken,
+                event.id,
+                occurrenceDate,
+              );
+            } else {
+              await deleteCalendarEvent(accessToken, event.id);
+            }
+          }
+          setEvents((current) =>
+            current.filter(
+              (item) =>
+                item.id !== event.id ||
+                (occurrenceDate !== undefined &&
+                  item.occurrenceDate !== occurrenceDate),
+            ),
           );
-        } else {
-          await deleteCalendarEvent(accessToken, selected.id);
+          setSelected(null);
+          showToast(
+            occurrenceDate
+              ? "Calendar occurrence canceled."
+              : "Calendar event deleted.",
+          );
+        } catch (error) {
+          setEventError(
+            error instanceof CalendarEventsApiError && error.status === 403
+              ? "Only an Editor or Owner can change Calendar events in this Space."
+              : "The Calendar event couldn’t be changed. Check your connection and retry.",
+          );
+        } finally {
+          setRemovingEvent(false);
         }
-      } catch (error) {
-        setEventError(
-          error instanceof CalendarEventsApiError && error.status === 403
-            ? "Only an Editor or Owner can change Calendar events in this Space."
-            : "The Calendar event couldn’t be canceled. Check your connection and retry.",
-        );
-        return;
-      }
-    }
-    setEvents((current) =>
-      current.filter((item) =>
-        scope === "occurrence" && selected.occurrenceDate
-          ? !(
-              item.id === selected.id &&
-              item.occurrenceDate === selected.occurrenceDate
-            )
-          : item.id !== selected.id,
-      ),
-    );
-    setSelected(null);
-    setEventError("");
-    showToast(
-      scope === "occurrence"
-        ? "Calendar occurrence canceled."
-        : "Calendar event deleted.",
-    );
+      },
+    });
   };
 
   const editSelectedTask = () => {
@@ -1073,7 +1096,7 @@ export function usePlannerApp(accessToken: string) {
     setPlaceError("");
     try {
       await deleteSavedPlace(accessToken, space.id, place.id);
-      setPlaces((current) => current.filter((item) => item.id !== place.id));
+      setPlacesRevision((value) => value + 1);
       showToast("Saved place removed.");
     } catch (error) {
       setPlaceError(
@@ -1166,26 +1189,6 @@ export function usePlannerApp(accessToken: string) {
     }
   };
 
-  const loadMorePlaces = async () => {
-    if (placesNextOffset === null || loadingMorePlaces) return;
-    setLoadingMorePlaces(true);
-    setPlaceError("");
-    try {
-      const page = await listSavedPlaces(accessToken, placesNextOffset);
-      setPlaces((current) => [
-        ...current,
-        ...page.items.filter(
-          (item) => !current.some((existing) => existing.id === item.id),
-        ),
-      ]);
-      setPlacesNextOffset(page.nextOffset);
-    } catch {
-      setPlaceError("More Saved places couldn’t be loaded. Please retry.");
-    } finally {
-      setLoadingMorePlaces(false);
-    }
-  };
-
   return {
     ...membershipState,
     ready,
@@ -1228,6 +1231,7 @@ export function usePlannerApp(accessToken: string) {
     setEditingEvent,
     editSelectedEvent,
     removeSelectedEvent,
+    removingEvent,
     tasks,
     setTasks,
     tasksStatus,
@@ -1247,12 +1251,8 @@ export function usePlannerApp(accessToken: string) {
     editTaskList,
     removeTaskList,
     createTaskList,
-    placesStatus,
     placeError,
-    retryPlaces: () => setPlacesReload((current) => current + 1),
-    placesNextOffset,
-    loadingMorePlaces,
-    loadMorePlaces,
+    placesRevision,
     savingPlace,
     removingPlaceId,
     removeSavedPlace,
@@ -1270,10 +1270,6 @@ export function usePlannerApp(accessToken: string) {
     confirmPendingAction,
     selected,
     setSelected,
-    placeFilter,
-    setPlaceFilter,
-    places,
-    setPlaces,
     taskLists,
     setTaskLists,
     serverTaskLists,

@@ -117,6 +117,42 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
     .toBe(200);
   await signIn(page, fixtureEmail());
   await createSpace(page, "Weekend planning");
+  await page.getByRole("link", { name: "All Spaces", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: /Weekend planning.*Open Space/ }),
+  ).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const requests: string[] = [];
+  const collect = (request: { url(): string }) => {
+    const url = new URL(request.url());
+    if (url.origin === origin && url.pathname.startsWith("/api/")) {
+      requests.push(url.pathname);
+    }
+  };
+  page.on("request", collect);
+  try {
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("heading", { name: "Your Spaces", exact: true, level: 1 }),
+    ).toBeVisible();
+  } finally {
+    page.off("request", collect);
+  }
+  expect(
+    requests.filter((path) => path === "/api/invitations/current"),
+  ).toHaveLength(1);
+  expect(requests).not.toContain("/api/join-requests/current");
+  expect(requests).not.toContain("/api/spaces/deleted");
+  expect(requests.filter((path) => path.startsWith("/api/spaces/"))).toEqual(
+    [],
+  );
+  expect(
+    requests.length,
+    `All Spaces requests: ${requests.join(", ")}`,
+  ).toBeLessThanOrEqual(9);
+  await page
+    .getByRole("link", { name: /Weekend planning.*Open Space/ })
+    .click();
   await page.getByRole("link", { name: "To-dos", exact: true }).click();
   await createList(page, "Weekend jobs");
 
@@ -138,6 +174,12 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
 
   await trigger.click();
   await dialog.getByRole("textbox", { name: "Title" }).fill("Water the plants");
+  const assignee = dialog.getByRole("combobox", { name: /Assignee/ });
+  const owner = assignee.getByRole("option", { name: / · Owner$/ });
+  await expect(owner).toBeAttached();
+  const ownerId = await owner.getAttribute("value");
+  if (!ownerId) throw new Error("Owner missing from the Task assignee list");
+  await assignee.selectOption(ownerId);
   await add.click();
   const task = page.getByRole("button", {
     name: "Water the plants",
@@ -151,12 +193,179 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   ).toContainText("No due date");
   await page.keyboard.press("Escape");
   await expect(task).toBeFocused();
+  await task.click();
+  await page.getByRole("button", { name: "Edit Task", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Edit Task" })
+      .getByRole("combobox", { name: /Assignee/ }),
+  ).toHaveValue(ownerId);
+  await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Email address")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Email address")).toBeVisible();
+});
+
+test("confirms whether to cancel one occurrence or delete a Calendar series", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  await createSpace(page, "Calendar planning");
+  await page.getByRole("button", { name: "New event", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "New event" });
+  await editor.getByRole("textbox", { name: "Title" }).fill("Weekly planning");
+  await editor
+    .getByRole("combobox", { name: "Repeats" })
+    .selectOption({ label: "Every week" });
+  await editor.getByRole("button", { name: "Add event" }).click();
+
+  const today = page.getByRole("region", { name: "Space calendar" });
+  const occurrence = today.getByRole("button", {
+    name: "Weekly planning",
+    exact: true,
+  });
+  const details = page.getByRole("dialog", { name: "Weekly planning" });
+  await occurrence.click();
+  const cancelOccurrence = details.getByRole("button", {
+    name: "Cancel this occurrence",
+  });
+  await cancelOccurrence.click();
+  const cancel = page.getByRole("dialog", { name: "Cancel this occurrence?" });
+  await expect(cancel).toContainText("The rest of the series will stay");
+  await page.keyboard.press("Escape");
+  await expect(cancel).toBeHidden();
+  await expect(cancelOccurrence).toBeFocused();
+  await cancelOccurrence.click();
+  await cancel
+    .getByRole("button", { name: "Cancel occurrence", exact: true })
+    .click();
+  await expect(occurrence).toHaveCount(0);
+
+  await page.reload();
+  const remaining = page.getByRole("button", {
+    name: "Weekly planning",
+    exact: true,
+  });
+  await remaining.first().click();
+  await details
+    .getByRole("button", { name: "Delete series", exact: true })
+    .click();
+  const remove = page.getByRole("dialog", { name: "Delete this series?" });
+  await expect(remove).toContainText("every occurrence");
+  await remove
+    .getByRole("button", { name: "Delete series", exact: true })
+    .click();
+  await expect(remaining).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Calendar", exact: true }),
+  ).toBeFocused();
+  await page.reload();
+  await expect(today.getByText("Nothing planned")).toBeVisible();
+  await expect(remaining).toHaveCount(0);
+
+  await page.getByRole("button", { name: "New event", exact: true }).click();
+  await editor.getByRole("textbox", { name: "Title" }).fill("One-time meeting");
+  await editor.getByRole("button", { name: "Add event" }).click();
+  const meeting = today.getByRole("button", {
+    name: "One-time meeting",
+    exact: true,
+  });
+  await meeting.click();
+  await page
+    .getByRole("dialog", { name: "One-time meeting" })
+    .getByRole("button", { name: "Delete event", exact: true })
+    .click();
+  const single = page.getByRole("dialog", {
+    name: "Delete this Calendar event?",
+  });
+  await expect(single).toContainText("This cannot be undone");
+  await single
+    .getByRole("button", { name: "Delete event", exact: true })
+    .click();
+  await expect(meeting).toHaveCount(0);
+});
+
+test("the mobile time-zone list does not block the reminder time", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const timeZone = page.getByRole("combobox", { name: "Time zone" });
+  const options = page.getByRole("listbox", { name: "Time zones" });
+  const reminder = page.getByLabel("Default reminder time");
+  await timeZone.click();
+  await expect(options).toBeVisible();
+  await reminder.click({ timeout: 2_000 });
+  await expect(options).toBeHidden();
+  await expect(reminder).toBeFocused();
+  await timeZone.click();
+  await expect(options).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(options).toBeHidden();
+  await expect(timeZone).toBeFocused();
+});
+
+test("Saved places filters expose selection and count only the current Space", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  const grove = await createSpace(page, "Grove");
+  const pier = await createSpace(page, "Pier");
+  const savePlace = async (name: string, category: string) => {
+    await page.getByRole("button", { name: "Save a place" }).click();
+    const dialog = page.getByRole("dialog", { name: "Save a place" });
+    await dialog.getByRole("textbox", { name: "Place name" }).fill(name);
+    await dialog
+      .getByRole("textbox", { name: "Address" })
+      .fill("12 Market Street");
+    await dialog
+      .getByRole("combobox", { name: "Category" })
+      .selectOption({ label: category });
+    await dialog
+      .getByRole("button", { name: "Save place", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+  };
+  await page.goto(`${pier}/places`);
+  await savePlace("Harbour shop", "Groceries");
+  await page.goto(`${grove}/places`);
+  await savePlace("Orchard café", "Food & drink");
+  await savePlace("Grove shop", "Groceries");
+
+  const filters = page.getByRole("group", { name: "Place categories" });
+  const groceries = filters.getByRole("button", { name: "Groceries (1)" });
+  await expect(
+    filters.getByRole("button", { name: "All (2)", pressed: true }),
+  ).toBeVisible();
+  await groceries.click();
+  await expect(
+    filters.getByRole("button", { name: "Groceries (1)", pressed: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Grove shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Orchard café" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("heading", { name: "Harbour shop" })).toHaveCount(
+    0,
+  );
+
+  await page.getByRole("button", { name: "Pier Owner" }).click();
+  await page.getByRole("link", { name: "Places", exact: true }).click();
+  await expect(
+    filters.getByRole("button", { name: "All (1)", pressed: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Harbour shop" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Grove shop" })).toHaveCount(
+    0,
+  );
 });
 
 test("an approved Editor writes shared content that an invited Viewer can only read", async ({

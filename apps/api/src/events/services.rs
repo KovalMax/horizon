@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
+use std::{sync::OnceLock, time::Instant};
 use uuid::Uuid;
 
 use crate::pagination::{Page, PageWindow};
@@ -11,6 +12,9 @@ use super::{
     requests::CreateEventRequest,
     responses::{EventPageResponse, EventResponse},
 };
+
+const RANGE_PROFILE_TARGET: &str = "horizon_api::calendar_profile";
+static RANGE_PROFILE: OnceLock<bool> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct EventsApplication {
@@ -55,10 +59,14 @@ impl EventsApplication {
         if end_date < start_date || end_date.signed_duration_since(start_date).num_days() > 90 {
             return Err(EventError::Invalid);
         }
+        let profiling = *RANGE_PROFILE
+            .get_or_init(|| std::env::var("HORIZON_PROFILE_CALENDAR_RANGE").as_deref() == Ok("1"));
+        let start_series = profiling.then(Instant::now);
         let events = self
             .repository
             .list_series_for_member(user_id, start_date, end_date)
             .await?;
+        let end_series = profiling.then(Instant::now);
         let overrides = self
             .repository
             .overrides_for_member(
@@ -74,15 +82,48 @@ impl EventsApplication {
                     .and_utc(),
             )
             .await?;
-        let occurrences = recurrence::expand(events, overrides, start_date, end_date)
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<_>>();
-        let page = Page::from_rows(occurrences, page);
-        Ok(EventPageResponse {
-            items: page.items,
-            next_offset: page.next_offset,
-        })
+        let end_overrides = profiling.then(Instant::now);
+        let series_count = events.len();
+        let override_count = overrides.len();
+        let mut timings = profiling.then(recurrence::ExpansionTimings::default);
+        let occurrences =
+            recurrence::expand(events, overrides, start_date, end_date, timings.as_mut());
+        let end_expansion = profiling.then(Instant::now);
+        let occurrence_count = occurrences.len();
+        let next_offset = page.offset + page.limit;
+        let page = EventPageResponse {
+            items: occurrences
+                .into_iter()
+                .skip(page.offset as usize)
+                .take(page.limit as usize)
+                .map(Into::into)
+                .collect(),
+            next_offset: (occurrence_count > next_offset as usize).then_some(next_offset),
+        };
+        if let (Some(start), Some(series), Some(overrides), Some(expansion), Some(timings)) = (
+            start_series,
+            end_series,
+            end_overrides,
+            end_expansion,
+            timings,
+        ) {
+            log::info!(
+                target: RANGE_PROFILE_TARGET,
+                "days={} series={} overrides={} occurrences={} returned={} series_us={} overrides_us={} build_us={} moved_overrides_us={} sort_us={} page_us={}",
+                end_date.signed_duration_since(start_date).num_days() + 1,
+                series_count,
+                override_count,
+                occurrence_count,
+                page.items.len(),
+                (series - start).as_micros(),
+                (overrides - series).as_micros(),
+                timings.build_us,
+                timings.moved_overrides_us,
+                timings.sort_us,
+                expansion.elapsed().as_micros(),
+            );
+        }
+        Ok(page)
     }
 
     pub async fn create(

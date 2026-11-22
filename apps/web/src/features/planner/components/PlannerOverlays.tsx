@@ -489,6 +489,11 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       <label className="form-field">
                         Assignee (optional, one person)
                         <select
+                          key={
+                            appState.membershipStatus === "ready"
+                              ? "members"
+                              : "loading"
+                          }
                           name="assignee"
                           defaultValue={appState.editingTask?.assigneeId ?? ""}
                           disabled={appState.membershipStatus !== "ready"}
@@ -666,6 +671,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <section
             className="modal detail-modal"
+            inert={Boolean(confirmation)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="selected-item-title"
@@ -805,12 +811,14 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   <Button
                     variant="outline"
                     onClick={() => removeSelectedEvent("occurrence")}
+                    disabled={appState.removingEvent}
                   >
                     Cancel this occurrence
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => removeSelectedEvent("series")}
+                    disabled={appState.removingEvent}
                   >
                     Delete series
                   </Button>
@@ -830,6 +838,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     <Button
                       variant="outline"
                       onClick={() => removeSelectedEvent("series")}
+                      disabled={appState.removingEvent}
                     >
                       Delete event
                     </Button>

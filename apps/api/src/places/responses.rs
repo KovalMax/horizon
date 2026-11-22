@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -21,6 +22,9 @@ pub struct PlaceResponse {
 pub struct PlacePageResponse {
     pub items: Vec<PlaceResponse>,
     pub next_offset: Option<i64>,
+    /// Counts in the requested Space before applying category or pagination.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category_counts: Option<BTreeMap<String, i64>>,
 }
 
 impl From<SavedPlace> for PlaceResponse {

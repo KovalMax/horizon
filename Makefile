@@ -3,7 +3,7 @@
 COMPOSE ?= docker compose
 SERVICE ?=
 
-.PHONY: help certs up down restart build ps logs migrate test-api test-web test-browser test-e2e-stack format-web check
+.PHONY: help certs up down restart build ps logs migrate test-api test-web test-browser test-e2e-stack perf-baseline format-web check
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; print "Horizon development commands:"} /^[a-zA-Z_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -57,6 +57,9 @@ test-browser: ## Run deterministic Playwright checks in a container
 
 test-e2e-stack: ## Run signed-in Playwright checks with isolated PostgreSQL and Mailpit
 	sh scripts/check-browser.sh stack
+
+perf-baseline: ## Measure API, PostgreSQL, and signed-in browser startup on seeded data
+	sh scripts/perf-baseline.sh
 
 format-web: ## Format frontend source and tests in a temporary container
 	$(COMPOSE) run --rm --no-deps web npm run format:write

@@ -484,6 +484,12 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
 
   fireEvent.click(screen.getByRole("button", { name: "Updated dinner" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
+  const confirmation = screen.getByRole("dialog", {
+    name: "Delete this Calendar event?",
+  });
+  fireEvent.click(
+    within(confirmation).getByRole("button", { name: "Delete event" }),
+  );
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "Updated dinner" })).toBeNull(),
   );
@@ -581,6 +587,16 @@ test("signed-in Members can cancel one expanded recurring occurrence", async () 
   );
   fireEvent.click(
     screen.getByRole("button", { name: "Cancel this occurrence" }),
+  );
+  const confirmation = screen.getByRole("dialog", {
+    name: "Cancel this occurrence?",
+  });
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    `/api/events/${recurringEvent.id}/occurrences/${occurrenceDate}`,
+    expect.objectContaining({ method: "DELETE" }),
+  );
+  fireEvent.click(
+    within(confirmation).getByRole("button", { name: "Cancel occurrence" }),
   );
   await waitFor(() =>
     expect(
@@ -825,6 +841,9 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   expect(
     within(newTaskDialog).getByRole("group", { name: "Reminders" }),
   ).toBeTruthy();
+  await within(newTaskDialog).findByRole("option", {
+    name: "ruth@example.test",
+  });
   fireEvent.change(
     within(newTaskDialog).getByRole("combobox", {
       name: "Assignee (optional, one person)",
@@ -911,8 +930,14 @@ test("signed-in Members load and save Places in their selected Space", async () 
           lists_next_offset: null,
           tasks_next_offset: null,
         });
-      if (url.startsWith("/api/places?"))
-        return Response.json({ items: savedPlaces, next_offset: null });
+      if (url === `/api/places?space_id=${space.id}&offset=0`)
+        return Response.json({
+          items: savedPlaces,
+          next_offset: null,
+          category_counts: savedPlaces.length
+            ? { "Food & drink": savedPlaces.length }
+            : {},
+        });
       if (url === `/api/spaces/${space.id}/places` && init?.method === "POST") {
         const body = JSON.parse(String(init.body));
         const place = {
@@ -1080,6 +1105,12 @@ test("signed-in Owners see real Members and send Viewer invitations", async () =
   expect(
     await screen.findByRole("heading", { name: "What each role can do" }),
   ).toBeTruthy();
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "＋ Invite" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   fireEvent.change(
     screen.getByRole("textbox", { name: "Email address to invite" }),
     {
@@ -1209,6 +1240,7 @@ test("Space Owners create reusable links and approve join requests", async () =>
   fireEvent.click(
     within(spacesNavigation).getByRole("link", { name: "Members" }),
   );
+  await screen.findByRole("button", { name: "Approve" });
   fireEvent.change(
     screen.getByRole("combobox", { name: "Role after approval" }),
     {
@@ -1531,7 +1563,11 @@ test("Viewers see read-only planner pages without requesting Owner invitations",
         tasks_next_offset: null,
       });
     if (url.startsWith("/api/places?"))
-      return Response.json({ items: [place], next_offset: null });
+      return Response.json({
+        items: [place],
+        next_offset: null,
+        category_counts: { "Food & drink": 1 },
+      });
     if (url === `/api/spaces/${space.id}/members`)
       return Response.json([
         { user_id: "user-1", email: "maya@example.com", role: "viewer" },
@@ -1569,6 +1605,9 @@ test("Viewers see read-only planner pages without requesting Owner invitations",
   );
   expect(
     await screen.findByRole("heading", { name: "Neighborhood bakery" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "All (1)", pressed: true }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save a place" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import type { EventItem, PlaceItem, TaskItem } from "./domain";
+import type { EventItem, TaskItem } from "./domain";
 import { listCalendarEvents } from "./eventsApi";
-import { listSavedPlaces } from "./placesApi";
 import { listTodos, type ApiTaskList } from "./todosApi";
 
 function dateForOffset(offset: number): string {
@@ -150,60 +149,5 @@ export function useTaskCollection(accessToken: string, enabled: boolean) {
     setTaskLists,
     serverTaskLists,
     setServerTaskLists,
-  };
-}
-
-export function useSavedPlaceCollection(accessToken: string, enabled: boolean) {
-  const [places, setPlaces] = useState<PlaceItem[]>([]);
-  const [placesStatus, setPlacesStatus] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
-  const [placesReload, setPlacesReload] = useState(0);
-  const [placeError, setPlaceError] = useState("");
-  const [placesNextOffset, setPlacesNextOffset] = useState<number | null>(null);
-  const [loadingMorePlaces, setLoadingMorePlaces] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) {
-      setPlacesStatus("idle");
-      return;
-    }
-    let active = true;
-    setPlaces([]);
-    setPlacesNextOffset(null);
-    setPlacesStatus("loading");
-    setPlaceError("");
-    listSavedPlaces(accessToken)
-      .then((result) => {
-        if (!active) return;
-        setPlaces(result.items);
-        setPlacesNextOffset(result.nextOffset);
-        setPlacesStatus("ready");
-      })
-      .catch(() => {
-        if (!active) return;
-        setPlacesStatus("error");
-        setPlaceError(
-          "Saved places couldn’t be loaded. Check your connection and retry.",
-        );
-      });
-    return () => {
-      active = false;
-    };
-  }, [accessToken, enabled, placesReload]);
-
-  return {
-    places,
-    setPlaces,
-    placesStatus,
-    setPlacesStatus,
-    placesReload,
-    setPlacesReload,
-    placeError,
-    setPlaceError,
-    placesNextOffset,
-    setPlacesNextOffset,
-    loadingMorePlaces,
-    setLoadingMorePlaces,
   };
 }

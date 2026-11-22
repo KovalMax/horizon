@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use chrono::{
     DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset,
@@ -8,21 +8,30 @@ use chrono_tz::Tz;
 
 use super::models::{CalendarEvent, EventOccurrence, OccurrenceOverride};
 
+#[derive(Default)]
+pub(super) struct ExpansionTimings {
+    pub build_us: u128,
+    pub moved_overrides_us: u128,
+    pub sort_us: u128,
+}
+
 pub(super) fn expand(
     events: Vec<CalendarEvent>,
     overrides: Vec<OccurrenceOverride>,
     start: NaiveDate,
     end: NaiveDate,
+    mut timings: Option<&mut ExpansionTimings>,
 ) -> Vec<EventOccurrence> {
+    let start_build = timings.is_some().then(Instant::now);
     let event_by_id: HashMap<_, _> = events.iter().map(|event| (event.id, event)).collect();
-    let overrides_by_key: HashMap<_, _> = overrides
+    let mut overrides_by_key: HashMap<_, _> = overrides
         .iter()
         .map(|item| ((item.event_id, item.occurrence_date), item))
         .collect();
     let mut result = Vec::new();
     for event in &events {
         for date in occurrence_dates(event, start, end) {
-            if let Some(override_item) = overrides_by_key.get(&(event.id, date)) {
+            if let Some(override_item) = overrides_by_key.remove(&(event.id, date)) {
                 if !override_item.cancelled {
                     if let (Some(title), Some(starts_at), Some(time_zone), Some(all_day)) = (
                         &override_item.title,
@@ -51,14 +60,17 @@ pub(super) fn expand(
             }
         }
     }
-    // An occurrence may be moved into this visible range from a scheduled date outside it.
-    for item in &overrides {
-        if item.cancelled
-            || result.iter().any(|occurrence| {
-                occurrence.event.id == item.event_id
-                    && occurrence.occurrence_date == item.occurrence_date
-            })
-        {
+    let start_overrides = start_build.map(|start| {
+        let now = Instant::now();
+        if let Some(timings) = timings.as_mut() {
+            timings.build_us = (now - start).as_micros();
+        }
+        now
+    });
+    // Only overrides not consumed by an in-range scheduled date can move in
+    // from outside the visible range.
+    for item in overrides_by_key.into_values() {
+        if item.cancelled {
             continue;
         }
         let Some(event) = event_by_id.get(&item.event_id) else {
@@ -90,7 +102,17 @@ pub(super) fn expand(
             is_override: true,
         });
     }
+    let start_sort = start_overrides.map(|start| {
+        let now = Instant::now();
+        if let Some(timings) = timings.as_mut() {
+            timings.moved_overrides_us = (now - start).as_micros();
+        }
+        now
+    });
     result.sort_by_key(|item| (item.starts_at, item.event.id, item.occurrence_date));
+    if let (Some(start), Some(timings)) = (start_sort, timings) {
+        timings.sort_us = start.elapsed().as_micros();
+    }
     result
 }
 

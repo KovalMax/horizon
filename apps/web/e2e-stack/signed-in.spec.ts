@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { devices, expect, test, webkit, type Page } from "@playwright/test";
 
 const origin = "https://horizon.localhost";
 const mailpit = process.env.HORIZON_MAILPIT_URL ?? "http://mailpit:8025";
@@ -366,6 +366,46 @@ test("Saved places filters expose selection and count only the current Space", a
   await expect(page.getByRole("heading", { name: "Grove shop" })).toHaveCount(
     0,
   );
+});
+
+test("keeps the filled join-link expiration inside its form on mobile WebKit", async () => {
+  const browser = await webkit.launch();
+  try {
+    const page = await browser.newPage({
+      ...devices["iPhone 13"],
+      baseURL: origin,
+      ignoreHTTPSErrors: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signIn(page, fixtureEmail());
+    const space = await createSpace(page, "Mobile planning");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${space}/members`);
+    const role = page.getByRole("combobox", { name: "Role after approval" });
+    const expiration = page.getByLabel(/Expires at/);
+    await expiration.fill("2035-12-24T21:45");
+
+    for (const width of [390, 375, 361, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      const roleBox = await role.boundingBox();
+      const expiryBox = await expiration.boundingBox();
+      expect(roleBox).not.toBeNull();
+      expect(expiryBox).not.toBeNull();
+      expect(expiryBox!.y).toBeGreaterThanOrEqual(roleBox!.y + roleBox!.height);
+      expect(expiryBox!.x + expiryBox!.width).toBeLessThanOrEqual(
+        roleBox!.x + roleBox!.width + 1,
+      );
+      expect(expiryBox!.height).toBeGreaterThanOrEqual(43);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(width);
+    }
+    await expect(expiration).toHaveValue("2035-12-24T21:45");
+    await expiration.fill("");
+    await expect(expiration).toHaveValue("");
+  } finally {
+    await browser.close();
+  }
 });
 
 test("an approved Editor writes shared content that an invited Viewer can only read", async ({

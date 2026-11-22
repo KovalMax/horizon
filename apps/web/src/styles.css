@@ -1577,20 +1577,14 @@ select:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
 }
-.join-link-compose .join-link-field {
-  min-width: 128px;
-  margin: 16px 0;
-}
-.join-link-compose .join-link-expiry {
-  width: min(300px, 100%);
-}
 .join-link-compose {
   display: grid;
-  grid-template-columns: 160px 300px max-content;
+  grid-template-columns: minmax(0, 160px) minmax(0, 300px) max-content;
   align-items: start;
   gap: 8px 10px;
 }
 .join-link-compose .join-link-field {
+  min-width: 0;
   margin: 16px 0 0;
 }
 .join-link-compose > .button {
@@ -1750,6 +1744,18 @@ select:focus-visible {
   padding: 0 12px;
   background: #fff;
   font-size: 14px;
+}
+.join-link-compose .join-link-field :is(input, select) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 43px;
+  color: var(--ink);
+}
+.join-link-expiry input {
+  appearance: none;
+}
+.join-link-expiry input::-webkit-date-and-time-value {
+  text-align: start;
 }
 select,
 .form-field select,
@@ -2566,7 +2572,7 @@ select,
     padding: 8px 0;
   }
   .join-link-compose {
-    grid-template-columns: minmax(120px, 0.75fr) minmax(180px, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .join-link-compose > .button {
     grid-column: 1 / -1;
@@ -2615,12 +2621,6 @@ select,
     bottom: calc(78px + env(safe-area-inset-bottom));
   }
 }
-@media (max-width: 360px) {
-  .join-link-compose {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* Quiet, consistent motion for navigation, controls, and overlays. */
 button,
 a {

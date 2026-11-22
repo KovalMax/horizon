@@ -1,0 +1,34 @@
+name: Browser gates
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic:
+    name: Playwright / Deterministic
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run browser checks
+        run: make test-browser
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deterministic-browser-failures
+          path: .local/browser-results/deterministic
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  signed-in:
+    name: Playwright / Signed-in stack
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run signed-in browser checks
+        run: make test-e2e-stack

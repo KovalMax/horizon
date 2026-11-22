@@ -10,3 +10,15 @@ permissions:
 jobs:
   validate:
     uses: ./.github/workflows/validate.yml
+
+  quality-gate:
+    name: Quality / Required
+    needs: validate
+    if: ${{ always() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all validation jobs to pass
+        env:
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: test "$VALIDATION_RESULT" = success

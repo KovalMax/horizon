@@ -1,0 +1,74 @@
+services:
+  browser:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.browser
+    init: true
+    shm_size: 1gb
+    environment:
+      CI: "true"
+    volumes:
+      - ${HORIZON_BROWSER_RESULTS:?Set HORIZON_BROWSER_RESULTS}:/results
+
+  stack-browser:
+    extends: browser
+    network_mode: service:traefik
+    environment:
+      HORIZON_MAILPIT_URL: http://mailpit:8025
+    command: npm run test:e2e:stack
+
+  traefik:
+    image: traefik:v3.7.17
+    command:
+      - --entrypoints.websecure.address=:443
+      - --providers.file.filename=/etc/traefik/routes.yml
+    volumes:
+      - ./infra/traefik.browser.routes.yml:/etc/traefik/routes.yml:ro
+      - ${HORIZON_BROWSER_CERTS:?Set HORIZON_BROWSER_CERTS}:/certs:ro
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.prod
+
+  api:
+    build: ./apps/api
+    command: ["sh", "-ec", "target/debug/horizon-api migrate && exec target/debug/horizon-api"]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: horizon_browser
+      POSTGRES_USER: horizon_browser
+      POSTGRES_PASSWORD: browser-only-password
+      AUTH_JWT_SECRET: browser-only-secret-not-for-use-outside-this-network
+      AUTH_JWT_ISSUER: horizon-browser
+      AUTH_JWT_AUDIENCE: horizon-browser
+      AUTH_PUBLIC_URL: https://horizon.localhost/auth/complete
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: Horizon <no-reply@horizon.localhost>
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  db:
+    image: postgres:17.11-trixie
+    environment:
+      POSTGRES_DB: horizon_browser
+      POSTGRES_USER: horizon_browser
+      POSTGRES_PASSWORD: browser-only-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+
+networks:
+  default:
+    internal: true

@@ -137,6 +137,10 @@ jobs:
       - name: Check web formatting
         run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run format:check
 
+  browser:
+    needs: release-tag
+    uses: ./.github/workflows/browser.yml
+
   release-migrations:
     name: Release / Migrations
     needs: api-test
@@ -193,6 +197,7 @@ jobs:
       - web-build
       - web-test
       - web-format
+      - browser
       - release-migrations
       - production-compose
     runs-on: ubuntu-26.04-arm

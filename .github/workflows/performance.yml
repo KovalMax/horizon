@@ -27,5 +27,6 @@ jobs:
             .local/perf-baseline/run.*/postgres.json
             .local/perf-baseline/run.*/query-plans.txt
             .local/perf-baseline/run.*/fixtures.txt
+            .local/perf-baseline/run.*/calendar-profile.log
           include-hidden-files: true
           if-no-files-found: error

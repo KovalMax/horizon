@@ -489,6 +489,11 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       <label className="form-field">
                         Assignee (optional, one person)
                         <select
+                          key={
+                            appState.membershipStatus === "ready"
+                              ? "members"
+                              : "loading"
+                          }
                           name="assignee"
                           defaultValue={appState.editingTask?.assigneeId ?? ""}
                           disabled={appState.membershipStatus !== "ready"}

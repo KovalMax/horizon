@@ -230,7 +230,20 @@ export function usePlannerApp(accessToken: string) {
   const currentSpaceId =
     path.match(/^\/spaces\/([^/]+)/)?.[1] ?? serverSpaces[0]?.id ?? "";
   const routeSection = path.split("/")[3] ?? "calendar";
+  const isSpacePage = path.startsWith("/spaces/");
   const showOverview = path === "/";
+  const showDeletedSpaces = path === "/settings";
+  const currentSpaceIsOwned = serverSpaces.some(
+    (item) => item.id === currentSpaceId && item.role === "Owner",
+  );
+  const showMembers = isSpacePage && routeSection === "members";
+  const memberSpaceId =
+    modal === "task"
+      ? (editingTask?.space ?? currentSpaceId)
+      : showMembers ||
+          (isSpacePage && routeSection === "settings" && currentSpaceIsOwned)
+        ? currentSpaceId
+        : "";
   const showCalendar =
     showOverview ||
     (path.startsWith("/spaces/") && routeSection === "calendar");
@@ -343,6 +356,7 @@ export function usePlannerApp(accessToken: string) {
   }, [accessToken, spacesReload]);
 
   useEffect(() => {
+    if (!showDeletedSpaces) return;
     let active = true;
     setDeletedSpacesStatus("loading");
     listDeletedSpaces(accessToken)
@@ -358,7 +372,7 @@ export function usePlannerApp(accessToken: string) {
     return () => {
       active = false;
     };
-  }, [accessToken, spacesReload]);
+  }, [accessToken, spacesReload, showDeletedSpaces]);
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
@@ -382,7 +396,10 @@ export function usePlannerApp(accessToken: string) {
   const membershipState = useSpaceMembership({
     accessToken,
     currentSpaceId,
-    serverSpaces,
+    memberSpaceId,
+    loadOwnerManagement: showMembers && currentSpaceIsOwned,
+    showInvitations: showOverview,
+    showOwnJoinRequests: path === "/welcome",
     setServerSpaces,
     setSpacesReload,
     setSpacesError,
@@ -406,7 +423,6 @@ export function usePlannerApp(accessToken: string) {
     ...baseSpace,
     name: baseSpace.name,
   };
-  const isSpacePage = path.startsWith("/spaces/");
   const belongsToCurrentSpaces = (spaceId: string) =>
     activeSpaces.some((item) => item.id === spaceId);
   const filteredEvents = events.filter(
@@ -673,7 +689,9 @@ export function usePlannerApp(accessToken: string) {
           listName,
           dueDate: String(form.get("dueDate") || "") || null,
           dueTime: String(form.get("taskTime") || "") || null,
-          assigneeId: String(form.get("assignee") || "") || null,
+          assigneeId: form.has("assignee")
+            ? String(form.get("assignee") || "") || null
+            : (editingTask?.assigneeId ?? null),
           reminderOffsetsMinutes: form.getAll("reminderOffset").map(Number),
         };
         const saved = editingTask

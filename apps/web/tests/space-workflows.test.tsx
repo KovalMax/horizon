@@ -841,6 +841,9 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   expect(
     within(newTaskDialog).getByRole("group", { name: "Reminders" }),
   ).toBeTruthy();
+  await within(newTaskDialog).findByRole("option", {
+    name: "ruth@example.test",
+  });
   fireEvent.change(
     within(newTaskDialog).getByRole("combobox", {
       name: "Assignee (optional, one person)",
@@ -1102,6 +1105,12 @@ test("signed-in Owners see real Members and send Viewer invitations", async () =
   expect(
     await screen.findByRole("heading", { name: "What each role can do" }),
   ).toBeTruthy();
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "＋ Invite" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
   fireEvent.change(
     screen.getByRole("textbox", { name: "Email address to invite" }),
     {
@@ -1231,6 +1240,7 @@ test("Space Owners create reusable links and approve join requests", async () =>
   fireEvent.click(
     within(spacesNavigation).getByRole("link", { name: "Members" }),
   );
+  await screen.findByRole("button", { name: "Approve" });
   fireEvent.change(
     screen.getByRole("combobox", { name: "Role after approval" }),
     {

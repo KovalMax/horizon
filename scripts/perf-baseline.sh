@@ -27,6 +27,7 @@ psql < scripts/perf/seed.sql > "$output/fixtures.txt"
 psql -c 'SELECT pg_stat_statements_reset()' >/dev/null
 compose up --detach --no-deps api
 compose run --rm --no-deps perf
+compose logs --no-color --no-log-prefix api | awk '/\[horizon_api::calendar_profile\]/' > "$output/calendar-profile.log"
 psql -At -v date="$(cat "$output/day")" \
   -v mixed_start="$(cat "$output/mixed-start")" -v mixed_end="$(cat "$output/mixed-end")" \
   < scripts/perf/report.sql > "$output/postgres.json"

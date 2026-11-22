@@ -42,6 +42,10 @@ it reaches the default branch. No CI threshold is enforced.
   plus actual execution plans extracted from the API’s SQL. Write plans run
   only on disposable data and roll back. Query times are PostgreSQL execution
   time, not total API or pool-wait time.
+- Time Calendar range phases separately: database reads, recurrence generation,
+  moved-override handling, sorting, and page preparation. This adds opt-in
+  numeric API logs only (`HORIZON_PROFILE_CALENDAR_RANGE=1` on the benchmark
+  API). They are disabled in normal environments and carry no identifiers.
 - Report mixed reads while the real Task reminder worker is enabled and
   record cumulative worker statement calls. There is no worker-off control in
   this first baseline; don’t attribute a latency change to the worker alone.

@@ -1751,10 +1751,12 @@ select:focus-visible {
   min-height: 43px;
   color: var(--ink);
 }
-.join-link-expiry input {
+.join-link-expiry input,
+.settings-time-fields input[type="time"] {
   appearance: none;
 }
-.join-link-expiry input::-webkit-date-and-time-value {
+.join-link-expiry input::-webkit-date-and-time-value,
+.settings-time-fields input[type="time"]::-webkit-date-and-time-value {
   text-align: start;
 }
 select,
@@ -1771,8 +1773,13 @@ select,
 .form-field textarea {
   padding-top: 10px;
 }
-.time-zone-picker input {
-  width: 100%;
+.settings-time-fields .form-field,
+.settings-time-fields input {
+  min-width: 0;
+}
+.settings-time-fields input {
+  max-width: 100%;
+  color: var(--ink);
 }
 .time-zone-options {
   margin-top: 4px;
@@ -2236,6 +2243,10 @@ select,
   }
 }
 @media (max-width: 1023px) {
+  .settings-time-fields input {
+    /* Keep iOS Safari from zooming when a time control receives focus. */
+    font-size: 16px;
+  }
   .connection-banner {
     padding: 8px 16px;
     font-size: 12px;

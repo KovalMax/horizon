@@ -408,6 +408,50 @@ test("keeps the filled join-link expiration inside its form on mobile WebKit", a
   }
 });
 
+test("keeps Settings time controls usable on mobile WebKit", async () => {
+  const browser = await webkit.launch();
+  try {
+    const page = await browser.newPage({
+      ...devices["iPhone 13"],
+      baseURL: origin,
+      ignoreHTTPSErrors: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signIn(page, fixtureEmail());
+    await page.goto("/settings");
+
+    const timeZone = page.getByRole("combobox", { name: "Time zone" });
+    const options = page.getByRole("listbox", { name: "Time zones" });
+    const reminder = page.getByLabel("Default reminder time");
+    await reminder.fill("21:45");
+
+    for (const width of [390, 375, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await timeZone.tap();
+      await expect(options).toBeVisible();
+      const search = await timeZone.boundingBox();
+      const list = await options.boundingBox();
+      const time = await reminder.boundingBox();
+      expect(Math.abs(time!.x - search!.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(time!.width - search!.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(time!.height - search!.height)).toBeLessThanOrEqual(1);
+      expect(list!.y + list!.height).toBeLessThanOrEqual(time!.y);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBe(width);
+      await reminder.tap();
+      await expect(options).toBeHidden();
+    }
+
+    // iOS Safari can zoom into focused controls whose text is under 16px.
+    await expect(timeZone).toHaveCSS("font-size", "16px");
+    await expect(reminder).toHaveCSS("font-size", "16px");
+    await expect(reminder).toHaveValue("21:45");
+  } finally {
+    await browser.close();
+  }
+});
+
 test("an approved Editor writes shared content that an invited Viewer can only read", async ({
   page: owner,
   browser,

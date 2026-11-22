@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 dir=${HORIZON_CERT_DIR:-.local/certs}
 umask 077
 mkdir -p "$dir"
@@ -29,4 +29,4 @@ for file in local-ca-key.pem local-ca.pem horizon-key.pem horizon.pem horizon.cs
 done
 echo "Local development certificates created in $dir."
 echo "Trust the new $dir/local-ca.pem; remove any old Horizon CA trust."
-echo "Restart Traefik with: docker compose restart traefik"
+echo "Restart the local stack with: make restart"

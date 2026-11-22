@@ -14,9 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build API check container
-        run: docker compose --file compose.checks.yaml build api
+        run: docker compose --file infra/compose.checks.yaml build api
       - name: Compile API and test targets
-        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
 
   api-test:
     name: API / Tests
@@ -28,14 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build API test container
-        run: docker compose --file compose.checks.yaml build api
+        run: docker compose --file infra/compose.checks.yaml build api
       - name: Start PostgreSQL
-        run: docker compose --file compose.checks.yaml up --detach --wait db
+        run: docker compose --file infra/compose.checks.yaml up --detach --wait db
       - name: Run Rust tests
-        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo test --locked
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo test --locked
       - name: Stop PostgreSQL and remove test containers
         if: always()
-        run: docker compose --file compose.checks.yaml down --remove-orphans
+        run: docker compose --file infra/compose.checks.yaml down --remove-orphans
 
   api-format:
     name: API / Format
@@ -45,9 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build API tooling container
-        run: docker compose --file compose.checks.yaml build api
+        run: docker compose --file infra/compose.checks.yaml build api
       - name: Check Rust formatting
-        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
 
   api-clippy:
     name: API / Clippy
@@ -57,9 +57,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build API tooling container
-        run: docker compose --file compose.checks.yaml build api
+        run: docker compose --file infra/compose.checks.yaml build api
       - name: Run Rust Clippy
-        run: docker compose --file compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
 
   web-build:
     name: Web / Build
@@ -68,9 +68,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build web check container
-        run: docker compose --file compose.checks.yaml build web
+        run: docker compose --file infra/compose.checks.yaml build web
       - name: Build web application
-        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run build
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps web npm run build
 
   web-test:
     name: Web / Tests
@@ -80,9 +80,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build web test container
-        run: docker compose --file compose.checks.yaml build web
+        run: docker compose --file infra/compose.checks.yaml build web
       - name: Run web unit tests
-        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm test
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps web npm test
 
   web-format:
     name: Web / Format
@@ -92,9 +92,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build web tooling container
-        run: docker compose --file compose.checks.yaml build web
+        run: docker compose --file infra/compose.checks.yaml build web
       - name: Check web formatting
-        run: docker compose --file compose.checks.yaml run --rm --no-deps web npm run format:check
+        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps web npm run format:check
 
   browser:
     uses: ./.github/workflows/browser.yml

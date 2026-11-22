@@ -1,2 +1,0 @@
-include:
-  - infra/compose.dev.yaml

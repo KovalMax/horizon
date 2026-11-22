@@ -1,0 +1,31 @@
+name: Performance baseline (report only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Docker API and PostgreSQL baseline
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Measure the seeded stack
+        run: make perf-baseline
+      - name: Add observations to the run summary
+        run: cat .local/perf-baseline/run.*/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload baseline and query plans
+        uses: actions/upload-artifact@v7
+        with:
+          name: horizon-performance-baseline
+          path: |
+            .local/perf-baseline/run.*/summary.md
+            .local/perf-baseline/run.*/baseline.json
+            .local/perf-baseline/run.*/postgres.json
+            .local/perf-baseline/run.*/query-plans.txt
+            .local/perf-baseline/run.*/fixtures.txt
+          include-hidden-files: true
+          if-no-files-found: error

@@ -841,6 +841,9 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
   expect(
     within(newTaskDialog).getByRole("group", { name: "Reminders" }),
   ).toBeTruthy();
+  await within(newTaskDialog).findByRole("option", {
+    name: "ruth@example.test",
+  });
   fireEvent.change(
     within(newTaskDialog).getByRole("combobox", {
       name: "Assignee (optional, one person)",

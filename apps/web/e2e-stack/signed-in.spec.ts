@@ -117,6 +117,42 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
     .toBe(200);
   await signIn(page, fixtureEmail());
   await createSpace(page, "Weekend planning");
+  await page.getByRole("link", { name: "All Spaces", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: /Weekend planning.*Open Space/ }),
+  ).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const requests: string[] = [];
+  const collect = (request: { url(): string }) => {
+    const url = new URL(request.url());
+    if (url.origin === origin && url.pathname.startsWith("/api/")) {
+      requests.push(url.pathname);
+    }
+  };
+  page.on("request", collect);
+  try {
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(
+      page.getByRole("heading", { name: "Your Spaces", exact: true, level: 1 }),
+    ).toBeVisible();
+  } finally {
+    page.off("request", collect);
+  }
+  expect(
+    requests.filter((path) => path === "/api/invitations/current"),
+  ).toHaveLength(1);
+  expect(requests).not.toContain("/api/join-requests/current");
+  expect(requests).not.toContain("/api/spaces/deleted");
+  expect(requests.filter((path) => path.startsWith("/api/spaces/"))).toEqual(
+    [],
+  );
+  expect(
+    requests.length,
+    `All Spaces requests: ${requests.join(", ")}`,
+  ).toBeLessThanOrEqual(9);
+  await page
+    .getByRole("link", { name: /Weekend planning.*Open Space/ })
+    .click();
   await page.getByRole("link", { name: "To-dos", exact: true }).click();
   await createList(page, "Weekend jobs");
 
@@ -138,6 +174,12 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
 
   await trigger.click();
   await dialog.getByRole("textbox", { name: "Title" }).fill("Water the plants");
+  const assignee = dialog.getByRole("combobox", { name: /Assignee/ });
+  const owner = assignee.getByRole("option", { name: / · Owner$/ });
+  await expect(owner).toBeAttached();
+  const ownerId = await owner.getAttribute("value");
+  if (!ownerId) throw new Error("Owner missing from the Task assignee list");
+  await assignee.selectOption(ownerId);
   await add.click();
   const task = page.getByRole("button", {
     name: "Water the plants",
@@ -151,6 +193,14 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   ).toContainText("No due date");
   await page.keyboard.press("Escape");
   await expect(task).toBeFocused();
+  await task.click();
+  await page.getByRole("button", { name: "Edit Task", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Edit Task" })
+      .getByRole("combobox", { name: /Assignee/ }),
+  ).toHaveValue(ownerId);
+  await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Sign out" }).click();

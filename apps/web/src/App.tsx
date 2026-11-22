@@ -12,6 +12,7 @@ import {
 } from "./features/planner/membersApi";
 
 function AuthenticatedJoinRequest({ authState }: { authState: AuthState }) {
+  const accessToken = authState.tokens!.accessToken;
   const [path, setPath] = useState(window.location.pathname);
   const [joinRequests, setJoinRequests] = useState<SpaceJoinRequest[]>([]);
   const navigate = useCallback((to: string) => {
@@ -21,25 +22,20 @@ function AuthenticatedJoinRequest({ authState }: { authState: AuthState }) {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    void listMySpaceJoinRequests(authState.tokens!.accessToken)
+    const controller = new AbortController();
+    void listMySpaceJoinRequests(accessToken, controller.signal)
       .then((requests) => {
-        if (active) setJoinRequests(requests);
+        if (!controller.signal.aborted) setJoinRequests(requests);
       })
       .catch(() => {
-        if (active) setJoinRequests([]);
+        if (!controller.signal.aborted) setJoinRequests([]);
       });
-    return () => {
-      active = false;
-    };
-  }, [authState.tokens]);
+    return () => controller.abort();
+  }, [accessToken]);
 
   const submitRequest = async (linkId: string) => {
     try {
-      const request = await requestSpaceJoin(
-        authState.tokens!.accessToken,
-        linkId,
-      );
+      const request = await requestSpaceJoin(accessToken, linkId);
       setJoinRequests((current) => [
         request,
         ...current.filter((item) => item.id !== request.id),

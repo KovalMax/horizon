@@ -33,7 +33,10 @@ import {
 type SpaceMembershipOptions = {
   accessToken: string;
   currentSpaceId: string;
-  serverSpaces: Space[];
+  memberSpaceId: string;
+  loadOwnerManagement: boolean;
+  showInvitations: boolean;
+  showOwnJoinRequests: boolean;
   setServerSpaces: Dispatch<SetStateAction<Space[]>>;
   setSpacesReload: Dispatch<SetStateAction<number>>;
   setSpacesError: Dispatch<SetStateAction<string>>;
@@ -45,7 +48,10 @@ type SpaceMembershipOptions = {
 export function useSpaceMembership({
   accessToken,
   currentSpaceId,
-  serverSpaces,
+  memberSpaceId,
+  loadOwnerManagement,
+  showInvitations,
+  showOwnJoinRequests,
   setServerSpaces,
   setSpacesReload,
   setSpacesError,
@@ -68,54 +74,86 @@ export function useSpaceMembership({
   >("idle");
   const [membershipError, setMembershipError] = useState("");
   const [membershipReload, setMembershipReload] = useState(0);
+  const [loadedMemberScope, setLoadedMemberScope] = useState("");
+  const memberScope = `${memberSpaceId}:${loadOwnerManagement}:${membershipReload}`;
   const [savingInvitation, setSavingInvitation] = useState(false);
   const [savingJoinLink, setSavingJoinLink] = useState(false);
   const [acceptingInvitation, setAcceptingInvitation] = useState("");
 
   useEffect(() => {
+    if (!memberSpaceId) return;
     const controller = new AbortController();
-    const canManageCurrentSpace = serverSpaces.some(
-      (item) => item.id === currentSpaceId && item.role === "Owner",
-    );
     setMembershipStatus("loading");
     setMembershipError("");
     Promise.all([
-      currentSpaceId
-        ? listSpaceMembers(accessToken, currentSpaceId)
+      listSpaceMembers(accessToken, memberSpaceId, controller.signal),
+      loadOwnerManagement
+        ? listSpaceInvitations(
+            accessToken,
+            memberSpaceId,
+            controller.signal,
+          ).catch(() => [])
         : Promise.resolve([]),
-      currentSpaceId
-        ? canManageCurrentSpace
-          ? listSpaceInvitations(accessToken, currentSpaceId).catch(() => [])
-          : Promise.resolve([])
+      loadOwnerManagement
+        ? listSpaceJoinLinks(accessToken, memberSpaceId, controller.signal)
         : Promise.resolve([]),
-      listMyInvitations(accessToken),
-      currentSpaceId && canManageCurrentSpace
-        ? listSpaceJoinLinks(accessToken, currentSpaceId)
+      loadOwnerManagement
+        ? listPendingSpaceJoinRequests(
+            accessToken,
+            memberSpaceId,
+            controller.signal,
+          )
         : Promise.resolve([]),
-      currentSpaceId && canManageCurrentSpace
-        ? listPendingSpaceJoinRequests(accessToken, currentSpaceId)
-        : Promise.resolve([]),
-      listMySpaceJoinRequests(accessToken),
     ])
-      .then(([members, invitations, mine, links, requests, mineRequests]) => {
+      .then(([members, invitations, links, requests]) => {
         if (controller.signal.aborted) return;
+        setLoadedMemberScope(memberScope);
         setSpaceMembers(members);
         setSpaceInvitations(invitations);
-        setMyInvitations(mine);
         setSpaceJoinLinks(links);
         setPendingJoinRequests(requests);
-        setMyJoinRequests(mineRequests);
         setMembershipStatus("ready");
       })
       .catch(() => {
         if (controller.signal.aborted) return;
+        setLoadedMemberScope(memberScope);
+        setSpaceMembers([]);
+        setSpaceInvitations([]);
+        setSpaceJoinLinks([]);
+        setPendingJoinRequests([]);
         setMembershipStatus("error");
         setMembershipError(
           "Space Members couldn’t be loaded. Check your connection and retry.",
         );
       });
     return () => controller.abort();
-  }, [accessToken, currentSpaceId, membershipReload, serverSpaces]);
+  }, [accessToken, memberSpaceId, loadOwnerManagement, memberScope]);
+
+  useEffect(() => {
+    if (!showInvitations) return;
+    const controller = new AbortController();
+    listMyInvitations(accessToken, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setMyInvitations(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setMyInvitations([]);
+      });
+    return () => controller.abort();
+  }, [accessToken, showInvitations]);
+
+  useEffect(() => {
+    if (!showOwnJoinRequests) return;
+    const controller = new AbortController();
+    listMySpaceJoinRequests(accessToken, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setMyJoinRequests(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setMyJoinRequests([]);
+      });
+    return () => controller.abort();
+  }, [accessToken, showOwnJoinRequests]);
 
   const inviteMember = async (email: string) => {
     if (!currentSpaceId) return false;
@@ -265,7 +303,7 @@ export function useSpaceMembership({
   ) => {
     if (!currentSpaceId) return false;
     try {
-      const result = await decideSpaceJoinRequest(
+      await decideSpaceJoinRequest(
         accessToken,
         currentSpaceId,
         requestId,
@@ -273,9 +311,6 @@ export function useSpaceMembership({
       );
       setPendingJoinRequests((all) =>
         all.filter((item) => item.id !== requestId),
-      );
-      setMyJoinRequests((all) =>
-        all.map((item) => (item.id === result.id ? result : item)),
       );
       if (decision === "approved") {
         setMembershipReload((current) => current + 1);
@@ -377,7 +412,6 @@ export function useSpaceMembership({
       setMyInvitations((all) =>
         all.filter((invitation) => invitation.id !== invitationId),
       );
-      setMembershipReload((current) => current + 1);
       setSpacesReload((current) => current + 1);
       showToast(`You joined ${accepted.space_name} as a Viewer.`);
     } catch {
@@ -390,13 +424,18 @@ export function useSpaceMembership({
   };
 
   return {
-    spaceMembers,
-    spaceInvitations,
-    spaceJoinLinks,
-    pendingJoinRequests,
+    spaceMembers: memberScope === loadedMemberScope ? spaceMembers : [],
+    spaceInvitations: memberScope === loadedMemberScope ? spaceInvitations : [],
+    spaceJoinLinks: memberScope === loadedMemberScope ? spaceJoinLinks : [],
+    pendingJoinRequests:
+      memberScope === loadedMemberScope ? pendingJoinRequests : [],
     myJoinRequests,
     myInvitations,
-    membershipStatus,
+    membershipStatus: !memberSpaceId
+      ? ("idle" as const)
+      : memberScope !== loadedMemberScope
+        ? ("loading" as const)
+        : membershipStatus,
     membershipError,
     setMembershipError,
     savingInvitation,

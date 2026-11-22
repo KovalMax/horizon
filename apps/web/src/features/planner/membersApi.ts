@@ -59,10 +59,12 @@ function headers(accessToken: string, json = false): HeadersInit {
 export async function listSpaceMembers(
   accessToken: string,
   spaceId: string,
+  signal?: AbortSignal,
 ): Promise<SpaceMember[]> {
   return readJson(
     await authenticatedFetch(`/api/spaces/${spaceId}/members`, {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }
@@ -70,10 +72,12 @@ export async function listSpaceMembers(
 export async function listSpaceInvitations(
   accessToken: string,
   spaceId: string,
+  signal?: AbortSignal,
 ): Promise<SpaceInvitation[]> {
   return readJson(
     await authenticatedFetch(`/api/spaces/${spaceId}/invitations`, {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }
@@ -136,10 +140,12 @@ export async function revokeSpaceInvitation(
 
 export async function listMyInvitations(
   accessToken: string,
+  signal?: AbortSignal,
 ): Promise<SpaceInvitation[]> {
   return readJson(
     await authenticatedFetch("/api/invitations/current", {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }
@@ -159,10 +165,12 @@ export async function acceptSpaceInvitation(
 export async function listSpaceJoinLinks(
   accessToken: string,
   spaceId: string,
+  signal?: AbortSignal,
 ): Promise<SpaceJoinLink[]> {
   return readJson(
     await authenticatedFetch(`/api/spaces/${spaceId}/join-links`, {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }
@@ -200,10 +208,12 @@ export async function revokeSpaceJoinLink(
 export async function listPendingSpaceJoinRequests(
   accessToken: string,
   spaceId: string,
+  signal?: AbortSignal,
 ): Promise<SpaceJoinRequest[]> {
   return readJson(
     await authenticatedFetch(`/api/spaces/${spaceId}/join-requests`, {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }
@@ -240,10 +250,12 @@ export async function requestSpaceJoin(
 
 export async function listMySpaceJoinRequests(
   accessToken: string,
+  signal?: AbortSignal,
 ): Promise<SpaceJoinRequest[]> {
   return readJson(
     await authenticatedFetch("/api/join-requests/current", {
       headers: headers(accessToken),
+      signal,
     }),
   );
 }

@@ -1,0 +1,31 @@
+http:
+  routers:
+    web:
+      rule: Host(`horizon.localhost`)
+      entryPoints: [websecure]
+      service: web
+      tls: {}
+    api:
+      rule: Host(`horizon.localhost`) && PathPrefix(`/api/`)
+      entryPoints: [websecure]
+      priority: 100
+      service: api
+      middlewares: [strip-api]
+      tls: {}
+  middlewares:
+    strip-api:
+      stripPrefix:
+        prefixes: [/api]
+  services:
+    web:
+      loadBalancer:
+        servers:
+          - url: http://web:8080
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:8000
+tls:
+  certificates:
+    - certFile: /certs/horizon.pem
+      keyFile: /certs/horizon-key.pem

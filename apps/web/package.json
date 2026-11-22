@@ -9,8 +9,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
-    "format:check": "prettier --check 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'e2e/**/*.{ts,tsx}' 'e2e-smoke/**/*.{ts,tsx}' 'playwright.config.ts' 'playwright.smoke.config.ts' 'vite.e2e.config.ts' 'vitest.config.ts'",
-    "format:write": "prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'e2e/**/*.{ts,tsx}' 'e2e-smoke/**/*.{ts,tsx}' 'playwright.config.ts' 'playwright.smoke.config.ts' 'vite.e2e.config.ts' 'vitest.config.ts'"
+    "test:e2e:stack": "playwright test --config playwright.stack.config.ts",
+    "format:check": "prettier --check 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'e2e*/**/*.{ts,tsx}' 'playwright*.config.ts' 'vite.e2e.config.ts' 'vitest.config.ts'",
+    "format:write": "prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'e2e*/**/*.{ts,tsx}' 'playwright*.config.ts' 'vite.e2e.config.ts' 'vitest.config.ts'"
   },
   "dependencies": {
     "react": "19.2.4",

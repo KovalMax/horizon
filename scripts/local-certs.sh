@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-dir=.local/certs
+dir=${HORIZON_CERT_DIR:-.local/certs}
 umask 077
 mkdir -p "$dir"
 tmp=$(mktemp -d "$dir/.generate.XXXXXXXX")

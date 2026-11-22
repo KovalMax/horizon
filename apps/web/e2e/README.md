@@ -1,66 +1,32 @@
-# Browser tests and Playwright MCP
+# Horizon browser checks
 
-Install the web dependencies and Chromium once:
+Run from the repository root using Docker:
 
-```sh
-cd apps/web
-npm ci
-npx playwright install --with-deps chromium
-npm run test:e2e
-```
+| Command | Coverage |
+| --- | --- |
+| `make test-browser` | Deterministic Playwright suite covering sign-in errors, rate limits, callback cleanup, session restoration, and an axe scan of mobile sign-in. |
+| `make test-e2e-stack` | Real HTTPS browser journeys: Mailpit delivery and sign-in, mobile Task persistence and keyboard focus, sign-out, and Owner/Editor/Viewer collaboration. |
 
-If Node.js is not installed locally, run the same checks in the matching
-Playwright container from this directory:
+Both targets run in PR and main CI, and must pass on the release tag before
+publishing images. They use their own Compose projects and
+do not need or modify the local development stack. The signed-in suite starts
+PostgreSQL on disposable storage, Mailpit, the Actix API, a production web
+build and an HTTPS proxy. The browser accesses `https://horizon.localhost/`
+inside that network; neither the database nor Mailpit is published to the host.
+The browser-only proxy does not apply the development rate limit, so the
+multi-user test can run from one IP. Rate-limit feedback remains covered by the
+deterministic suite.
 
-```sh
-docker run --rm -v "$PWD:/work" -w /work \
-  mcr.microsoft.com/playwright:v1.65.1-noble \
-  sh -lc 'npm ci && npm run test:e2e'
-```
+Configure the PR check **Quality / Required** in the `main` branch ruleset
+after its first successful run if merges must be blocked on these checks.
 
-The deterministic suite runs the Vite app on `127.0.0.1:4173`. It stubs external
-API responses where needed and checks sign-in requests, callback redemption and
-URL cleanup, missing-token handling, retry and rate-limit feedback, and session
-restoration. Authenticated persisted planner workflows are covered by web tests;
-the deterministic browser suite does not replace the real local
-browser-to-API-to-PostgreSQL smoke test.
+The stack generates a temporary CA without changing the host trust store or
+development certificates. Test accounts use unique `example.test` addresses
+and all email stays inside Mailpit. Signed-in tests have screenshots, traces,
+and videos disabled so that callback and join links are not uploaded. The
+deterministic suite can retain traces under `.local/browser-results/` (or
+`HORIZON_BROWSER_RESULTS`).
 
-## Real local browser-to-API-to-PostgreSQL smoke test
-
-The local Compose stack bind-mounts both apps' source directories. Web edits are
-picked up by Vite (polling is enabled for Docker Desktop); API edits are rebuilt
-and restarted by `cargo watch`. Start or refresh the development containers with
-`docker compose up --build -d`. Rust build artifacts and web dependencies live
-in named volumes, not in the host source tree. If web dependencies change, restart
-them with `docker compose exec web npm ci`, then run `docker compose restart web`
-so the named dependency volume is refreshed.
-The development API applies pending database migrations at startup and before
-each watched API restart.
-
-This separate smoke test calls the local Compose stack through the same HTTPS
-host a browser uses. It has no Playwright-managed web server and does not stub
-the readiness request. Run it only against the local development stack:
-
-```sh
-cd <repository-root>
-./scripts/local-certs.sh
-docker compose up --build -d
-cd apps/web
-npm run test:e2e:smoke
-```
-
-The test trusts the local certificate only for this Playwright context and
-expects `https://horizon.localhost` (override with `HORIZON_SMOKE_URL`). It
-asserts both the browser-visible success state and the real `/api/health/ready`
-HTTP 200 response, which executes `SELECT 1` against PostgreSQL. Use `docker
-compose down` for non-destructive shutdown; do not add `-v` if you want to keep
-local database data. This smoke test does not cover magic-link delivery; the
-separate auth/Mailpit browser journey is still an outstanding acceptance item.
-
-The repository-level `opencode.json` configures the official Playwright MCP
-server (`@playwright/mcp`) for Chromium. Restart/reload OpenCode after adding the
-config, then use the `playwright` MCP tools to inspect the running app. Start it
-separately with `cd apps/web && npm run dev` (normally at
-`http://localhost:3000`). The MCP server and the Playwright test runner are
-separate: MCP is for interactive browser control, while `npm run test:e2e`
-executes the repeatable checks.
+For a manual review, start the development stack with `make up`, then open
+`https://horizon.localhost/` through the browser or Playwright MCP. Mailpit's
+development inbox is `http://localhost:8025`.

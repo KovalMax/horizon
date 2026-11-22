@@ -14,14 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run browser checks
-        run: make test-browser
+        run: HORIZON_BROWSER_RESULTS="$RUNNER_TEMP/horizon/browser" make test-browser
       - name: Upload failure traces
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: deterministic-browser-failures
-          path: .local/browser-results/deterministic
-          include-hidden-files: true
+          path: ${{ runner.temp }}/horizon/browser/deterministic/**/trace.zip
           if-no-files-found: ignore
 
   signed-in:
@@ -31,4 +30,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run signed-in browser checks
-        run: make test-e2e-stack
+        run: HORIZON_BROWSER_RESULTS="$RUNNER_TEMP/horizon/browser" make test-e2e-stack

@@ -13,11 +13,15 @@ services:
       timeout: 5s
       retries: 30
   api:
-    build: ./apps/api
+    build:
+      context: ../apps/api
+      dockerfile: ../../infra/docker/api/Dockerfile
     environment:
       POSTGRES_HOST: db
       POSTGRES_DB: horizon_test
       POSTGRES_USER: horizon_test
       POSTGRES_PASSWORD: local-test-only
   web:
-    build: ./apps/web
+    build:
+      context: ../apps/web
+      dockerfile: ../../infra/docker/web/Dockerfile

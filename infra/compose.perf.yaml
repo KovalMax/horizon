@@ -1,7 +1,7 @@
 services:
   api:
     build:
-      dockerfile: Dockerfile.prod
+      dockerfile: ../../infra/docker/api/Dockerfile.prod
     command: []
     environment:
       HORIZON_PROFILE_CALENDAR_RANGE: "1"
@@ -19,6 +19,6 @@ services:
       PERF_MIXED_SECONDS: ${PERF_MIXED_SECONDS:-65}
       PERF_REVISION: ${PERF_REVISION:-unknown}
     volumes:
-      - ./scripts/perf:/perf:ro
-      - ./apps/api/src:/api-source:ro
+      - ./perf:/perf:ro
+      - ../apps/api/src:/api-source:ro
     command: ["sh", "-ec", "node --test /perf/metrics.test.mjs && exec node /perf/baseline.mjs"]

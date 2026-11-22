@@ -1,8 +1,8 @@
 services:
   browser:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile.browser
+      context: ../apps/web
+      dockerfile: ../../infra/docker/web/Dockerfile.browser
     init: true
     shm_size: 1gb
     environment:
@@ -23,16 +23,18 @@ services:
       - --entrypoints.websecure.address=:443
       - --providers.file.filename=/etc/traefik/routes.yml
     volumes:
-      - ./infra/traefik.browser.routes.yml:/etc/traefik/routes.yml:ro
+      - ./traefik.browser.routes.yml:/etc/traefik/routes.yml:ro
       - ${HORIZON_BROWSER_CERTS:?Set HORIZON_BROWSER_CERTS}:/certs:ro
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile.prod
+      context: ../apps/web
+      dockerfile: ../../infra/docker/web/Dockerfile.prod
 
   api:
-    build: ./apps/api
+    build:
+      context: ../apps/api
+      dockerfile: ../../infra/docker/api/Dockerfile
     command: ["sh", "-ec", "target/debug/horizon-api migrate && exec target/debug/horizon-api"]
     environment:
       POSTGRES_HOST: db

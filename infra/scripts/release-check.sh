@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 project="horizon-release-checks-$$"
-compose() { docker compose -p "$project" -f compose.checks.yaml "$@"; }
+compose() { docker compose -p "$project" -f infra/compose.checks.yaml "$@"; }
 cleanup() { compose down --remove-orphans; }
 trap cleanup EXIT
 

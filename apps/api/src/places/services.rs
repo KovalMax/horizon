@@ -28,18 +28,32 @@ impl PlacesApplication {
         &self,
         user_id: Uuid,
         window: PageWindow,
+        space_id: Option<Uuid>,
+        category: Option<&str>,
     ) -> Result<PlacePageResponse, PlaceError> {
-        self.repository
-            .list_for_member(user_id, window)
+        if category.is_some_and(|value| !PLACE_CATEGORIES.contains(&value)) {
+            return Err(PlaceError::Invalid);
+        }
+        let rows = self
+            .repository
+            .list_for_member(user_id, window, space_id, category)
             .await
-            .map(|places| {
-                let page = Page::from_rows(places, window);
-                PlacePageResponse {
-                    items: page.items.into_iter().map(Into::into).collect(),
-                    next_offset: page.next_offset,
-                }
-            })
-            .map_err(|_| PlaceError::Unavailable)
+            .map_err(|_| PlaceError::Unavailable)?;
+        let category_counts = match space_id {
+            Some(space_id) => Some(
+                self.repository
+                    .category_counts_for_member(space_id, user_id)
+                    .await
+                    .map_err(|_| PlaceError::Unavailable)?,
+            ),
+            None => None,
+        };
+        let page = Page::from_rows(rows, window);
+        Ok(PlacePageResponse {
+            items: page.items.into_iter().map(Into::into).collect(),
+            next_offset: page.next_offset,
+            category_counts,
+        })
     }
 
     pub async fn create(

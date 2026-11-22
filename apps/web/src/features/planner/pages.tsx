@@ -106,7 +106,7 @@ export function renderPageContent(
   if (routeSection === "tasks")
     return <TasksPage state={state} helpers={helpers} />;
   if (routeSection === "places")
-    return <PlacesPage state={state} helpers={helpers} />;
+    return <PlacesPage key={state.space.id} state={state} helpers={helpers} />;
   if (routeSection === "members")
     return <MembersPage state={state} helpers={helpers} />;
   if (routeSection === "settings")

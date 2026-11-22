@@ -67,7 +67,7 @@ export function SettingsPage({
   );
   useEffect(() => {
     if (!timeZonePickerOpen) return;
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
       if (
         event.target instanceof Node &&
         !timeZonePickerRef.current?.contains(event.target)
@@ -82,10 +82,10 @@ export function SettingsPage({
       setTimeZonePickerOpen(false);
       setTimeZoneSearch("");
     };
-    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    document.addEventListener("click", closeOnOutsideClick);
     document.addEventListener("keydown", closeOnEscape, true);
     return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+      document.removeEventListener("click", closeOnOutsideClick);
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [timeZonePickerOpen]);
@@ -99,7 +99,7 @@ export function SettingsPage({
       <section className="list-card">
         <h2>Time and reminders</h2>
         <p>Changes are saved with the Save settings button below.</p>
-        <div className="form-field time-zone-field">
+        <div className="form-field">
           <label htmlFor="time-zone-search">Time zone</label>
           <div className="time-zone-picker" ref={timeZonePickerRef}>
             <input
@@ -118,6 +118,7 @@ export function SettingsPage({
                 setTimeZoneSearch("");
                 setTimeZonePickerOpen(true);
               }}
+              onClick={() => setTimeZonePickerOpen(true)}
               onChange={(event) => {
                 setTimeZoneSearch(event.target.value);
                 setTimeZonePickerOpen(true);

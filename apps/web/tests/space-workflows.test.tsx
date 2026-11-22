@@ -1547,7 +1547,11 @@ test("Viewers see read-only planner pages without requesting Owner invitations",
         tasks_next_offset: null,
       });
     if (url.startsWith("/api/places?"))
-      return Response.json({ items: [place], next_offset: null });
+      return Response.json({
+        items: [place],
+        next_offset: null,
+        category_counts: { "Food & drink": 1 },
+      });
     if (url === `/api/spaces/${space.id}/members`)
       return Response.json([
         { user_id: "user-1", email: "maya@example.com", role: "viewer" },
@@ -1585,6 +1589,9 @@ test("Viewers see read-only planner pages without requesting Owner invitations",
   );
   expect(
     await screen.findByRole("heading", { name: "Neighborhood bakery" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "All (1)", pressed: true }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save a place" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();

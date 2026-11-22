@@ -59,9 +59,8 @@ impl EventsApplication {
         if end_date < start_date || end_date.signed_duration_since(start_date).num_days() > 90 {
             return Err(EventError::Invalid);
         }
-        let profiling = *RANGE_PROFILE.get_or_init(|| {
-            std::env::var("HORIZON_PROFILE_CALENDAR_RANGE").as_deref() == Ok("1")
-        });
+        let profiling = *RANGE_PROFILE
+            .get_or_init(|| std::env::var("HORIZON_PROFILE_CALENDAR_RANGE").as_deref() == Ok("1"));
         let start_series = profiling.then(Instant::now);
         let events = self
             .repository
@@ -93,9 +92,13 @@ impl EventsApplication {
         let occurrence_count = occurrences.len();
         let occurrences = occurrences.into_iter().map(Into::into).collect::<Vec<_>>();
         let page = Page::from_rows(occurrences, page);
-        if let (Some(start), Some(series), Some(overrides), Some(expansion), Some(timings)) =
-            (start_series, end_series, end_overrides, end_expansion, timings)
-        {
+        if let (Some(start), Some(series), Some(overrides), Some(expansion), Some(timings)) = (
+            start_series,
+            end_series,
+            end_overrides,
+            end_expansion,
+            timings,
+        ) {
             log::info!(
                 target: RANGE_PROFILE_TARGET,
                 "days={} series={} overrides={} occurrences={} returned={} series_us={} overrides_us={} build_us={} moved_overrides_us={} sort_us={} page_us={}",

@@ -14,19 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Measure the seeded stack
-        run: make perf-baseline
+        run: HORIZON_PERF_RESULTS="$RUNNER_TEMP/horizon/performance" make perf-baseline
       - name: Add observations to the run summary
-        run: cat .local/perf-baseline/run.*/summary.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat "$RUNNER_TEMP"/horizon/performance/run.*/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload baseline and query plans
         uses: actions/upload-artifact@v7
         with:
           name: horizon-performance-baseline
           path: |
-            .local/perf-baseline/run.*/summary.md
-            .local/perf-baseline/run.*/baseline.json
-            .local/perf-baseline/run.*/postgres.json
-            .local/perf-baseline/run.*/query-plans.txt
-            .local/perf-baseline/run.*/fixtures.txt
-            .local/perf-baseline/run.*/calendar-profile.log
-          include-hidden-files: true
+            ${{ runner.temp }}/horizon/performance/run.*/summary.md
+            ${{ runner.temp }}/horizon/performance/run.*/baseline.json
+            ${{ runner.temp }}/horizon/performance/run.*/postgres.json
+            ${{ runner.temp }}/horizon/performance/run.*/query-plans.txt
+            ${{ runner.temp }}/horizon/performance/run.*/fixtures.txt
+            ${{ runner.temp }}/horizon/performance/run.*/calendar-profile.log
           if-no-files-found: error

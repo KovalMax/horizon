@@ -25,7 +25,8 @@ development certificates. Test accounts use unique `example.test` addresses
 and all email stays inside Mailpit. Signed-in tests have screenshots, traces,
 and videos disabled so that callback and join links are not uploaded. The
 deterministic suite can retain traces under `.local/browser-results/` (or
-`HORIZON_BROWSER_RESULTS`).
+`HORIZON_BROWSER_RESULTS`). GitHub Actions uses `$RUNNER_TEMP/horizon/browser`
+and uploads only deterministic failure traces.
 
 For a manual review, start the development stack with `make up`, then open
 `https://horizon.localhost/` through the browser or Playwright MCP. Mailpit's

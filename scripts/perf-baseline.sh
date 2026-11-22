@@ -1,9 +1,11 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-mkdir -p .local/perf-baseline
-output=$(mktemp -d "$(pwd)/.local/perf-baseline/run.XXXXXXXX")
-certs=$(mktemp -d "$(pwd)/.local/perf-baseline/certs.XXXXXXXX")
+results="${HORIZON_PERF_RESULTS:-$(pwd)/.local/perf-baseline}"
+mkdir -p "$results"
+results=$(cd "$results" && pwd)
+output=$(mktemp -d "$results/run.XXXXXXXX")
+certs=$(mktemp -d "$results/certs.XXXXXXXX")
 project="horizon-perf-$$"
 export HORIZON_BROWSER_RESULTS="$output"
 export HORIZON_BROWSER_CERTS="$certs"

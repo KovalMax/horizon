@@ -50,7 +50,9 @@ it reaches the default branch. No CI threshold is enforced.
   record cumulative worker statement calls. There is no worker-off control in
   this first baseline; don’t attribute a latency change to the worker alone.
 
-Results are written to `.local/perf-baseline/run.*/`: start with `summary.md`,
+Results default to `.local/perf-baseline/run.*/` for local runs. Set
+`HORIZON_PERF_RESULTS` to choose another root; GitHub Actions uses
+`$RUNNER_TEMP/horizon/performance`. Start with `summary.md`,
 use `baseline.json` for comparisons, then inspect `postgres.json`,
 `query-plans.txt` and `fixtures.txt`. Reports exclude tokens, query bind values
 from HTTP traffic, and Mailpit bodies. Query plans include only reproducible

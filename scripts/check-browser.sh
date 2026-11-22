@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-mkdir -p .local
-certs=$(mktemp -d "$(pwd)/.local/browser-certs.XXXXXXXX")
 project="horizon-browser-$$"
-export HORIZON_BROWSER_CERTS="$certs"
 export HORIZON_BROWSER_RESULTS="${HORIZON_BROWSER_RESULTS:-$(pwd)/.local/browser-results}"
 mkdir -p "$HORIZON_BROWSER_RESULTS"
+HORIZON_BROWSER_RESULTS=$(cd "$HORIZON_BROWSER_RESULTS" && pwd)
+certs=$(mktemp -d "$HORIZON_BROWSER_RESULTS/certs.XXXXXXXX")
+export HORIZON_BROWSER_CERTS="$certs"
 compose() { docker compose -p "$project" -f compose.browser.yaml "$@"; }
 cleanup() {
   compose down --remove-orphans --rmi local

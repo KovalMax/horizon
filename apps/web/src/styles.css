@@ -1765,22 +1765,12 @@ select,
 .form-field textarea {
   padding-top: 10px;
 }
-.time-zone-field {
-  position: relative;
-}
-.time-zone-picker {
-  position: relative;
-}
 .time-zone-picker input {
   width: 100%;
 }
 .time-zone-options {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  right: 0;
-  left: 0;
-  max-height: 280px;
+  margin-top: 4px;
+  max-height: min(280px, 32dvh);
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 10px;

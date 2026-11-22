@@ -21,6 +21,7 @@ export class PlacesApiError extends Error {
 type ApiPlacePage = {
   items: ApiSavedPlace[];
   next_offset: number | null;
+  category_counts: Record<string, number>;
 };
 
 function toPlace(place: ApiSavedPlace): PlaceItem {
@@ -43,16 +44,26 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export async function listSavedPlaces(
   accessToken: string,
-  offset = 0,
-): Promise<{ items: PlaceItem[]; nextOffset: number | null }> {
+  spaceId: string,
+  category: string | null,
+  offset: number,
+  signal: AbortSignal,
+) {
+  const query = new URLSearchParams({
+    space_id: spaceId,
+    offset: String(offset),
+  });
+  if (category) query.set("category", category);
   const page = await readJson<ApiPlacePage>(
-    await authenticatedFetch(`/api/places?offset=${offset}`, {
+    await authenticatedFetch(`/api/places?${query}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal,
     }),
   );
   return {
     items: page.items.map(toPlace),
     nextOffset: page.next_offset,
+    counts: page.category_counts,
   };
 }
 

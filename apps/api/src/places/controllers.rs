@@ -6,9 +6,13 @@ use actix_web::{
 use uuid::Uuid;
 
 use crate::auth::{AuthApplication, AuthError, Problem};
-use crate::pagination::{PageQuery, PageWindow};
+use crate::pagination::PageWindow;
 
-use super::{models::PlaceError, requests::CreatePlaceRequest, services::PlacesApplication};
+use super::{
+    models::PlaceError,
+    requests::{CreatePlaceRequest, PlacesPageQuery},
+    services::PlacesApplication,
+};
 
 fn bearer_token(request: &HttpRequest) -> Option<&str> {
     request
@@ -97,11 +101,11 @@ fn place_error(error: PlaceError) -> HttpResponse {
 #[utoipa::path(
     get,
     path = "/places",
-    params(PageQuery),
+    params(PlacesPageQuery),
     security(("accessBearer" = [])),
     responses(
         (status = 200, description = "A page of Saved places in Spaces the Member can access", body = super::responses::PlacePageResponse),
-        (status = 400, description = "Page offset is invalid", body = Problem),
+        (status = 400, description = "Invalid page or Place category", body = Problem),
         (status = 401, description = "Access token is invalid or missing", body = Problem),
         (status = 503, description = "Service unavailable", body = Problem)
     )
@@ -109,7 +113,7 @@ fn place_error(error: PlaceError) -> HttpResponse {
 #[get("/places")]
 pub async fn list_places(
     request: HttpRequest,
-    query: web::Query<PageQuery>,
+    query: web::Query<PlacesPageQuery>,
     auth: web::Data<AuthApplication>,
     places: web::Data<PlacesApplication>,
 ) -> HttpResponse {
@@ -124,7 +128,10 @@ pub async fn list_places(
             "invalid_page_offset",
         );
     };
-    match places.list_for_member(user_id, page).await {
+    match places
+        .list_for_member(user_id, page, query.space_id, query.category.as_deref())
+        .await
+    {
         Ok(result) => HttpResponse::Ok().json(result),
         Err(error) => place_error(error),
     }

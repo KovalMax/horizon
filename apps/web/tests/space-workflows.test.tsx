@@ -582,6 +582,16 @@ test("signed-in Members can cancel one expanded recurring occurrence", async () 
   fireEvent.click(
     screen.getByRole("button", { name: "Cancel this occurrence" }),
   );
+  const confirmation = screen.getByRole("dialog", {
+    name: "Cancel this occurrence?",
+  });
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    `/api/events/${recurringEvent.id}/occurrences/${occurrenceDate}`,
+    expect.objectContaining({ method: "DELETE" }),
+  );
+  fireEvent.click(
+    within(confirmation).getByRole("button", { name: "Cancel occurrence" }),
+  );
   await waitFor(() =>
     expect(
       screen.queryByRole("button", { name: "Recurring dinner" }),
@@ -911,8 +921,14 @@ test("signed-in Members load and save Places in their selected Space", async () 
           lists_next_offset: null,
           tasks_next_offset: null,
         });
-      if (url.startsWith("/api/places?"))
-        return Response.json({ items: savedPlaces, next_offset: null });
+      if (url === `/api/places?space_id=${space.id}&offset=0`)
+        return Response.json({
+          items: savedPlaces,
+          next_offset: null,
+          category_counts: savedPlaces.length
+            ? { "Food & drink": savedPlaces.length }
+            : {},
+        });
       if (url === `/api/spaces/${space.id}/places` && init?.method === "POST") {
         const body = JSON.parse(String(init.body));
         const place = {

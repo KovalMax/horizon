@@ -146,6 +146,56 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     assert_eq!(next_places.items.len(), 1);
     assert_eq!(next_places.next_offset, None);
     assert_ne!(places.items[0].id, next_places.items[0].id);
+
+    let request = actix_test::TestRequest::post()
+        .uri("/spaces")
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(CreateSpaceRequest {
+            name: "Another Space".to_owned(),
+        })
+        .to_request();
+    let response = actix_test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let other_space: SpaceResponse = actix_test::read_body_json(response).await;
+    let request = actix_test::TestRequest::post()
+        .uri(&format!("/spaces/{}/places", other_space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(CreatePlaceRequest {
+            name: "A bakery in another Space".to_owned(),
+            ..place_request()
+        })
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::CREATED
+    );
+
+    let scoped_page = |query: &str| {
+        actix_test::TestRequest::get()
+            .uri(&format!("/places?space_id={}&limit=1{query}", space.id))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .to_request()
+    };
+    let page: serde_json::Value = actix_test::call_and_read_body_json(&app, scoped_page("")).await;
+    assert_eq!(page["items"][0]["id"], created.id.to_string());
+    assert_eq!(page["next_offset"], 1);
+    assert_eq!(
+        page["category_counts"],
+        serde_json::json!({"Food & drink": 1, "Services": 1})
+    );
+    let page: serde_json::Value =
+        actix_test::call_and_read_body_json(&app, scoped_page("&offset=1")).await;
+    assert_eq!(page["items"][0]["id"], second_place.id.to_string());
+    assert_eq!(page["next_offset"], serde_json::Value::Null);
+    let page: serde_json::Value =
+        actix_test::call_and_read_body_json(&app, scoped_page("&category=Services")).await;
+    assert_eq!(page["items"][0]["id"], second_place.id.to_string());
+    assert_eq!(page["next_offset"], serde_json::Value::Null);
+    assert_eq!(
+        page["category_counts"],
+        serde_json::json!({"Food & drink": 1, "Services": 1})
+    );
+
     let request = actix_test::TestRequest::delete()
         .uri(&format!("/spaces/{}/places/{}", space.id, second_place.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
@@ -160,10 +210,7 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
         .execute(&pool)
         .await
         .expect("test should be able to switch the member to Viewer");
-    let request = actix_test::TestRequest::get()
-        .uri("/places")
-        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
-        .to_request();
+    let request = scoped_page("");
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::OK);
     let viewer_places: PlacePageResponse = actix_test::read_body_json(response).await;
@@ -187,8 +234,21 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
         StatusCode::FORBIDDEN
     );
 
+    sqlx::query("DELETE FROM space_memberships WHERE space_id = $1")
+        .bind(space.id)
+        .execute(&pool)
+        .await
+        .expect("test should be able to remove the membership");
+    let page: serde_json::Value = actix_test::call_and_read_body_json(&app, scoped_page("")).await;
+    assert_eq!(page["items"], serde_json::json!([]));
+    assert_eq!(page["category_counts"], serde_json::json!({}));
+
     let _ = sqlx::query("DELETE FROM spaces WHERE id = $1")
         .bind(space.id)
+        .execute(&pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM spaces WHERE id = $1")
+        .bind(other_space.id)
         .execute(&pool)
         .await;
     let _ = sqlx::query("DELETE FROM users WHERE id = $1")

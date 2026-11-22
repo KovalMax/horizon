@@ -1,6 +1,6 @@
-import { useMemo } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button, Icon } from "../../../shared/ui";
+import { useSpacePlaces } from "../useSpacePlaces";
 
 export function PlacesPage({
   state,
@@ -9,34 +9,29 @@ export function PlacesPage({
   state: PlannerAppState;
   helpers: PageHelpers;
 }) {
-  const {
-    setModal,
-    space,
-    placeFilter,
-    setPlaceFilter,
-    places,
-    placesStatus,
-    placeError,
-    retryPlaces,
-  } = state;
+  const { setModal, space, accessToken, placesRevision, placeError } = state;
   const { pageHeader } = helpers;
-  const canManage = space.role !== "Viewer";
-  const spacePlaces = useMemo(
-    () => places.filter((place) => place.space === space.id),
-    [places, space.id],
+  const canManage = Boolean(space.id) && space.role !== "Viewer";
+  const {
+    category,
+    setCategory,
+    counts,
+    page,
+    error,
+    retry,
+    pageError,
+    loadingMore,
+    loadMore,
+  } = useSpacePlaces(accessToken, space.id, placesRevision);
+  const total = Object.values(counts ?? {}).reduce(
+    (sum, count) => sum + count,
+    0,
   );
-  const categories = useMemo(
-    () => ["All", ...new Set(spacePlaces.map((place) => place.category))],
-    [spacePlaces],
-  );
-  const visiblePlaces = useMemo(
-    () =>
-      spacePlaces.filter(
-        (place) => placeFilter === "All" || place.category === placeFilter,
-      ),
-    [spacePlaces, placeFilter],
-  );
-  const hasSavedPlaces = spacePlaces.length > 0;
+  const categories = Array.from(
+    new Set([...Object.keys(counts ?? {}), ...(category ? [category] : [])]),
+  ).sort();
+  const visiblePlaces = page?.items ?? [];
+  const hasSavedPlaces = total > 0;
 
   return (
     <>
@@ -56,34 +51,35 @@ export function PlacesPage({
           Owner can change them.
         </p>
       )}
-      {placesStatus === "loading" && <p role="status">Loading Saved places…</p>}
-      {placesStatus === "error" && (
+      {!page && !error && <p role="status">Loading Saved places…</p>}
+      {error && (
         <div role="alert">
-          <p>{placeError}</p>
-          <Button variant="outline" onClick={retryPlaces}>
+          <p>{error}</p>
+          <Button variant="outline" onClick={retry}>
             Retry
           </Button>
         </div>
       )}
       <div className="place-controls">
-        <div className="place-filters">
-          {categories.map((category) => {
-            const count =
-              category === "All"
-                ? spacePlaces.length
-                : spacePlaces.filter((place) => place.category === category)
-                    .length;
-            return (
+        {counts && (
+          <div
+            className="place-filters"
+            role="group"
+            aria-label="Place categories"
+          >
+            {[null, ...categories].map((option) => (
               <button
-                className={placeFilter === category ? "picked" : ""}
-                key={category}
-                onClick={() => setPlaceFilter(category)}
+                type="button"
+                className={category === option ? "picked" : ""}
+                aria-pressed={category === option}
+                key={option ?? "all"}
+                onClick={() => setCategory(option)}
               >
-                {category} ({count})
+                {option ?? "All"} ({option ? (counts[option] ?? 0) : total})
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
         {hasSavedPlaces && (
           <div
             className="place-view-toggle"
@@ -155,7 +151,7 @@ export function PlacesPage({
           ))}
         </div>
       ) : (
-        placesStatus === "ready" && (
+        page && (
           <div className="empty-state">
             <h2>
               {hasSavedPlaces
@@ -175,16 +171,11 @@ export function PlacesPage({
           </div>
         )
       )}
-      {placeError && placesStatus !== "error" && (
-        <p role="alert">{placeError}</p>
-      )}
-      {state.placesNextOffset !== null && (
-        <Button
-          variant="outline"
-          disabled={state.loadingMorePlaces}
-          onClick={state.loadMorePlaces}
-        >
-          {state.loadingMorePlaces ? "Loading…" : "Load more Saved places"}
+      {placeError && <p role="alert">{placeError}</p>}
+      {pageError && <p role="alert">{pageError}</p>}
+      {page && page.nextOffset !== null && (
+        <Button variant="outline" disabled={loadingMore} onClick={loadMore}>
+          {loadingMore ? "Loading…" : "Load more Saved places"}
         </Button>
       )}
     </>

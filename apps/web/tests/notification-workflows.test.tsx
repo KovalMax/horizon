@@ -209,7 +209,7 @@ test("time zone suggestions close when clicking outside the picker", async () =>
   expect(
     await screen.findByRole("listbox", { name: "Time zones" }),
   ).toBeTruthy();
-  fireEvent.pointerDown(document.body);
+  fireEvent.click(document.body);
 
   await waitFor(() => {
     expect(timeZone.getAttribute("aria-expanded")).toBe("false");

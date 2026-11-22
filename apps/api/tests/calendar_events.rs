@@ -347,7 +347,10 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
         assert_eq!(page.items.len(), usize::from(expected.is_some()));
         if let Some((title, scheduled_date)) = expected {
             assert_eq!(page.items[0].title, title);
-            assert_eq!(page.items[0].occurrence_date.as_deref(), Some(scheduled_date));
+            assert_eq!(
+                page.items[0].occurrence_date.as_deref(),
+                Some(scheduled_date)
+            );
             assert!(page.items[0].is_override);
         }
     }

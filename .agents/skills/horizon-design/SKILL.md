@@ -1,5 +1,5 @@
 ---
-name: Horizon UI design
+name: horizon-design
 description: Use when changing Horizon's visual design, interaction patterns, responsive layouts, components, icons, or UI copy.
 ---
 
@@ -27,27 +27,15 @@ The prototype's **Review guide** is a review aid for the human evaluating the
 prototype, not a Horizon product feature. Do not add it to the app's routes,
 navigation, or UI.
 
+See [horizon-lovable](../horizon-lovable/SKILL.md) for review scope and
+[horizon-design-tokens](../horizon-design-tokens/SKILL.md) for CSS token usage.
+
 ## Visual foundation
 
 The reference uses **Figtree**, a warm near-white canvas, subdued green-gray
 text, fine sage borders, rounded white cards, and restrained shadows. The
 canonical CSS variables live in `apps/web/src/styles.css`; extend or reuse
 those variables rather than introducing near-duplicate colors.
-
-Current palette and semantic roles:
-
-| Token | Value | Use |
-| --- | --- | --- |
-| `--ink` | `oklch(27.8% 0.016 182.8)` | Main text |
-| `--muted` | `oklch(48.5% 0.021 174.5)` | Secondary text |
-| `--primary` | `oklch(48.3% 0.069 172.2)` | Primary action and focus |
-| `--canvas` | `oklch(97.8% 0.004 121.6)` | App background |
-| `--border` | `oklch(90.3% 0.015 151.8)` | Dividers and outlines |
-| `--control` | `oklch(61.9% 0.021 171.1)` | Form control borders |
-| `--personal` / `--personal-soft` | `oklch(49% 0.044 266.9)` / `oklch(95.7% 0.01 266)` | Personal Space identity |
-| `--home` / `--home-soft` | `oklch(53.7% 0.097 44.6)` / `oklch(95.5% 0.015 51.3)` | Household Space identity |
-| `--trip` / `--trip-soft` | `oklch(50.1% 0.086 238.5)` / `oklch(95.4% 0.013 234.8)` | Trip Space identity |
-| `--sage` / `--sage-soft` | `oklch(48.3% 0.069 150)` / `oklch(95% 0.015 150)` | General positive/sage accent |
 
 The base radius is `14px`; use the existing card, pill, and control radii
 according to their component roles. Use `--shadow` for low-emphasis elevation.
@@ -145,7 +133,12 @@ did not establish that every route or state is at parity:
 - Custom pickers and popovers close on Escape without closing their containing
   dialog, as well as on outside pointer interaction.
 - Use styled, accessible confirmations instead of browser-native confirms.
-  Space deletion requires the Owner to type the exact Space name.
+  Space deletion requires the Owner to type the exact Space name. Calendar
+  confirmations distinguish cancelling one occurrence from deleting a whole
+  series or a one-time event.
+- Saved places show category totals for the entire current Space and expose
+  the active category as pressed. The Settings time-zone picker must not
+  cover the reminder-time input.
 - A Task without a due date must remain explicitly undated in its detail view.
   Refresh repeating Calendar events after creation so occurrence and series
   actions use the persisted event representation.

@@ -484,6 +484,12 @@ test("signed-in Calendar loads persisted events and creates one in the selected 
 
   fireEvent.click(screen.getByRole("button", { name: "Updated dinner" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete event" }));
+  const confirmation = screen.getByRole("dialog", {
+    name: "Delete this Calendar event?",
+  });
+  fireEvent.click(
+    within(confirmation).getByRole("button", { name: "Delete event" }),
+  );
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: "Updated dinner" })).toBeNull(),
   );

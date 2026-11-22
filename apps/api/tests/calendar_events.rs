@@ -298,6 +298,60 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
         Some("2026-03-29")
     );
 
+    // A date originally outside the range can move in. An override for a date
+    // already expanded inside the range should still appear exactly once.
+    let moved_into_range = CreateEventRequest {
+        title: "Moved into range".to_owned(),
+        starts_at: "2026-03-28T12:30:00+01:00".to_owned(),
+        ends_at: Some("2026-03-28T13:30:00+01:00".to_owned()),
+        ..occurrence_update
+    };
+    let request = actix_test::TestRequest::put()
+        .uri(&format!(
+            "/events/{}/occurrences/2026-03-27",
+            daily_series.id
+        ))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .set_json(&moved_into_range)
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::OK
+    );
+    let request = actix_test::TestRequest::delete()
+        .uri(&format!(
+            "/events/{}/occurrences/2026-03-29",
+            daily_series.id
+        ))
+        .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+        .to_request();
+    assert_eq!(
+        actix_test::call_service(&app, request).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    for (offset, expected) in [
+        (0, Some(("Moved one date", "2026-03-28"))),
+        (1, Some(("Moved into range", "2026-03-27"))),
+        (2, None),
+    ] {
+        let request = actix_test::TestRequest::get()
+            .uri(&format!(
+                "/events?start_date=2026-03-28&end_date=2026-03-30&limit=1&offset={offset}"
+            ))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .to_request();
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let page: EventPageResponse = actix_test::read_body_json(response).await;
+        assert_eq!(page.next_offset, (offset == 0).then_some(1));
+        assert_eq!(page.items.len(), usize::from(expected.is_some()));
+        if let Some((title, scheduled_date)) = expected {
+            assert_eq!(page.items[0].title, title);
+            assert_eq!(page.items[0].occurrence_date.as_deref(), Some(scheduled_date));
+            assert!(page.items[0].is_override);
+        }
+    }
+
     let request = actix_test::TestRequest::delete()
         .uri(&format!("/events/{}", daily_series.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))

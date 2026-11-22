@@ -90,8 +90,16 @@ impl EventsApplication {
             recurrence::expand(events, overrides, start_date, end_date, timings.as_mut());
         let end_expansion = profiling.then(Instant::now);
         let occurrence_count = occurrences.len();
-        let occurrences = occurrences.into_iter().map(Into::into).collect::<Vec<_>>();
-        let page = Page::from_rows(occurrences, page);
+        let next_offset = page.offset + page.limit;
+        let page = EventPageResponse {
+            items: occurrences
+                .into_iter()
+                .skip(page.offset as usize)
+                .take(page.limit as usize)
+                .map(Into::into)
+                .collect(),
+            next_offset: (occurrence_count > next_offset as usize).then_some(next_offset),
+        };
         if let (Some(start), Some(series), Some(overrides), Some(expansion), Some(timings)) = (
             start_series,
             end_series,
@@ -115,10 +123,7 @@ impl EventsApplication {
                 expansion.elapsed().as_micros(),
             );
         }
-        Ok(EventPageResponse {
-            items: page.items,
-            next_offset: page.next_offset,
-        })
+        Ok(page)
     }
 
     pub async fn create(

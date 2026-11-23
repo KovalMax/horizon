@@ -96,7 +96,7 @@ export function SettingsPage({
         "Settings",
         "Manage your time, reminders, and notification preferences.",
       )}
-      <section className="list-card">
+      <section className="list-card settings-time-fields">
         <h2>Time and reminders</h2>
         <p>Changes are saved with the Save settings button below.</p>
         <div className="form-field">

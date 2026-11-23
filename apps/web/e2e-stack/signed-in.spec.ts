@@ -418,11 +418,16 @@ test("keeps Settings time controls usable on mobile WebKit", async () => {
     });
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page, fixtureEmail());
-    await page.goto("/settings");
+    await page.getByRole("link", { name: "Settings", exact: true }).click();
+    // The saved preferences populate the form asynchronously after navigation.
+    await expect(
+      page.getByRole("button", { name: "Save settings" }),
+    ).toBeEnabled();
 
     const timeZone = page.getByRole("combobox", { name: "Time zone" });
     const options = page.getByRole("listbox", { name: "Time zones" });
     const reminder = page.getByLabel("Default reminder time");
+    await page.setViewportSize({ width: 390, height: 844 });
     await reminder.fill("21:45");
 
     for (const width of [390, 375, 320]) {

@@ -22,10 +22,32 @@ export function OverviewPage({
     filteredTasks,
   } = state;
   const { pageHeader, spaceCards, taskRow, eventRow } = helpers;
-  const noSpacesVisible = activeSpaces.every((item) =>
-    hidden.includes(item.id),
-  );
+  const noSpacesVisible =
+    activeSpaces.length > 0 &&
+    activeSpaces.every((item) => hidden.includes(item.id));
   const undatedTasks = filteredTasks.filter((task) => task.day === undefined);
+  const timelineDays = days
+    .map((day) => ({
+      day,
+      events: filteredEvents.filter((event) => event.day === day),
+      tasks: filteredTasks.filter((task) => task.day === day),
+    }))
+    .filter(({ events, tasks }) => events.length > 0 || tasks.length > 0);
+  const timelineSources = [
+    { status: state.spacesStatus, retry: state.retrySpaces },
+    ...(filter !== "tasks"
+      ? [{ status: state.eventsStatus, retry: state.retryEvents }]
+      : []),
+    ...(filter !== "events"
+      ? [{ status: state.tasksStatus, retry: state.retryTasks }]
+      : []),
+  ];
+  const failedSources = timelineSources.filter(
+    ({ status }) => status === "error",
+  );
+  const timelineLoading = timelineSources.some(
+    ({ status }) => status === "idle" || status === "loading",
+  );
   return (
     <>
       {pageHeader(
@@ -107,42 +129,49 @@ export function OverviewPage({
                 <p>Turn a Space back on above to see its events and To-dos.</p>
               </div>
             </section>
-          ) : filteredEvents.length === 0 && filteredTasks.length === 0 ? (
+          ) : timelineDays.length === 0 && failedSources.length > 0 ? (
+            <section className="list-card">
+              <p role="alert">The timeline couldn’t be loaded.</p>
+              <Button
+                variant="outline"
+                onClick={() => failedSources.forEach(({ retry }) => retry())}
+              >
+                Retry timeline
+              </Button>
+            </section>
+          ) : timelineDays.length === 0 && timelineLoading ? (
+            <p role="status">Loading timeline…</p>
+          ) : timelineDays.length === 0 ? (
             <section className="list-card empty-overview" role="status">
               <Icon name="calendar" />
               <div>
                 <h2>Nothing coming up</h2>
                 <p>
-                  There are no events or open To-dos to show with these filters.
+                  Nothing is scheduled in the next two weeks with these filters.
                 </p>
               </div>
             </section>
           ) : (
-            days.map((day) => {
-              const ev = filteredEvents.filter((e) => e.day === day);
-              const ts = filteredTasks.filter((t) => t.day === day);
-              if (!ev.length && !ts.length) return null;
-              return (
-                <section className="day-card" key={day}>
-                  <h2>
-                    {day === 0 ? (
-                      <>
-                        <b>Today</b> · {todayLong}
-                      </>
-                    ) : day === 1 ? (
-                      <>
-                        <b>Tomorrow</b> · {dateLabel(day, true)}
-                      </>
-                    ) : (
-                      <b>{dateLabel(day, true)}</b>
-                    )}
-                  </h2>
-                  {ev.map((e) => eventRow(e, true))}
-                  {ev.length > 0 && ts.length > 0 && <hr />}
-                  {ts.map((t) => taskRow(t, true))}
-                </section>
-              );
-            })
+            timelineDays.map(({ day, events, tasks }) => (
+              <section className="day-card" key={day}>
+                <h2>
+                  {day === 0 ? (
+                    <>
+                      <b>Today</b> · {todayLong}
+                    </>
+                  ) : day === 1 ? (
+                    <>
+                      <b>Tomorrow</b> · {dateLabel(day, true)}
+                    </>
+                  ) : (
+                    <b>{dateLabel(day, true)}</b>
+                  )}
+                </h2>
+                {events.map((e) => eventRow(e, true))}
+                {events.length > 0 && tasks.length > 0 && <hr />}
+                {tasks.map((t) => taskRow(t, true))}
+              </section>
+            ))
           )}
         </div>
         <aside className="overview-aside">

@@ -202,11 +202,43 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   ).toHaveValue(ownerId);
   await page.keyboard.press("Escape");
 
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "No due date" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Nothing coming up" }),
+  ).toBeVisible();
+  await expect(task).toBeVisible();
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Email address")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Email address")).toBeVisible();
+});
+
+test("the Space filter border stays inside its scroll area on hover", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  const filters = page.getByRole("group", { name: "Filter by Space" });
+  const personal = filters.getByRole("button", { name: "Personal" });
+  for (const width of [1023, 390, 320]) {
+    await page.setViewportSize({ width, height: 750 });
+    await personal.hover();
+    expect(
+      await personal.evaluate(async (pill) => {
+        await Promise.all(
+          pill.getAnimations().map((animation) => animation.finished),
+        );
+        return (
+          pill.getBoundingClientRect().top >=
+          pill.parentElement!.getBoundingClientRect().top
+        );
+      }),
+    ).toBe(true);
+  }
 });
 
 test("confirms whether to cancel one occurrence or delete a Calendar series", async ({

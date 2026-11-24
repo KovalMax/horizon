@@ -94,8 +94,10 @@ pub async fn request_magic_link(
         .request_magic_link(&body.email, &ip, body.time_zone.as_deref())
         .await
     {
-        Ok(()) => HttpResponse::Accepted().json(MagicLinkAccepted {
-            message: "If the address can receive mail, a sign-in link will be sent.".to_owned(),
+        Ok(challenge_id) => HttpResponse::Accepted().json(MagicLinkAccepted {
+            challenge_id,
+            message: "If the address can receive mail, a sign-in link and code will be sent."
+                .to_owned(),
         }),
         Err(AuthError::InvalidRequest) => {
             problem(StatusCode::BAD_REQUEST, "Invalid request", "invalid_email")
@@ -132,7 +134,35 @@ pub async fn redeem_magic_link(
     state: web::Data<AuthApplication>,
     body: web::Json<RedeemMagicLinkRequest>,
 ) -> HttpResponse {
-    match state.redeem_magic_link(&body.token).await {
+    redemption_response(state.redeem_magic_link(&body.token).await)
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/sign-in-codes/redeem",
+    request_body = super::requests::RedeemSignInCodeRequest,
+    responses(
+        (status = 200, body = AuthenticationResponse),
+        (status = 401, description = "Code is invalid, expired, used, or locked", body = Problem),
+        (status = 503, body = Problem)
+    )
+)]
+#[post("/auth/sign-in-codes/redeem")]
+pub async fn redeem_sign_in_code(
+    state: web::Data<AuthApplication>,
+    body: web::Json<super::requests::RedeemSignInCodeRequest>,
+) -> HttpResponse {
+    redemption_response(
+        state
+            .redeem_sign_in_code(body.challenge_id, &body.code)
+            .await,
+    )
+}
+
+fn redemption_response(
+    result: Result<super::models::AuthenticatedSession, AuthError>,
+) -> HttpResponse {
+    match result {
         Ok(session) => HttpResponse::Ok().json(AuthenticationResponse::from(session)),
         Err(AuthError::Unauthorized) => unauthorized(),
         Err(AuthError::Internal) => problem(

@@ -10,13 +10,14 @@ mod services;
 mod token_service;
 
 pub use controllers::{
-    current_account, redeem_magic_link, refresh_token, request_magic_link, revoke_current_session,
+    current_account, redeem_magic_link, redeem_sign_in_code, refresh_token, request_magic_link,
+    revoke_current_session,
 };
 pub use email::{EmailSender, SmtpEmailSender};
 pub use factories::AuthSettings;
 pub use models::{AccessPrincipal, Account, AuthError, AuthenticatedSession, TokenSet};
-pub use repositories::{AuthRepository, PostgresAuthRepository};
-pub use requests::{MagicLinkRequest, RedeemMagicLinkRequest};
+pub use repositories::{AuthRepository, PostgresAuthRepository, SignInProof};
+pub use requests::{MagicLinkRequest, RedeemMagicLinkRequest, RedeemSignInCodeRequest};
 pub use responses::{
     AccountResponse, AuthenticationResponse, MagicLinkAccepted, Problem, TokenPairResponse,
 };

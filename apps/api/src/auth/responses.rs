@@ -57,6 +57,7 @@ impl From<AuthenticatedSession> for AuthenticationResponse {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MagicLinkAccepted {
+    pub challenge_id: uuid::Uuid,
     pub message: String,
 }
 

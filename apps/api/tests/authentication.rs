@@ -16,10 +16,15 @@ use std::{
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
-struct RecordingMailer(Arc<Mutex<Option<String>>>);
+struct RecordingMailer(Arc<Mutex<Option<String>>>, Arc<Mutex<Option<String>>>);
 
 #[async_trait]
 impl EmailSender for RecordingMailer {
+    async fn send_sign_in(&self, recipient: &str, link: &str, code: &str) -> Result<(), String> {
+        *self.1.lock().unwrap() = Some(code.to_owned());
+        self.send_magic_link(recipient, link).await
+    }
+
     async fn send_magic_link(&self, _recipient: &str, link: &str) -> Result<(), String> {
         *self.0.lock().expect("test mailer lock should be available") = Some(link.to_owned());
         Ok(())
@@ -56,6 +61,7 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
             .app_data(web::Data::new(spaces::SpacesApplication::new(pool.clone())))
             .service(auth::request_magic_link)
             .service(auth::redeem_magic_link)
+            .service(auth::redeem_sign_in_code)
             .service(auth::refresh_token)
             .service(auth::revoke_current_session)
             .service(auth::current_account)
@@ -74,6 +80,28 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .to_request();
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::ACCEPTED);
+    let challenge: auth::MagicLinkAccepted = actix_test::read_body_json(response).await;
+
+    // A wrong code consumes an attempt, but locking it does not invalidate the link.
+    let correct = mailer.1.lock().unwrap().clone().unwrap();
+    let wrong = if correct == "00000000" {
+        "11111111"
+    } else {
+        "00000000"
+    };
+    for code in [wrong, wrong, wrong, wrong, wrong, correct.as_str()] {
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::post()
+                .uri("/auth/sign-in-codes/redeem")
+                .set_json(
+                    serde_json::json!({ "challenge_id": challenge.challenge_id, "code": code }),
+                )
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 
     let throttled = actix_test::TestRequest::post()
         .uri("/auth/magic-links")

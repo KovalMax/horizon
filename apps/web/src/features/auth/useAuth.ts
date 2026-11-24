@@ -5,6 +5,7 @@ import {
   getCurrentAccount,
   hasStoredRefreshToken,
   redeemMagicLink,
+  redeemSignInCode,
   requestMagicLink,
   restoreAuthSession,
   revokeCurrentSession,
@@ -13,6 +14,21 @@ import {
   type AuthAccount,
   type AuthTokens,
 } from "./api";
+
+const pendingChallengeKey = "horizon-pending-sign-in";
+
+function readPendingChallenge(): string | null {
+  try {
+    const value = JSON.parse(
+      sessionStorage.getItem(pendingChallengeKey) ?? "null",
+    );
+    return typeof value?.id === "string" && value.expiresAt > Date.now()
+      ? value.id
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function formatRetryDelay(seconds: number | null): string {
   if (seconds === null) return "a little while";
@@ -30,10 +46,12 @@ export type AuthState = {
   account: AuthAccount | null;
   tokens: AuthTokens | null;
   requestStatus: "idle" | "sending" | "sent";
+  canRedeemCode: boolean;
   redemptionStatus: "idle" | "redeeming" | "failed";
   error: string;
   restoring: boolean;
   requestLink: (email: string, timeZone: string) => Promise<void>;
+  redeemCode: (code: string) => Promise<boolean>;
   redeemLink: (token: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   resetRequest: () => void;
@@ -42,12 +60,30 @@ export type AuthState = {
 export function useAuth(): AuthState {
   const [account, setAccount] = useState<AuthAccount | null>(null);
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
-  const [requestStatus, setRequestStatus] =
-    useState<AuthState["requestStatus"]>("idle");
+  const [challengeId, setChallengeId] = useState(readPendingChallenge);
+  const [requestStatus, setRequestStatus] = useState<
+    AuthState["requestStatus"]
+  >(challengeId ? "sent" : "idle");
   const [redemptionStatus, setRedemptionStatus] =
     useState<AuthState["redemptionStatus"]>("idle");
   const [error, setError] = useState("");
   const [restoring, setRestoring] = useState(hasStoredRefreshToken);
+
+  function rememberChallenge(id: string | null) {
+    setChallengeId(id);
+    try {
+      if (id) {
+        sessionStorage.setItem(
+          pendingChallengeKey,
+          JSON.stringify({ id, expiresAt: Date.now() + 30 * 60_000 }),
+        );
+      } else {
+        sessionStorage.removeItem(pendingChallengeKey);
+      }
+    } catch {
+      // The current page can still redeem the code if storage is unavailable.
+    }
+  }
 
   useEffect(
     () =>
@@ -101,7 +137,7 @@ export function useAuth(): AuthState {
     setRequestStatus("sending");
     setError("");
     try {
-      await requestMagicLink(email, timeZone);
+      rememberChallenge(await requestMagicLink(email, timeZone));
       setRequestStatus("sent");
     } catch (failure) {
       setRequestStatus("idle");
@@ -115,17 +151,21 @@ export function useAuth(): AuthState {
     }
   };
 
-  const redeemLink = async (token: string): Promise<boolean> => {
+  const redeem = async (
+    exchange: () => Promise<AuthTokens>,
+    invalidMessage: string,
+  ): Promise<boolean> => {
     setRedemptionStatus("redeeming");
     setError("");
     let redeemedTokens: AuthTokens | null = null;
     try {
-      const newTokens = await redeemMagicLink(token);
+      const newTokens = await exchange();
       redeemedTokens = newTokens;
       setAuthTokens(newTokens);
       const currentAccount = await getCurrentAccount(newTokens.accessToken);
       setTokens(getAuthTokens() ?? newTokens);
       setAccount(currentAccount);
+      rememberChallenge(null);
       setRedemptionStatus("idle");
       return true;
     } catch (failure) {
@@ -140,12 +180,25 @@ export function useAuth(): AuthState {
         redeemedTokens
           ? "Your sign-in succeeded, but we couldn’t load your account. Reload this tab to retry."
           : failure instanceof AuthApiError && failure.status === 401
-            ? "This sign-in link is invalid, expired, or already used."
+            ? invalidMessage
             : "We couldn't complete sign-in. Please try again shortly.",
       );
       return false;
     }
   };
+
+  const redeemLink = (token: string) =>
+    redeem(
+      () => redeemMagicLink(token),
+      "This sign-in link is invalid, expired, or already used.",
+    );
+  const redeemCode = (code: string) =>
+    challengeId
+      ? redeem(
+          () => redeemSignInCode(challengeId, code),
+          "This code couldn’t be accepted. Check it or request a new sign-in email.",
+        )
+      : Promise.resolve(false);
 
   const signOut = async () => {
     const refreshToken = getAuthTokens()?.refreshToken ?? tokens?.refreshToken;
@@ -160,6 +213,7 @@ export function useAuth(): AuthState {
     setTokens(null);
     setAccount(null);
     setRequestStatus("idle");
+    rememberChallenge(null);
     setRedemptionStatus("idle");
     setError("");
     if (!refreshToken) return;
@@ -172,6 +226,8 @@ export function useAuth(): AuthState {
 
   const resetRequest = () => {
     setRequestStatus("idle");
+    rememberChallenge(null);
+    setRedemptionStatus("idle");
     setError("");
   };
 
@@ -179,11 +235,13 @@ export function useAuth(): AuthState {
     account,
     tokens,
     requestStatus,
+    canRedeemCode: challengeId !== null,
     redemptionStatus,
     error,
     restoring,
     requestLink,
     redeemLink,
+    redeemCode,
     signOut,
     resetRequest,
   };

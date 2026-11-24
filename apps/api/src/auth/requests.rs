@@ -16,3 +16,9 @@ pub struct RedeemMagicLinkRequest {
     #[schema(min_length = 32, write_only)]
     pub token: String,
 }
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct RedeemSignInCodeRequest {
+    pub challenge_id: uuid::Uuid,
+    pub code: String,
+}

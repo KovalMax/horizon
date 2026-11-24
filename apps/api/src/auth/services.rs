@@ -1,4 +1,5 @@
 use chrono::Utc;
+use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ use super::{
         AuthError, ACCESS_TOKEN_TTL_SECONDS, MAGIC_LINK_TTL_MINUTES, REFRESH_IDLE_DAYS,
         SESSION_ABSOLUTE_DAYS,
     },
-    repositories::AuthRepository,
+    repositories::{AuthRepository, SignInProof},
 };
 
 pub struct AuthApplication {
@@ -34,13 +35,36 @@ impl AuthApplication {
         if !(32..=256).contains(&token.len()) {
             return Err(AuthError::Unauthorized);
         }
+        self.redeem(SignInProof::Link(self.token_service.hash_secret(token)))
+            .await
+    }
+
+    pub async fn redeem_sign_in_code(
+        &self,
+        challenge: Uuid,
+        code: &str,
+    ) -> Result<super::models::AuthenticatedSession, AuthError> {
+        if code.len() != 8 || !code.bytes().all(|digit| digit.is_ascii_digit()) {
+            return Err(AuthError::Unauthorized);
+        }
+        let hash = self
+            .token_service
+            .hash_sign_in_code(challenge, code)
+            .map_err(|_| AuthError::Internal)?;
+        self.redeem(SignInProof::Code { challenge, hash }).await
+    }
+
+    async fn redeem(
+        &self,
+        proof: SignInProof,
+    ) -> Result<super::models::AuthenticatedSession, AuthError> {
         let now = Utc::now();
         let session_id = Uuid::new_v4();
         let refresh_token = self.token_service.create_secret();
         let redeemed = self
             .repository
             .redeem_magic_link(
-                self.token_service.hash_secret(token),
+                proof,
                 session_id,
                 self.token_service.hash_secret(&refresh_token),
                 now,
@@ -131,7 +155,7 @@ impl AuthApplication {
         email: &str,
         ip: &str,
         time_zone: Option<&str>,
-    ) -> Result<(), AuthError> {
+    ) -> Result<Uuid, AuthError> {
         let email = normalized_email(email).ok_or(AuthError::InvalidRequest)?;
         let time_zone = time_zone
             .and_then(|value| value.parse::<chrono_tz::Tz>().ok())
@@ -142,6 +166,11 @@ impl AuthApplication {
             .unwrap_or_else(|| "UTC".to_owned());
         let secret = self.token_service.create_secret();
         let challenge_id = Uuid::new_v4();
+        let code = format!("{:08}", OsRng.gen_range(0..100_000_000u32));
+        let code_hash = self
+            .token_service
+            .hash_sign_in_code(challenge_id, &code)
+            .map_err(|_| AuthError::Internal)?;
         let expires_at = Utc::now() + chrono::Duration::minutes(MAGIC_LINK_TTL_MINUTES);
         self.repository
             .create_magic_link_challenge(
@@ -149,19 +178,24 @@ impl AuthApplication {
                 &email,
                 ip,
                 &time_zone,
-                self.token_service.hash_secret(&secret),
+                (self.token_service.hash_secret(&secret), code_hash),
                 expires_at,
             )
             .await?;
         let link = format!("{}#token={secret}", self.public_url.trim_end_matches('/'));
-        if self.mailer.send_magic_link(&email, &link).await.is_err() {
+        if self
+            .mailer
+            .send_sign_in(&email, &link, &code)
+            .await
+            .is_err()
+        {
             let _ = self
                 .repository
                 .consume_magic_link_challenge(challenge_id)
                 .await;
             return Err(AuthError::EmailDelivery);
         }
-        Ok(())
+        Ok(challenge_id)
     }
 }
 

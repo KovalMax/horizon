@@ -7,11 +7,10 @@ const fixtureEmail = () => `browser-${randomUUID()}@example.test`;
 
 type Inbox = { messages?: { ID: string; Subject: string }[] };
 
-async function getMailLink(
+async function getMailText(
   page: Page,
   email: string,
   subject: string,
-  path: string,
 ): Promise<string> {
   let messageId = "";
   await expect
@@ -36,10 +35,23 @@ async function getMailLink(
   );
   expect(message.status()).toBe(200);
   const { Text }: { Text: string } = await message.json();
-  const links = Text.match(/https:\/\/horizon\.localhost\/[^\s<>]+/g) ?? [];
+  return Text;
+}
+
+function findMailLink(text: string, path: string): string {
+  const links = text.match(/https:\/\/horizon\.localhost\/[^\s<>]+/g) ?? [];
   const link = links.find((url) => new URL(url).pathname === path);
   if (!link) throw new Error(`The message did not contain a link to ${path}`);
   return link;
+}
+
+async function getMailLink(
+  page: Page,
+  email: string,
+  subject: string,
+  path: string,
+) {
+  return findMailLink(await getMailText(page, email, subject), path);
 }
 
 async function openPrivateLink(page: Page, link: string) {
@@ -244,6 +256,37 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   await expect(page.getByLabel("Email address")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Email address")).toBeVisible();
+});
+
+test("signs in with the emailed code without opening the magic link", async ({
+  page,
+}) => {
+  const email = fixtureEmail();
+  await page.goto("/welcome");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  const input = page.getByRole("textbox", { name: "Sign-in code" });
+  await expect(input).toBeVisible();
+  const text = await getMailText(page, email, "Your Horizon sign-in link");
+  const code = text.match(/^\s*(\d{8})\s*$/m)?.[1];
+  if (!code) throw new Error("The sign-in email did not contain a code");
+  await page.reload();
+  await input.fill(code).catch(() => {
+    throw new Error("Could not enter the sign-in code");
+  });
+  await page.getByRole("button", { name: "Sign in with code" }).click();
+  await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible();
+  const fragment = new URL(findMailLink(text, "/auth/complete")).hash;
+  const token = new URLSearchParams(fragment.slice(1)).get("token");
+  const replayStatus = await page.evaluate(async (token) => {
+    const response = await fetch("/api/auth/magic-links/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    return response.status;
+  }, token);
+  expect(replayStatus).toBe(401);
 });
 
 test("the installable app serves only a public fallback offline", async ({

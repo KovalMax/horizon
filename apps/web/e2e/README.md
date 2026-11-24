@@ -39,3 +39,7 @@ To check iPhone installation on a deployed HTTPS build, open Horizon in
 Safari, choose **Share → Add to Home Screen**, and launch it from the Home
 Screen. Installability and the offline message do not imply push delivery
 or offline access to saved plans.
+
+If the sign-in link opens Safari instead of the installed app, request a
+sign-in email from the Home Screen app, then enter the eight-digit code from
+that email in the same app. Use either the code or the link, not both.

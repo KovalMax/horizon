@@ -20,6 +20,11 @@ up: ## Build and start local services in the background
 	$(DEV_COMPOSE) up -d --build
 	@$(MAKE) --no-print-directory urls
 
+.PHONY: up-push
+up-push: ## Start local services with Web Push testing enabled
+	VITE_ENABLE_LOCAL_PUSH=true $(DEV_COMPOSE) up -d --build
+	@$(MAKE) --no-print-directory urls
+
 down: ## Stop local services, preserving PostgreSQL data
 	$(DEV_COMPOSE) down
 
@@ -64,6 +69,13 @@ perf-baseline: ## Measure API, PostgreSQL, and signed-in browser startup on seed
 
 format-web: ## Format frontend source and tests in a temporary container
 	$(DEV_COMPOSE) run --rm --no-deps web npm run format:write
+
+.PHONY: api-lock format-api
+api-lock: ## Refresh the Rust lockfile after changing API dependencies
+	$(DEV_COMPOSE) exec -T api cargo update --workspace
+
+format-api: ## Format API source and tests in the running development container
+	$(DEV_COMPOSE) exec -T api cargo fmt --all
 
 check: ## Run all CI checks with an isolated temporary database
 	sh infra/scripts/check.sh

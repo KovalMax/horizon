@@ -47,7 +47,8 @@ impl TaskReminderWorker {
                  AND (COALESCE((SELECT enabled FROM notification_preferences \
                       WHERE user_id = j.recipient_id AND event_type = 'due_reminder' AND channel = 'in_app'), TRUE) \
                    OR COALESCE((SELECT enabled FROM notification_preferences \
-                      WHERE user_id = j.recipient_id AND event_type = 'due_reminder' AND channel = 'email'), FALSE)) \
+                       WHERE user_id = j.recipient_id AND event_type = 'due_reminder' AND channel = 'email'), FALSE) \
+                    OR EXISTS (SELECT 1 FROM web_push_subscriptions WHERE user_id = j.recipient_id AND task_reminders)) \
                  AND j.offset_minutes = ANY(COALESCE(p.offsets_minutes, t.reminder_offsets_minutes)) \
              )",
         )
@@ -66,7 +67,8 @@ impl TaskReminderWorker {
                AND (COALESCE((SELECT enabled FROM notification_preferences \
                     WHERE user_id = u.id AND event_type = 'due_reminder' AND channel = 'in_app'), TRUE) \
                  OR COALESCE((SELECT enabled FROM notification_preferences \
-                    WHERE user_id = u.id AND event_type = 'due_reminder' AND channel = 'email'), FALSE))",
+                     WHERE user_id = u.id AND event_type = 'due_reminder' AND channel = 'email'), FALSE) \
+                  OR EXISTS (SELECT 1 FROM web_push_subscriptions WHERE user_id = u.id AND task_reminders))",
         )
         .fetch_all(&mut *tx)
         .await?;
@@ -146,7 +148,7 @@ impl TaskReminderWorker {
 
     async fn deliver_claimed(&self, job: &ReminderJob) -> Result<(), String> {
         let row = sqlx::query_as::<_, DeliveryRow>(
-            "SELECT t.title, s.name AS space_name, t.due_date, t.due_time, \
+            "SELECT t.title, s.name AS space_name, s.id AS space_id, t.due_date, t.due_time, \
                u.time_zone, u.default_reminder_time, j.scheduled_at, \
                to_char(t.due_date, 'YYYY-MM-DD') || COALESCE(' ' || to_char(t.due_time, 'HH24:MI'), '') AS due, \
                e.email_normalized AS email, \
@@ -161,7 +163,7 @@ impl TaskReminderWorker {
              JOIN users u ON u.id = j.recipient_id \
              JOIN LATERAL (SELECT email_normalized FROM email_identities \
                WHERE user_id = j.recipient_id ORDER BY created_at LIMIT 1) e ON TRUE \
-             WHERE j.id = $1 AND NOT t.done AND t.due_date IS NOT NULL \
+              WHERE j.id = $1 AND NOT t.done AND t.due_date IS NOT NULL AND s.deleted_at IS NULL \
                AND ((t.due_time IS NOT NULL AND ((t.due_date + t.due_time) AT TIME ZONE u.time_zone) > now()) \
                  OR (t.due_time IS NULL AND t.due_date >= (now() AT TIME ZONE u.time_zone)::date)) \
                AND j.recipient_id = COALESCE(t.assignee_id, t.creator_id) \
@@ -174,7 +176,6 @@ impl TaskReminderWorker {
         .map_err(|error| error.to_string())?;
         let Some(row) = row.filter(|row| {
             !row.muted
-                && (row.in_app || row.email_enabled)
                 && reminder_time(
                     row.due_date,
                     row.due_time,
@@ -185,6 +186,24 @@ impl TaskReminderWorker {
         }) else {
             return Ok(());
         };
+
+        sqlx::query(
+            "INSERT INTO web_push_outbox \
+                 (endpoint, space_id, reminder_key, kind, item_id, reference_time, offset_minutes, expires_at) \
+             SELECT endpoint, $2, concat('task:', $3::uuid), 'tasks', $4, $5::timestamptz, $6, $5::timestamptz + interval '10 minutes' \
+             FROM web_push_subscriptions WHERE user_id = $1 AND task_reminders \
+               AND $5::timestamptz + interval '10 minutes' > now() \
+             ON CONFLICT (endpoint, reminder_key) DO NOTHING",
+        )
+        .bind(job.recipient_id)
+        .bind(row.space_id)
+        .bind(job.id)
+        .bind(job.task_id)
+        .bind(row.scheduled_at)
+        .bind(job.offset_minutes)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
 
         if row.in_app {
             let mut tx = self.pool.begin().await.map_err(|error| error.to_string())?;
@@ -298,6 +317,7 @@ fn resolve_local_time(
 
 #[derive(FromRow)]
 struct DeliveryRow {
+    space_id: Uuid,
     due_date: NaiveDate,
     due_time: Option<NaiveTime>,
     time_zone: String,
@@ -310,6 +330,32 @@ struct DeliveryRow {
     in_app: bool,
     email_enabled: bool,
     muted: bool,
+}
+
+pub(crate) async fn push_reminder_is_current(
+    pool: &PgPool,
+    recipient: Uuid,
+    task: Uuid,
+    reference: chrono::DateTime<Utc>,
+    offset: i32,
+) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query_as::<_, (NaiveDate, Option<NaiveTime>, String, NaiveTime)>(
+        "SELECT t.due_date, t.due_time, u.time_zone, u.default_reminder_time \
+         FROM tasks t JOIN users u ON u.id = COALESCE(t.assignee_id, t.creator_id) \
+         LEFT JOIN task_reminder_preferences p ON p.task_id = t.id AND p.user_id = u.id \
+         WHERE t.id = $1 AND u.id = $2 AND NOT t.done AND t.due_date IS NOT NULL \
+           AND $3 = ANY(COALESCE(p.offsets_minutes, t.reminder_offsets_minutes)) \
+           AND CASE WHEN t.due_time IS NULL THEN t.due_date >= (now() AT TIME ZONE u.time_zone)::date \
+                    ELSE ((t.due_date + t.due_time) AT TIME ZONE u.time_zone) > now() END",
+    )
+    .bind(task)
+    .bind(recipient)
+    .bind(offset)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.is_some_and(|(date, time, zone, default)| {
+        reminder_time(date, time, &zone, default, offset) == Some(reference)
+    }))
 }
 
 #[cfg(test)]

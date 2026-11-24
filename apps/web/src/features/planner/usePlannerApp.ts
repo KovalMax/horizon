@@ -445,6 +445,37 @@ export function usePlannerApp(accessToken: string) {
     [],
   );
 
+  useEffect(() => {
+    if (!isSpacePage || !activeSpaces.some(({ id }) => id === currentSpaceId)) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    const reminder = url.searchParams.get("reminder");
+    if (!reminder) return;
+    const occurrence = url.searchParams.get("occurrence");
+    const item =
+      routeSection === "calendar"
+        ? events.find(
+            (event) =>
+              String(event.id) === reminder &&
+              event.space === currentSpaceId &&
+              (!occurrence ||
+                event.occurrenceDate === occurrence ||
+                (!event.repeat && event.startDate === occurrence)),
+          )
+        : routeSection === "tasks"
+          ? tasks.find(
+              (task) =>
+                String(task.id) === reminder && task.space === currentSpaceId,
+            )
+          : undefined;
+    if (!item) return;
+    url.searchParams.delete("reminder");
+    url.searchParams.delete("occurrence");
+    window.history.replaceState(window.history.state, "", url);
+    setSelectedState(item);
+  }, [activeSpaces, currentSpaceId, events, isSpacePage, routeSection, tasks]);
+
   const toggleTask = (id: TaskItem["id"]) => {
     const task = tasks.find((item) => item.id === id);
     if (!task) return;

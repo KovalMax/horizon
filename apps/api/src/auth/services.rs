@@ -90,6 +90,15 @@ impl AuthApplication {
         })
     }
 
+    pub(crate) fn access_principal(
+        &self,
+        token: &str,
+    ) -> Result<super::models::AccessPrincipal, AuthError> {
+        self.token_service
+            .verify_access_token(token)
+            .ok_or(AuthError::Unauthorized)
+    }
+
     pub async fn current_account(&self, token: &str) -> Result<super::models::Account, AuthError> {
         let claims = self
             .token_service

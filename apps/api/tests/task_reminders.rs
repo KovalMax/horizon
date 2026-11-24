@@ -97,6 +97,19 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
     .await
     .unwrap();
 
+    let endpoint = format!("https://fcm.googleapis.com/fcm/send/{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions \
+         (endpoint, user_id, p256dh, auth_secret, calendar_reminders, task_reminders) \
+         VALUES ($1, $2, $3, $4, FALSE, TRUE)",
+    )
+    .bind(&endpoint)
+    .bind(user_id)
+    .bind(vec![0u8; 65])
+    .bind(vec![0u8; 16])
+    .execute(&pool)
+    .await
+    .unwrap();
     let mailer = RecordingMailer::default();
     let worker = TaskReminderWorker::new(pool.clone(), Arc::new(mailer.clone()));
     let test_now = chrono::Utc::now() + chrono::Duration::minutes(3);
@@ -133,6 +146,13 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
     .await
     .unwrap();
     assert_eq!(sent_count, 1);
+    let queued_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM web_push_outbox WHERE endpoint = $1")
+            .bind(&endpoint)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(queued_count, 1);
 
     let date_only_task = Uuid::new_v4();
     sqlx::query(

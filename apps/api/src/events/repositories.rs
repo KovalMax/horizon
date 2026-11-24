@@ -16,6 +16,25 @@ impl PostgresEventsRepository {
         Self { pool }
     }
 
+    pub(super) async fn overrides_for_event(
+        &self,
+        event: Uuid,
+        date: NaiveDate,
+    ) -> Result<Vec<OccurrenceOverride>, sqlx::Error> {
+        Ok(sqlx::query_as::<_, OverrideRow>(
+            "SELECT event_id, occurrence_date, cancelled, title, starts_at, \
+                    ends_at, time_zone, all_day, location, notes \
+             FROM calendar_event_occurrence_overrides WHERE event_id = $1 AND occurrence_date = $2",
+        )
+        .bind(event)
+        .bind(date)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+    }
+
     pub(super) async fn list_for_member(
         &self,
         user_id: Uuid,

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlannerAppState, PageHelpers } from "./context";
 import { Button } from "../../../shared/ui";
+import { DevicePushSettings } from "../components/DevicePushSettings";
+import { AppUpdateSettings } from "../components/AppUpdateSettings";
 
 const supportedTimeZones: string[] =
   typeof Intl !== "undefined" && "supportedValuesOf" in Intl
@@ -249,6 +251,10 @@ export function SettingsPage({
             <p role="alert">{state.notificationPrefsError}</p>
           )}
       </section>
+      {(import.meta.env.PROD ||
+        import.meta.env.VITE_ENABLE_LOCAL_PUSH === "true") && (
+        <DevicePushSettings accessToken={state.accessToken} />
+      )}
       <section className="list-card">
         <h2>Muted Spaces</h2>
         <p>
@@ -327,6 +333,9 @@ export function SettingsPage({
           {notificationPrefsStatus === "saving" ? "Saving…" : "Save settings"}
         </Button>
       </section>
+      {(import.meta.env.PROD ||
+        import.meta.env.VITE_ENABLE_LOCAL_PUSH === "true") &&
+        "serviceWorker" in navigator && <AppUpdateSettings />}
     </>
   );
 }

@@ -3,6 +3,7 @@ use actix_web::{
     test as actix_test, web, App,
 };
 use async_trait::async_trait;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use horizon_api::{
     auth::{self, AuthSettings, EmailSender, MagicLinkRequest, RedeemMagicLinkRequest},
     events::{self, CreateEventRequest, EventResponse},
@@ -84,6 +85,113 @@ macro_rules! authenticate {
             session.tokens.access_token
         }
     }};
+}
+
+#[actix_web::test]
+async fn push_subscriptions_can_only_be_changed_by_their_account() {
+    let pool = PgPoolOptions::new().connect_lazy_with(horizon_api::database_connection_options());
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    let mailbox = Mailbox::default();
+    let auth = auth::AuthApplication::with_email_sender(
+        pool.clone(),
+        Arc::new(Mailbox(mailbox.0.clone())),
+        AuthSettings {
+            jwt_secret: "test-only-notifications-secret-is-32-bytes".to_owned(),
+            issuer: "horizon-test".to_owned(),
+            audience: "horizon-api-test".to_owned(),
+            key_id: "test-v1".to_owned(),
+            public_url: "https://horizon.localhost/auth/complete".to_owned(),
+        },
+    )
+    .unwrap();
+    let app = actix_test::init_service(
+        App::new()
+            .app_data(web::Data::new(auth))
+            .app_data(web::Data::new(pool.clone()))
+            .service(auth::request_magic_link)
+            .service(auth::redeem_magic_link)
+            .service(notifications::register_push_subscription)
+            .service(notifications::remove_push_subscription)
+            .service(notifications::push_subscription_status),
+    )
+    .await;
+    let owner = authenticate!(&app, mailbox, format!("{}@example.test", Uuid::new_v4())).await;
+    let other = authenticate!(&app, mailbox, format!("{}@example.test", Uuid::new_v4())).await;
+    let endpoint = format!("https://fcm.googleapis.com/fcm/send/{}", Uuid::new_v4());
+    let path = "/notifications/push-subscription";
+    let put = |endpoint: &str, calendar_reminders| {
+        let mut key = [1u8; 65];
+        key[0] = 4;
+        actix_test::TestRequest::put()
+            .uri(path)
+            .set_json(serde_json::json!({
+                "endpoint": endpoint,
+                "p256dh": URL_SAFE_NO_PAD.encode(key),
+                "auth": URL_SAFE_NO_PAD.encode([1u8; 16]),
+                "calendar_reminders": calendar_reminders,
+                "task_reminders": true,
+            }))
+    };
+    assert_eq!(
+        actix_test::call_service(&app, put(&endpoint, true).to_request())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for (url, token, calendar, status) in [
+        (
+            "https://fcm.googleapis.com.example.test/push",
+            &owner,
+            true,
+            StatusCode::BAD_REQUEST,
+        ),
+        (&endpoint, &owner, true, StatusCode::NO_CONTENT),
+        (&endpoint, &other, false, StatusCode::CONFLICT),
+        (&endpoint, &owner, false, StatusCode::NO_CONTENT),
+    ] {
+        let request = put(url, calendar)
+            .insert_header((AUTHORIZATION, format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(
+            actix_test::call_service(&app, request).await.status(),
+            status
+        );
+    }
+    for (token, expected) in [(&other, Some((false, true))), (&owner, None)] {
+        let request = actix_test::TestRequest::post()
+            .uri(&format!("{path}/status"))
+            .insert_header((AUTHORIZATION, format!("Bearer {token}")))
+            .set_json(serde_json::json!({ "endpoint": endpoint }))
+            .to_request();
+        let response = actix_test::call_service(&app, request).await;
+        if token == &owner {
+            assert_eq!(response.status(), StatusCode::OK);
+            let settings: serde_json::Value = actix_test::read_body_json(response).await;
+            assert_eq!(
+                settings,
+                serde_json::json!({ "calendar_reminders": false, "task_reminders": true })
+            );
+        } else {
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        }
+        let request = actix_test::TestRequest::delete()
+            .uri(path)
+            .insert_header((AUTHORIZATION, format!("Bearer {token}")))
+            .set_json(serde_json::json!({ "endpoint": endpoint }))
+            .to_request();
+        assert_eq!(
+            actix_test::call_service(&app, request).await.status(),
+            StatusCode::NO_CONTENT
+        );
+        let saved: Option<(bool, bool)> = sqlx::query_as(
+            "SELECT calendar_reminders, task_reminders FROM web_push_subscriptions WHERE endpoint = $1",
+        )
+        .bind(&endpoint)
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        assert_eq!(saved, expected);
+    }
 }
 
 #[actix_web::test]

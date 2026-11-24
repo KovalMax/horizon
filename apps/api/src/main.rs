@@ -121,6 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(health::readiness)
             .service(auth::request_magic_link)
             .service(auth::redeem_magic_link)
+            .service(auth::redeem_sign_in_code)
             .service(auth::refresh_token)
             .service(auth::revoke_current_session)
             .service(auth::current_account)

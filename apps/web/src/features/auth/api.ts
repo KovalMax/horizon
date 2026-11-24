@@ -247,11 +247,29 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export async function requestMagicLink(
   email: string,
   timeZone: string,
-): Promise<void> {
-  await postJson<{ message: string }>("/auth/magic-links", {
-    email,
-    time_zone: timeZone,
-  });
+): Promise<string | null> {
+  const response = await postJson<{ challenge_id?: string }>(
+    "/auth/magic-links",
+    {
+      email,
+      time_zone: timeZone,
+    },
+  );
+  return response.challenge_id ?? null;
+}
+
+export async function redeemSignInCode(
+  challengeId: string,
+  code: string,
+): Promise<AuthTokens> {
+  const { tokens } = await postJson<AuthenticationResponse>(
+    "/auth/sign-in-codes/redeem",
+    { challenge_id: challengeId, code },
+  );
+  return {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+  };
 }
 
 export async function redeemMagicLink(token: string): Promise<AuthTokens> {

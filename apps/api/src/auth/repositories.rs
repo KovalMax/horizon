@@ -97,6 +97,20 @@ pub(super) async fn is_rate_limited(
     Ok((retry_after_seconds > 0).then_some(retry_after_seconds.max(1)))
 }
 
+pub enum SignInProof {
+    Link(Vec<u8>),
+    Code { challenge: Uuid, hash: Vec<u8> },
+}
+
+#[derive(sqlx::FromRow)]
+struct SignInChallenge {
+    id: Uuid,
+    email_normalized: String,
+    time_zone: String,
+    code_hash: Option<Vec<u8>>,
+    code_attempts: i32,
+}
+
 #[async_trait]
 pub trait AuthRepository: Send + Sync {
     async fn create_magic_link_challenge(
@@ -105,7 +119,7 @@ pub trait AuthRepository: Send + Sync {
         email: &str,
         ip: &str,
         time_zone: &str,
-        secret_hash: Vec<u8>,
+        hashes: (Vec<u8>, Vec<u8>),
         expires_at: DateTime<Utc>,
     ) -> Result<(), super::models::AuthError>;
 
@@ -123,7 +137,7 @@ pub trait AuthRepository: Send + Sync {
 
     async fn redeem_magic_link(
         &self,
-        secret_hash: Vec<u8>,
+        proof: SignInProof,
         session_id: Uuid,
         refresh_hash: Vec<u8>,
         now: DateTime<Utc>,
@@ -158,7 +172,7 @@ impl AuthRepository for PostgresAuthRepository {
         email: &str,
         ip: &str,
         time_zone: &str,
-        secret_hash: Vec<u8>,
+        hashes: (Vec<u8>, Vec<u8>),
         expires_at: DateTime<Utc>,
     ) -> Result<(), super::models::AuthError> {
         let mut transaction = self
@@ -179,15 +193,16 @@ impl AuthRepository for PostgresAuthRepository {
             Err(_) => return Err(super::models::AuthError::Unavailable),
         }
         sqlx::query(
-            "INSERT INTO auth_challenges (id, email_normalized, secret_hash, request_ip, time_zone, expires_at) \
-             VALUES ($1, $2, $3, $4, $5, $6)",
+            "INSERT INTO auth_challenges (id, email_normalized, secret_hash, request_ip, time_zone, expires_at, code_hash) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(id)
         .bind(email)
-        .bind(secret_hash)
+        .bind(hashes.0)
         .bind(ip)
         .bind(time_zone)
         .bind(expires_at)
+        .bind(hashes.1)
         .execute(&mut *transaction)
         .await
         .map_err(|_| super::models::AuthError::Unavailable)?;
@@ -243,7 +258,7 @@ impl AuthRepository for PostgresAuthRepository {
 
     async fn redeem_magic_link(
         &self,
-        secret_hash: Vec<u8>,
+        proof: SignInProof,
         session_id: Uuid,
         refresh_hash: Vec<u8>,
         now: DateTime<Utc>,
@@ -255,21 +270,49 @@ impl AuthRepository for PostgresAuthRepository {
             .begin()
             .await
             .map_err(|_| AuthError::Unavailable)?;
-        let challenge =
-            sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>)>(
-                "SELECT id, email_normalized, time_zone, expires_at, consumed_at \
-             FROM auth_challenges WHERE secret_hash = $1 FOR UPDATE",
-            )
-            .bind(secret_hash)
-            .fetch_optional(&mut *transaction)
-            .await
-            .map_err(|_| AuthError::Unavailable)?;
-        let Some((challenge_id, email, time_zone, expires_at, consumed_at)) = challenge else {
+        let (challenge_id, link_hash) = match &proof {
+            SignInProof::Link(hash) => (None, Some(hash.as_slice())),
+            SignInProof::Code { challenge, .. } => (Some(*challenge), None),
+        };
+        let challenge = sqlx::query_as::<_, SignInChallenge>(
+            "SELECT id, email_normalized, time_zone, code_hash, code_attempts \
+             FROM auth_challenges WHERE (id = $1 OR secret_hash = $2) \
+               AND consumed_at IS NULL AND expires_at > $3 FOR UPDATE",
+        )
+        .bind(challenge_id)
+        .bind(link_hash)
+        .bind(now)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| AuthError::Unavailable)?;
+        let Some(challenge) = challenge else {
             return Err(AuthError::Unauthorized);
         };
-        if consumed_at.is_some() || expires_at <= now {
-            return Err(AuthError::Unauthorized);
+        if let SignInProof::Code { hash, .. } = proof {
+            let Some(stored) = challenge.code_hash else {
+                return Err(AuthError::Unauthorized);
+            };
+            if challenge.code_attempts >= 5 {
+                return Err(AuthError::Unauthorized);
+            }
+            if stored.len() != hash.len() || !openssl::memcmp::eq(&stored, &hash) {
+                sqlx::query(
+                    "UPDATE auth_challenges SET code_attempts = code_attempts + 1 WHERE id = $1",
+                )
+                .bind(challenge.id)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|_| AuthError::Unavailable)?;
+                transaction
+                    .commit()
+                    .await
+                    .map_err(|_| AuthError::Unavailable)?;
+                return Err(AuthError::Unauthorized);
+            }
         }
+        let challenge_id = challenge.id;
+        let email = challenge.email_normalized;
+        let time_zone = challenge.time_zone;
 
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
             .bind(format!("account:{email}"))

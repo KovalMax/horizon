@@ -209,7 +209,50 @@ export function AuthScreen({
           <p role="status">
             If that address can receive mail, a sign-in link is on its way.
           </p>
-          <Button variant="outline" onClick={auth.resetRequest}>
+          {auth.canRedeemCode && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const code = String(
+                  new FormData(event.currentTarget).get("code"),
+                );
+                void auth.redeemCode(code).then((signedIn) => {
+                  if (signedIn && !joinToken) navigate("/");
+                });
+              }}
+            >
+              <p>
+                Using the Home Screen app? Enter the code from the email here
+                instead of opening the link.
+              </p>
+              <label className="form-field">
+                Sign-in code
+                <input
+                  name="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
+                  required
+                />
+              </label>
+              {auth.error && <p role="alert">{auth.error}</p>}
+              <Button
+                type="submit"
+                disabled={auth.redemptionStatus === "redeeming"}
+              >
+                {auth.redemptionStatus === "redeeming"
+                  ? "Signing in…"
+                  : "Sign in with code"}
+              </Button>
+            </form>
+          )}
+          <Button
+            variant="outline"
+            onClick={auth.resetRequest}
+            disabled={auth.redemptionStatus === "redeeming"}
+          >
             Use a different email
           </Button>
         </>

@@ -10,6 +10,10 @@ use std::env;
 pub trait EmailSender: Send + Sync {
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String>;
 
+    async fn send_sign_in(&self, recipient: &str, link: &str, _code: &str) -> Result<(), String> {
+        self.send_magic_link(recipient, link).await
+    }
+
     async fn send_task_reminder(
         &self,
         recipient: &str,
@@ -94,16 +98,25 @@ impl SmtpEmailSender {
 #[async_trait]
 impl EmailSender for SmtpEmailSender {
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String> {
+        self.send_sign_in(recipient, link, "").await
+    }
+
+    async fn send_sign_in(&self, recipient: &str, link: &str, code: &str) -> Result<(), String> {
         let recipient = recipient
             .parse::<Mailbox>()
             .map_err(|_| "recipient email is invalid".to_owned())?;
         let recipient_address = recipient.email.to_string();
+        let code_instructions = if code.is_empty() {
+            String::new()
+        } else {
+            format!("\n\nUsing the Horizon Home Screen app? Return to the app and enter this sign-in code instead:\n\n{code}\n\nUse either the link or the code, not both.")
+        };
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
             .subject("Your Horizon sign-in link")
             .body(format!(
-                "Use this link to sign in to Horizon. It expires in 30 minutes.\n\n{link}\n\nIf you did not request this link, you can ignore this email."
+                "Use this link to sign in to Horizon. It expires in 30 minutes.\n\n{link}{code_instructions}\n\nIf you did not request this sign-in email, you can ignore it."
             ))
             .map_err(|_| "could not create sign-in email".to_owned())?;
 

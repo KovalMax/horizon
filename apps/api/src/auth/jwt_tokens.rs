@@ -3,6 +3,7 @@ use chrono::Utc;
 use jsonwebtoken::{
     decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
+use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -13,6 +14,7 @@ use super::{models::AccessPrincipal, token_service::TokenService};
 pub struct JwtTokenService {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
+    code_key: Vec<u8>,
     issuer: String,
     audience: String,
     key_id: String,
@@ -34,6 +36,7 @@ impl JwtTokenService {
         Self {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()),
+            code_key: secret.as_bytes().to_vec(),
             issuer,
             audience,
             key_id,
@@ -42,6 +45,18 @@ impl JwtTokenService {
 }
 
 impl TokenService for JwtTokenService {
+    fn hash_sign_in_code(&self, challenge: Uuid, code: &str) -> Result<Vec<u8>, String> {
+        let digest = || -> Result<Vec<u8>, openssl::error::ErrorStack> {
+            let key = PKey::hmac(&self.code_key)?;
+            let mut signer = Signer::new(MessageDigest::sha256(), &key)?;
+            signer.update(b"horizon:sign-in-code:v1:")?;
+            signer.update(challenge.as_bytes())?;
+            signer.update(code.as_bytes())?;
+            signer.sign_to_vec()
+        };
+        digest().map_err(|_| "could not hash sign-in code".to_owned())
+    }
+
     fn issue_access_token(&self, user_id: Uuid, session_id: Uuid) -> Result<String, String> {
         let now = Utc::now().timestamp();
         let claims = AccessClaims {

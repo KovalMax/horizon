@@ -261,6 +261,7 @@ async fn assigned_task_notifications_preferences_mute_and_read_state_are_persist
             notes: None,
             recurrence: None,
             recurrence_ends_on: None,
+            my_reminder_offsets_minutes: None,
         })
         .to_request();
     let response = actix_test::call_service(&app, event_request).await;
@@ -279,6 +280,7 @@ async fn assigned_task_notifications_preferences_mute_and_read_state_are_persist
             notes: None,
             recurrence: None,
             recurrence_ends_on: None,
+            my_reminder_offsets_minutes: None,
         })
         .to_request();
     assert_eq!(

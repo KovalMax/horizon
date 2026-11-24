@@ -8,6 +8,7 @@ export type Space = {
 };
 
 export type EventItem = {
+  myReminderOffsetsMinutes?: number[];
   id: string;
   title: string;
   space: string;

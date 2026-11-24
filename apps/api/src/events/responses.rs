@@ -25,6 +25,8 @@ pub struct EventResponse {
     /// Stable composite occurrence identity (`series UUID:scheduled local date`).
     pub occurrence_id: Option<String>,
     pub is_override: bool,
+    /// Reminder offsets visible only to the authenticated Member who set them.
+    pub my_reminder_offsets_minutes: Vec<i32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -52,6 +54,7 @@ impl From<CalendarEvent> for EventResponse {
             occurrence_date: None,
             occurrence_id: None,
             is_override: false,
+            my_reminder_offsets_minutes: event.my_reminder_offsets_minutes,
         }
     }
 }

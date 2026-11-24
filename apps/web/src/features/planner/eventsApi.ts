@@ -18,6 +18,7 @@ type ApiCalendarEvent = {
   occurrence_date: string | null;
   occurrence_id: string | null;
   is_override: boolean;
+  my_reminder_offsets_minutes?: number[];
 };
 
 export type CalendarEventInput = {
@@ -30,6 +31,7 @@ export type CalendarEventInput = {
   notes: string | null;
   recurrence: "daily" | "weekly" | "monthly" | null;
   recurrenceEndsOn: string | null;
+  myReminderOffsetsMinutes?: number[];
 };
 
 export class CalendarEventsApiError extends Error {
@@ -100,6 +102,7 @@ function toEvent(event: ApiCalendarEvent): EventItem {
     startsAt: event.starts_at,
     endsAt: event.ends_at ?? undefined,
     timeZone: event.time_zone,
+    myReminderOffsetsMinutes: event.my_reminder_offsets_minutes,
   };
 }
 
@@ -119,6 +122,7 @@ function serializeInput(input: CalendarEventInput) {
     notes: input.notes,
     recurrence: input.recurrence,
     recurrence_ends_on: input.recurrenceEndsOn,
+    my_reminder_offsets_minutes: input.myReminderOffsetsMinutes,
   };
 }
 

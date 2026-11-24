@@ -116,11 +116,19 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
     )
     .toBe(200);
   await signIn(page, fixtureEmail());
+  const upcoming = page.getByRole("region", { name: "Today & coming up" });
+  const emptyTimeline = upcoming.getByRole("heading", {
+    name: "Nothing scheduled in the next two weeks",
+  });
+  const undated = page.getByRole("region", { name: "No due date" });
+  const spaces = page.getByRole("region", { name: "Your Spaces" });
+  await expect(emptyTimeline).toBeVisible();
+  await expect(undated).toHaveCount(0);
   await createSpace(page, "Weekend planning");
   await page.getByRole("link", { name: "All Spaces", exact: true }).click();
-  await expect(
-    page.getByRole("link", { name: /Weekend planning.*Open Space/ }),
-  ).toBeVisible();
+  const weekend = spaces.getByRole("link", { name: "Weekend planning" });
+  await expect(weekend).toBeVisible();
+  await expect(weekend).toHaveText("Weekend planning");
   await page.waitForLoadState("networkidle");
   const requests: string[] = [];
   const collect = (request: { url(): string }) => {
@@ -133,7 +141,7 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   try {
     await page.reload({ waitUntil: "networkidle" });
     await expect(
-      page.getByRole("heading", { name: "Your Spaces", exact: true, level: 1 }),
+      page.getByRole("heading", { name: "Your plans", exact: true, level: 1 }),
     ).toBeVisible();
   } finally {
     page.off("request", collect);
@@ -150,9 +158,7 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
     requests.length,
     `All Spaces requests: ${requests.join(", ")}`,
   ).toBeLessThanOrEqual(9);
-  await page
-    .getByRole("link", { name: /Weekend planning.*Open Space/ })
-    .click();
+  await weekend.click();
   await page.getByRole("link", { name: "To-dos", exact: true }).click();
   await createList(page, "Weekend jobs");
 
@@ -203,19 +209,101 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   await page.keyboard.press("Escape");
 
   await page.goto("/");
+  await expect(emptyTimeline).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "No due date" }),
+    undated.getByRole("button", { name: "Water the plants", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Nothing coming up" }),
-  ).toBeVisible();
-  await expect(task).toBeVisible();
+  await expect(page.getByRole("main").getByRole("region")).toHaveText([
+    /Today & coming up/,
+    /No due date/,
+    /Your Spaces/,
+  ]);
+  await upcoming.getByRole("button", { name: "Events", exact: true }).click();
+  await expect(undated).toHaveCount(0);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByLabel("Email address")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Email address")).toBeVisible();
+});
+
+test("the installable app serves only a public fallback offline", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
+    "href",
+    "/manifest.webmanifest",
+  );
+  const { status, contentType, manifest } = await page.evaluate(async () => {
+    const response = await fetch("/manifest.webmanifest");
+    return {
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      manifest: await response.json(),
+    };
+  });
+  expect(status).toBe(200);
+  expect(contentType).toContain("application/manifest+json");
+  expect(manifest).toMatchObject({
+    name: "Horizon",
+    start_url: "/",
+    display: "standalone",
+    icons: expect.arrayContaining([
+      expect.objectContaining({ sizes: "192x192" }),
+      expect.objectContaining({ sizes: "512x512" }),
+    ]),
+  });
+  const iconPaths = [
+    ...manifest.icons.map((icon: { src: string }) => icon.src),
+    "/horizon-touch-180.png",
+  ];
+  expect(
+    await page.evaluate(
+      (paths) =>
+        Promise.all(
+          paths.map(async (path) => {
+            const image = new Image();
+            image.src = path;
+            await image.decode();
+            return `${image.naturalWidth}x${image.naturalHeight}`;
+          }),
+        ),
+      iconPaths,
+    ),
+  ).toEqual(["192x192", "512x512", "180x180"]);
+  await page.waitForFunction(
+    () => Boolean(navigator.serviceWorker.controller),
+    undefined,
+    { timeout: 10_000 },
+  );
+  const cachedPaths = await page.evaluate(async () => {
+    const requests = await Promise.all(
+      (await caches.keys()).map(async (key) => (await caches.open(key)).keys()),
+    );
+    return requests.flat().map((request) => new URL(request.url).pathname);
+  });
+  expect(cachedPaths).toEqual(["/offline.html"]);
+
+  await page.context().setOffline(true);
+  try {
+    await page.goto("/settings");
+    await expect(
+      page.getByRole("heading", { name: "You’re offline" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" })).toHaveCount(
+      0,
+    );
+    // A browser may reuse its HTTP cache, but the worker must not answer this URL.
+    const callback = await page.goto("/auth/complete").catch(() => null);
+    if (callback) expect(callback.fromServiceWorker()).toBe(false);
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 
 test("the Space filter border stays inside its scroll area on hover", async ({
@@ -249,6 +337,16 @@ test("confirms whether to cancel one occurrence or delete a Calendar series", as
   await page.getByRole("button", { name: "New event", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "New event" });
   await editor.getByRole("textbox", { name: "Title" }).fill("Weekly planning");
+  const reminders = editor.getByRole("group", { name: "Remind me" });
+  const firstReminder = reminders.getByRole("combobox", {
+    name: "Reminder 1",
+    exact: true,
+  });
+  await expect(firstReminder).toHaveValue("");
+  await firstReminder.selectOption("60");
+  await expect(
+    reminders.getByRole("combobox", { name: "Reminder 2", exact: true }),
+  ).toHaveValue("");
   await editor
     .getByRole("combobox", { name: "Repeats" })
     .selectOption({ label: "Every week" });
@@ -305,6 +403,18 @@ test("confirms whether to cancel one occurrence or delete a Calendar series", as
     name: "One-time meeting",
     exact: true,
   });
+  await expect(meeting).toBeVisible();
+  await page.getByRole("link", { name: "All Spaces", exact: true }).click();
+  const upcoming = page.getByRole("region", { name: "Today & coming up" });
+  await expect(
+    upcoming.getByRole("button", { name: "One-time meeting", exact: true }),
+  ).toBeVisible();
+  await expect(
+    upcoming.getByRole("heading", {
+      name: "Nothing scheduled in the next two weeks",
+    }),
+  ).toHaveCount(0);
+  await page.goBack();
   await meeting.click();
   await page
     .getByRole("dialog", { name: "One-time meeting" })
@@ -401,7 +511,7 @@ test("Saved places filters expose selection and count only the current Space", a
 });
 
 test("keeps the filled join-link expiration inside its form on mobile WebKit", async () => {
-  const browser = await webkit.launch();
+  const browser = await webkit.launch({ args: [] });
   try {
     const page = await browser.newPage({
       ...devices["iPhone 13"],
@@ -441,7 +551,7 @@ test("keeps the filled join-link expiration inside its form on mobile WebKit", a
 });
 
 test("keeps Settings time controls usable on mobile WebKit", async () => {
-  const browser = await webkit.launch();
+  const browser = await webkit.launch({ args: [] });
   try {
     const page = await browser.newPage({
       ...devices["iPhone 13"],
@@ -459,6 +569,9 @@ test("keeps Settings time controls usable on mobile WebKit", async () => {
     const timeZone = page.getByRole("combobox", { name: "Time zone" });
     const options = page.getByRole("listbox", { name: "Time zones" });
     const reminder = page.getByLabel("Default reminder time");
+    const reminderControl = page.locator(".settings-reminder-control", {
+      has: reminder,
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await reminder.fill("21:45");
 
@@ -468,10 +581,15 @@ test("keeps Settings time controls usable on mobile WebKit", async () => {
       await expect(options).toBeVisible();
       const search = await timeZone.boundingBox();
       const list = await options.boundingBox();
-      const time = await reminder.boundingBox();
+      const time = await reminderControl.boundingBox();
       expect(Math.abs(time!.x - search!.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(time!.width - search!.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(time!.height - search!.height)).toBeLessThanOrEqual(1);
+      const editor = await reminder.boundingBox();
+      expect(editor!.x).toBeGreaterThanOrEqual(time!.x);
+      expect(editor!.x + editor!.width).toBeLessThanOrEqual(
+        time!.x + time!.width,
+      );
       expect(list!.y + list!.height).toBeLessThanOrEqual(time!.y);
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),

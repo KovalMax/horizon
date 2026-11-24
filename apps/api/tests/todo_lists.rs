@@ -180,7 +180,7 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
         due_date: Some("2026-12-12".to_owned()),
         due_time: Some("10:30".to_owned()),
         assignee_id: Some(assigned_user_id),
-        reminder_offsets_minutes: vec![1440, 60],
+        reminder_offsets_minutes: vec![1440, 60, 15, 2880, 10080],
     };
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/tasks", space.id))
@@ -200,6 +200,25 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
         Some(assigned_email.as_str())
     );
     assert!(!task.done);
+    assert_eq!(
+        task.reminder_offsets_minutes,
+        vec![15, 60, 1440, 2880, 10080]
+    );
+
+    for offsets in [vec![30, 30], vec![5], vec![15, 30, 60, 120, 1440, 2880]] {
+        let request = actix_test::TestRequest::post()
+            .uri(&format!("/spaces/{}/tasks", space.id))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .set_json(CreateTaskRequest {
+                reminder_offsets_minutes: offsets,
+                ..create_task()
+            })
+            .to_request();
+        assert_eq!(
+            actix_test::call_service(&app, request).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
 
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/tasks", space.id))
@@ -229,19 +248,18 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/tasks", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
-        .set_json({
-            let mut second = create_task();
-            second.title = "Pack snacks".to_owned();
-            second.due_date = Some("2026-12-13".to_owned());
-            second.assignee_id = None;
-            second
-        })
+        .set_json(serde_json::json!({
+            "title": "Pack snacks",
+            "list_name": "Weekend prep",
+            "due_date": "2026-12-13"
+        }))
         .to_request();
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let second_task: todos::TaskResponse = actix_test::read_body_json(response).await;
     assert_eq!(second_task.title, "Pack snacks");
     assert_eq!(second_task.assignee_id, None);
+    assert!(second_task.reminder_offsets_minutes.is_empty());
 
     let request = actix_test::TestRequest::put()
         .uri(&format!("/tasks/{}/reminders", task.id))
@@ -260,15 +278,15 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
         .uri(&format!("/tasks/{}/reminders", second_task.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
         .set_json(todos::UpdateTaskReminderPreferenceRequest {
-            offsets_minutes: vec![],
+            offsets_minutes: vec![30],
         })
         .to_request();
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::OK);
     let private_preference: todos::TaskReminderPreferenceResponse =
         actix_test::read_body_json(response).await;
-    assert!(private_preference.offsets_minutes.is_empty());
-    let (mut shared_offsets, private_offsets): (Vec<i32>, Vec<i32>) = sqlx::query_as(
+    assert_eq!(private_preference.offsets_minutes, vec![30]);
+    let (shared_offsets, private_offsets): (Vec<i32>, Vec<i32>) = sqlx::query_as(
         "SELECT t.reminder_offsets_minutes, p.offsets_minutes FROM tasks t \
          JOIN task_reminder_preferences p ON p.task_id = t.id AND p.user_id = t.creator_id \
          WHERE t.id = $1",
@@ -277,9 +295,8 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
     .fetch_one(&pool)
     .await
     .expect("test should read private and shared offsets independently");
-    shared_offsets.sort_unstable();
-    assert_eq!(shared_offsets, vec![60, 1440]);
-    assert!(private_offsets.is_empty());
+    assert!(shared_offsets.is_empty());
+    assert_eq!(private_offsets, vec![30]);
 
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/lists", space.id))

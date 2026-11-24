@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Horizon",
+  "short_name": "Horizon",
+  "description": "Shared calendars, To-dos, and Saved places for everyday plans.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#f7f8f5",
+  "icons": [
+    { "src": "/horizon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/horizon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

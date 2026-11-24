@@ -120,6 +120,7 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
         notes: Some("Bring tickets".to_owned()),
         recurrence: None,
         recurrence_ends_on: None,
+        my_reminder_offsets_minutes: None,
     };
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/events", space.id))
@@ -132,6 +133,7 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     assert_eq!(created.title, "School concert");
     assert_eq!(created.space_id, space.id);
     assert_eq!(created.time_zone, "Europe/Berlin");
+    assert!(created.my_reminder_offsets_minutes.is_empty());
 
     let mut legacy_time_zone_request = create_request();
     legacy_time_zone_request.title = "Kyiv timezone alias".to_owned();
@@ -186,6 +188,7 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     daily_request.time_zone = "Europe/Berlin".to_owned();
     daily_request.recurrence = Some("daily".to_owned());
     daily_request.recurrence_ends_on = Some("2026-03-31".to_owned());
+    daily_request.my_reminder_offsets_minutes = Some(vec![60, 15]);
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/events", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
@@ -194,6 +197,36 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let daily_series: EventResponse = actix_test::read_body_json(response).await;
+    assert_eq!(daily_series.my_reminder_offsets_minutes, vec![15, 60]);
+    let viewer = Uuid::new_v4();
+    sqlx::query("INSERT INTO users (id) VALUES ($1)")
+        .bind(viewer)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, 'viewer')",
+    )
+    .bind(space.id)
+    .bind(viewer)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let viewer_events = events::EventsApplication::new(pool.clone())
+        .list_for_member(
+            viewer,
+            horizon_api::pagination::PageWindow::new(None, None).unwrap(),
+        )
+        .await
+        .unwrap();
+    let shared_series = viewer_events
+        .items
+        .iter()
+        .find(|event| event.id == daily_series.id);
+    assert!(shared_series
+        .unwrap()
+        .my_reminder_offsets_minutes
+        .is_empty());
 
     let request = actix_test::TestRequest::get()
         .uri("/events?start_date=2026-03-27&end_date=2026-03-31&limit=20")
@@ -275,6 +308,7 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     let mut series_update = daily_request.clone();
     series_update.title = "Renamed daily series".to_owned();
     series_update.recurrence_ends_on = Some("2026-03-29".to_owned());
+    series_update.my_reminder_offsets_minutes = None;
     let request = actix_test::TestRequest::put()
         .uri(&format!("/events/{}", daily_series.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
@@ -292,6 +326,10 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     let after_series_edit: EventPageResponse = actix_test::read_body_json(response).await;
     assert_eq!(after_series_edit.items.len(), 3);
     assert_eq!(after_series_edit.items[0].title, "Renamed daily series");
+    assert_eq!(
+        after_series_edit.items[0].my_reminder_offsets_minutes,
+        vec![15, 60]
+    );
     assert_eq!(after_series_edit.items[1].title, "Moved one date");
     assert_eq!(
         after_series_edit.items[2].occurrence_date.as_deref(),
@@ -354,6 +392,45 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
             assert!(page.items[0].is_override);
         }
     }
+
+    let reminder_worker = events::CalendarReminderWorker::new(pool.clone());
+    for instant in [
+        "2026-03-28T07:00:00Z", // No alert at the original start minus an hour.
+        "2026-03-28T08:30:00Z", // Moved occurrence, one hour before.
+        "2026-03-28T08:31:00Z", // Same delivery window, no duplicate.
+        "2026-03-28T09:15:00Z", // Moved occurrence, 15 minutes before.
+        "2026-03-28T10:30:00Z", // Second moved occurrence, one hour before.
+        "2026-03-29T06:00:00Z", // Cancelled occurrence.
+    ] {
+        reminder_worker
+            .run_once_at(instant.parse().unwrap())
+            .await
+            .expect("Calendar reminder worker should run");
+    }
+    let deliveries: Vec<(String, i32)> = sqlx::query_as(
+        "SELECT occurrence_date::text, offset_minutes FROM calendar_reminder_deliveries \
+         WHERE event_id = $1 ORDER BY occurrence_date, offset_minutes",
+    )
+    .bind(daily_series.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        deliveries,
+        vec![
+            ("2026-03-27".to_owned(), 60),
+            ("2026-03-28".to_owned(), 15),
+            ("2026-03-28".to_owned(), 60),
+        ]
+    );
+    let notice_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications WHERE space_id = $1 AND title = 'Calendar reminder'",
+    )
+    .bind(space.id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(notice_count, 3);
 
     let request = actix_test::TestRequest::delete()
         .uri(&format!("/events/{}", daily_series.id))

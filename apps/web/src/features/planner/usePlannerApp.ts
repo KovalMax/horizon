@@ -566,6 +566,10 @@ export function usePlannerApp(accessToken: string) {
           eventEditScope !== "occurrence" && recurrenceValue
             ? recurrenceEndsOnValue || null
             : null,
+        myReminderOffsetsMinutes:
+          allDay || eventEditScope === "occurrence"
+            ? undefined
+            : form.getAll("eventReminderOffset").filter(Boolean).map(Number),
       };
       if (input.endsAt && new Date(input.endsAt) <= new Date(input.startsAt)) {
         setEventError("The end time must be after the start time.");
@@ -692,7 +696,10 @@ export function usePlannerApp(accessToken: string) {
           assigneeId: form.has("assignee")
             ? String(form.get("assignee") || "") || null
             : (editingTask?.assigneeId ?? null),
-          reminderOffsetsMinutes: form.getAll("reminderOffset").map(Number),
+          reminderOffsetsMinutes: form
+            .getAll("reminderOffset")
+            .filter(Boolean)
+            .map(Number),
         };
         const saved = editingTask
           ? await updateTodoTask(accessToken, String(editingTask.id), taskInput)

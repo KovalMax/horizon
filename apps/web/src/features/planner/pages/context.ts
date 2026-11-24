@@ -8,7 +8,6 @@ export type PageHelpers = {
     description?: string,
     action?: ReactNode,
   ) => ReactNode;
-  spaceCards: ReactNode;
   taskRow: (task: TaskItem, withSpace?: boolean) => ReactNode;
   eventRow: (event: EventItem, withSpace?: boolean) => ReactNode;
 };

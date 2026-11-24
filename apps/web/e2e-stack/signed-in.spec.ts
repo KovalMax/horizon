@@ -295,14 +295,22 @@ test("the installable app serves only a public fallback offline", async ({
     await expect(page.getByRole("heading", { name: "Settings" })).toHaveCount(
       0,
     );
-    // A browser may reuse its HTTP cache, but the worker must not answer this URL.
-    const callback = await page.goto("/auth/complete").catch(() => null);
-    if (callback) expect(callback.fromServiceWorker()).toBe(false);
+    // Check callback bypass without booting the auth app offline in this tab.
+    const callbackPage = await page.context().newPage();
+    try {
+      await expect(
+        callbackPage.goto("/auth/complete?offline-check=1", { timeout: 5_000 }),
+      ).rejects.toThrow("net::ERR_INTERNET_DISCONNECTED");
+    } finally {
+      await callbackPage.close();
+    }
   } finally {
     await page.context().setOffline(false);
   }
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible();
+  await page.getByRole("link", { name: "Try again" }).click();
+  await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 

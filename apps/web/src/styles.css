@@ -2367,7 +2367,7 @@ select,
     flex-wrap: nowrap;
     overflow-x: auto;
     margin: 0 -20px;
-    padding: 0 20px 3px;
+    padding: 5px 20px 4px;
   }
   .filter-pill {
     min-height: 38px;

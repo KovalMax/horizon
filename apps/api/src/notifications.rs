@@ -1,4 +1,6 @@
 pub mod controllers;
+mod push;
+pub(crate) mod push_delivery;
 mod repositories;
 mod requests;
 mod responses;
@@ -6,8 +8,11 @@ mod services;
 
 pub use controllers::{
     list_notifications, mark_all_notifications_read, mark_notification_read,
-    notification_preferences, update_notification_preferences,
+    notification_preferences, push_config, push_subscription_status, register_push_subscription,
+    remove_push_subscription, update_notification_preferences,
 };
+pub use push::{PushConfig, PushPreferences, PutPushSubscription, RemovePushSubscription};
+pub use push_delivery::PushWorker;
 pub use requests::{
     NotificationPreferenceInput, UpdateNotificationPreferencesRequest,
     UpdateNotificationReadRequest,

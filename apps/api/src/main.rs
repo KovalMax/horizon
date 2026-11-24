@@ -33,6 +33,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reminder_worker =
         task_reminders::TaskReminderWorker::new(pool.clone(), auth_state.email_sender());
     let calendar_reminders = events::CalendarReminderWorker::new(pool.clone());
+    if let Some(push_worker) = notifications::PushWorker::from_env(pool.clone()) {
+        actix_web::rt::spawn(async move {
+            let mut interval = actix_web::rt::time::interval(Duration::from_secs(15));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                if let Err(error) = push_worker.run_once().await {
+                    log::error!("Failed to process Web Push queue: {error}");
+                }
+            }
+        });
+    } else if env::var("WEB_PUSH_PUBLIC_KEY").is_ok_and(|key| !key.is_empty()) {
+        log::warn!("Web Push is disabled: check the VAPID key pair and contact email");
+    }
     let purge_spaces = spaces_state.clone();
     let purge_notifications = notifications_state.clone();
     let reminders = reminder_worker.clone();
@@ -115,6 +129,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(notifications::mark_all_notifications_read)
             .service(notifications::notification_preferences)
             .service(notifications::update_notification_preferences)
+            .service(notifications::register_push_subscription)
+            .service(notifications::remove_push_subscription)
+            .service(notifications::push_config)
+            .service(notifications::push_subscription_status)
             .service(spaces::list_spaces)
             .service(spaces::create_shared_space)
             .service(spaces::transfer_space_ownership)

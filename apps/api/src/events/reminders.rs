@@ -1,11 +1,12 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::reminder_offsets::PRESETS;
 
 use super::{
     recurrence,
-    repositories::{EventRow, OverrideRow},
+    repositories::{EventRow, OverrideRow, PostgresEventsRepository},
 };
 
 #[derive(Clone)]
@@ -92,6 +93,27 @@ impl CalendarReminderWorker {
                 continue;
             }
             sqlx::query(
+                "INSERT INTO web_push_outbox \
+                     (endpoint, space_id, reminder_key, kind, item_id, occurrence_date, reference_time, offset_minutes, expires_at) \
+                 SELECT d.endpoint, $2, concat('calendar:', $1::uuid, ':', $3::date, ':', preset.value, ':', extract(epoch FROM $5::timestamptz)), \
+                        'calendar', $1, $3, $5::timestamptz, preset.value, least($5::timestamptz, now() + interval '10 minutes') \
+                 FROM calendar_reminder_preferences p \
+                 JOIN web_push_subscriptions d ON d.user_id = p.user_id AND d.calendar_reminders \
+                 JOIN space_memberships m ON m.space_id = $2 AND m.user_id = p.user_id \
+                 CROSS JOIN LATERAL unnest(p.offsets_minutes) AS preset(value) \
+                 WHERE p.event_id = $1 AND preset.value = ANY($4) \
+                   AND NOT EXISTS (SELECT 1 FROM space_notification_preferences \
+                     WHERE user_id = p.user_id AND space_id = $2 AND muted) \
+                 ON CONFLICT (endpoint, reminder_key) DO NOTHING",
+            )
+            .bind(occurrence.event.id)
+            .bind(occurrence.event.space_id)
+            .bind(occurrence.occurrence_date)
+            .bind(&due_offsets)
+            .bind(occurrence.starts_at)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
                 "WITH delivered AS ( \
                      INSERT INTO calendar_reminder_deliveries (event_id, user_id, occurrence_date, offset_minutes) \
                      SELECT p.event_id, p.user_id, $3, preset.value \
@@ -120,4 +142,37 @@ impl CalendarReminderWorker {
         }
         tx.commit().await
     }
+}
+
+pub(crate) async fn push_reminder_is_current(
+    pool: &PgPool,
+    user: Uuid,
+    event: Uuid,
+    date: Option<NaiveDate>,
+    starts_at: DateTime<Utc>,
+    offset: i32,
+) -> Result<bool, sqlx::Error> {
+    let unavailable = || sqlx::Error::Protocol("Calendar reminder lookup failed".into());
+    let repository = PostgresEventsRepository::new(pool.clone());
+    let Some(date) = date else { return Ok(false) };
+    let Some(series) = repository
+        .find_series_for_member(event, user)
+        .await
+        .map_err(|_| unavailable())?
+    else {
+        return Ok(false);
+    };
+    if !series.my_reminder_offsets_minutes.contains(&offset)
+        || !recurrence::occurs_on(&series, date)
+    {
+        return Ok(false);
+    }
+    let overrides = repository.overrides_for_event(event, date).await?;
+    Ok(
+        recurrence::expand(vec![series], overrides, date, date, None)
+            .into_iter()
+            .any(|item| {
+                !item.all_day && item.starts_at == starts_at && item.starts_at > Utc::now()
+            }),
+    )
 }

@@ -1733,8 +1733,7 @@ select:focus-visible {
 .join-link-expiry input {
   appearance: none;
 }
-.join-link-expiry input::-webkit-date-and-time-value,
-.settings-time-fields input[type="time"]::-webkit-date-and-time-value {
+.join-link-expiry input::-webkit-date-and-time-value {
   text-align: start;
 }
 select,
@@ -1763,6 +1762,7 @@ select,
   /* Keep iOS's native time editor from sizing the visible field. */
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  align-items: center;
   min-width: 0;
   height: 43px;
   overflow: hidden;
@@ -1774,7 +1774,8 @@ select,
 .settings-reminder-control input {
   display: block;
   min-height: 0;
-  height: 100%;
+  /* Center the native editor itself; Safari can pin its text to the top. */
+  height: auto;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -1782,6 +1783,15 @@ select,
   background: transparent;
   -webkit-appearance: none;
   appearance: none;
+}
+.settings-reminder-control input::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: start;
+}
+.settings-reminder-control input::-webkit-datetime-edit {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
 }
 .settings-reminder-control:focus-within {
   outline: 2px solid var(--primary);

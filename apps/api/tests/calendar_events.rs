@@ -393,6 +393,19 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
         }
     }
 
+    let endpoint = format!("https://fcm.googleapis.com/fcm/send/{}", Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions \
+         (endpoint, user_id, p256dh, auth_secret, calendar_reminders, task_reminders) \
+         SELECT $2, creator_id, $3, $4, TRUE, FALSE FROM calendar_events WHERE id = $1",
+    )
+    .bind(daily_series.id)
+    .bind(&endpoint)
+    .bind(vec![0u8; 65])
+    .bind(vec![0u8; 16])
+    .execute(&pool)
+    .await
+    .unwrap();
     let reminder_worker = events::CalendarReminderWorker::new(pool.clone());
     for instant in [
         "2026-03-28T07:00:00Z", // No alert at the original start minus an hour.
@@ -431,6 +444,13 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     .await
     .unwrap();
     assert_eq!(notice_count, 3);
+    let queued_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM web_push_outbox WHERE endpoint = $1")
+            .bind(&endpoint)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(queued_count, 3);
 
     let request = actix_test::TestRequest::delete()
         .uri(&format!("/events/{}", daily_series.id))

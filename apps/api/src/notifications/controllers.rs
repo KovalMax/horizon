@@ -1,5 +1,5 @@
 use actix_web::{
-    get,
+    delete, get,
     http::{header, StatusCode},
     post, put, web, HttpRequest, HttpResponse,
 };
@@ -11,9 +11,118 @@ use crate::{
 };
 
 use super::{
+    push::{
+        self, PushConfig, PushPreferences, PutPushSubscription, RegistrationError,
+        RemovePushSubscription,
+    },
     requests::{UpdateNotificationPreferencesRequest, UpdateNotificationReadRequest},
     services::{NotificationError, NotificationsApplication},
 };
+
+#[utoipa::path(
+    get,
+    path = "/notifications/push-config",
+    responses((status = 200, body = PushConfig))
+)]
+#[get("/notifications/push-config")]
+pub async fn push_config() -> HttpResponse {
+    HttpResponse::Ok().json(PushConfig {
+        public_key: super::PushWorker::public_key(),
+    })
+}
+
+#[utoipa::path(
+    post,
+    path = "/notifications/push-subscription/status",
+    request_body = RemovePushSubscription,
+    security(("accessBearer" = [])),
+    responses((status = 200, body = PushPreferences), (status = 204), (status = 400, body = Problem), (status = 401, body = Problem))
+)]
+#[post("/notifications/push-subscription/status")]
+pub async fn push_subscription_status(
+    request: HttpRequest,
+    auth: web::Data<AuthApplication>,
+    pool: web::Data<sqlx::PgPool>,
+    subscription: web::Json<RemovePushSubscription>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(status) => return authentication_error(status),
+    };
+    match push::preferences(&pool, user_id, &subscription.endpoint).await {
+        Ok(Some(preferences)) => HttpResponse::Ok().json(preferences),
+        Ok(None) => HttpResponse::NoContent().finish(),
+        Err(error) => push_result(Err(error)),
+    }
+}
+
+fn push_result(result: Result<(), RegistrationError>) -> HttpResponse {
+    match result {
+        Ok(()) => HttpResponse::NoContent().finish(),
+        Err(RegistrationError::Invalid) => problem(
+            StatusCode::BAD_REQUEST,
+            "Push subscription is invalid or unsupported",
+            "invalid_push_subscription",
+        ),
+        Err(RegistrationError::Conflict) => problem(
+            StatusCode::CONFLICT,
+            "Create a new push subscription for this account",
+            "push_subscription_conflict",
+        ),
+        Err(RegistrationError::Unavailable) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Service unavailable",
+            "database_unavailable",
+        ),
+    }
+}
+
+#[utoipa::path(
+    put,
+    path = "/notifications/push-subscription",
+    request_body = PutPushSubscription,
+    security(("accessBearer" = [])),
+    responses((status = 204), (status = 400, body = Problem), (status = 401, body = Problem), (status = 409, body = Problem))
+)]
+#[put("/notifications/push-subscription")]
+pub async fn register_push_subscription(
+    request: HttpRequest,
+    auth: web::Data<AuthApplication>,
+    pool: web::Data<sqlx::PgPool>,
+    subscription: web::Json<PutPushSubscription>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(status) => return authentication_error(status),
+    };
+    let Some(principal) =
+        bearer_token(&request).and_then(|token| auth.access_principal(token).ok())
+    else {
+        return authentication_error(StatusCode::UNAUTHORIZED);
+    };
+    push_result(push::register(&pool, user_id, principal.session_id, &subscription).await)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/notifications/push-subscription",
+    request_body = RemovePushSubscription,
+    security(("accessBearer" = [])),
+    responses((status = 204), (status = 400, body = Problem), (status = 401, body = Problem))
+)]
+#[delete("/notifications/push-subscription")]
+pub async fn remove_push_subscription(
+    request: HttpRequest,
+    auth: web::Data<AuthApplication>,
+    pool: web::Data<sqlx::PgPool>,
+    subscription: web::Json<RemovePushSubscription>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(status) => return authentication_error(status),
+    };
+    push_result(push::remove(&pool, user_id, &subscription.endpoint).await)
+}
 
 fn bearer_token(request: &HttpRequest) -> Option<&str> {
     request

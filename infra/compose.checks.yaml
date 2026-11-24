@@ -17,6 +17,7 @@ services:
       context: ../apps/api
       dockerfile: ../../infra/docker/api/Dockerfile
     environment:
+      CARGO_BUILD_JOBS:
       POSTGRES_HOST: db
       POSTGRES_DB: horizon_test
       POSTGRES_USER: horizon_test

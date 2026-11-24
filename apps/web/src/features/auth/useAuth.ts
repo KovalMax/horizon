@@ -149,6 +149,13 @@ export function useAuth(): AuthState {
 
   const signOut = async () => {
     const refreshToken = getAuthTokens()?.refreshToken ?? tokens?.refreshToken;
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker
+        .getRegistration()
+        .then((worker) => worker?.pushManager?.getSubscription())
+        .then((subscription) => subscription?.unsubscribe())
+        .catch(() => {});
+    }
     setAuthTokens(null, "signed-out");
     setTokens(null);
     setAccount(null);

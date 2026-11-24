@@ -186,7 +186,19 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   const ownerId = await owner.getAttribute("value");
   if (!ownerId) throw new Error("Owner missing from the Task assignee list");
   await assignee.selectOption(ownerId);
-  await add.click();
+  const [createdTask] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        /^\/api\/spaces\/[^/]+\/tasks$/.test(
+          new URL(response.url()).pathname,
+        ) &&
+        response.request().method() === "POST" &&
+        response.status() === 201,
+    ),
+    add.click(),
+  ]);
+  const { id: taskId } = (await createdTask.json()) as { id: string };
+  const taskRoute = new URL(page.url()).pathname;
   const task = page.getByRole("button", {
     name: "Water the plants",
     exact: true,
@@ -220,6 +232,12 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   ]);
   await upcoming.getByRole("button", { name: "Events", exact: true }).click();
   await expect(undated).toHaveCount(0);
+
+  await page.goto(`${taskRoute}?reminder=${taskId}`);
+  await expect(
+    page.getByRole("dialog", { name: "Water the plants" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -311,6 +329,16 @@ test("the installable app serves only a public fallback offline", async ({
   await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible({
     timeout: 15_000,
   });
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  const update = page.getByRole("button", { name: "Update app" });
+  await Promise.all([
+    page.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === page.mainFrame(),
+    }),
+    update.click(),
+  ]);
+  await expect(update).toBeEnabled();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 });
 
@@ -594,6 +622,10 @@ test("keeps Settings time controls usable on mobile WebKit", async () => {
       expect(Math.abs(time!.width - search!.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(time!.height - search!.height)).toBeLessThanOrEqual(1);
       const editor = await reminder.boundingBox();
+      const topInset = editor!.y - time!.y;
+      const bottomInset = time!.y + time!.height - editor!.y - editor!.height;
+      expect(topInset).toBeGreaterThan(1);
+      expect(Math.abs(topInset - bottomInset)).toBeLessThanOrEqual(1);
       expect(editor!.x).toBeGreaterThanOrEqual(time!.x);
       expect(editor!.x + editor!.width).toBeLessThanOrEqual(
         time!.x + time!.width,

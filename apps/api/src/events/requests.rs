@@ -17,6 +17,8 @@ pub struct CreateEventRequest {
     pub recurrence: Option<String>,
     /// Inclusive last occurrence date in the series timezone. `None` means no end date.
     pub recurrence_ends_on: Option<String>,
+    /// Private reminders for the caller. Omit to keep existing choices, or send an empty list to clear them.
+    pub my_reminder_offsets_minutes: Option<Vec<i32>>,
 }
 
 #[derive(Clone, Debug, Deserialize, IntoParams)]

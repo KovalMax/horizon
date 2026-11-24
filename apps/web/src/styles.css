@@ -390,12 +390,10 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin: 0 0 31px;
 }
 .space-card {
   display: flex;
-  min-height: 142px;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
   border: 1px solid var(--border);
   border-top: 4px solid var(--primary);
@@ -420,39 +418,25 @@ select:focus-visible {
 .space-card.trip {
   border-top-color: var(--trip);
 }
-.space-card-head {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-.space-card-head div {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-.space-card-head b {
-  overflow: hidden;
-  font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.space-card-head small {
-  color: var(--muted);
-  font-size: 11px;
-}
-.space-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
 .space-card strong {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: auto;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.space-card > svg {
+  flex: 0 0 auto;
   color: var(--primary);
-  font-size: 13px;
+}
+.overview-section + .overview-section {
+  margin-top: 24px;
+}
+.overview-heading {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.overview-section > .button {
+  margin: 12px 8px 0 0;
 }
 .empty-overview {
   display: flex;
@@ -465,12 +449,12 @@ select:focus-visible {
   flex: 0 0 auto;
   color: var(--primary);
 }
-.empty-overview h2 {
-  margin: 0 0 4px;
+.empty-overview h3 {
+  margin: 0;
   font-size: 14px;
 }
 .empty-overview p {
-  margin: 0;
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
@@ -545,14 +529,7 @@ select:focus-visible {
   color: var(--primary);
   background: #e4f2eb;
 }
-.overview-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 288px;
-  gap: 24px;
-  align-items: start;
-}
 .timeline,
-.overview-aside,
 .calendar-day-list {
   display: grid;
   align-content: start;
@@ -572,13 +549,15 @@ select:focus-visible {
   padding: 16px 24px;
 }
 .day-card h2,
+.timeline .day-card h3,
 .list-card h2 {
   margin: 0 0 9px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.day-card h2 b {
+.day-card h2 b,
+.timeline .day-card h3 b {
   font-weight: 800;
 }
 .event-row {
@@ -1751,8 +1730,7 @@ select:focus-visible {
   min-height: 43px;
   color: var(--ink);
 }
-.join-link-expiry input,
-.settings-time-fields input[type="time"] {
+.join-link-expiry input {
   appearance: none;
 }
 .join-link-expiry input::-webkit-date-and-time-value,
@@ -1780,6 +1758,37 @@ select,
 .settings-time-fields input {
   max-width: 100%;
   color: var(--ink);
+}
+.settings-reminder-control {
+  /* Keep iOS's native time editor from sizing the visible field. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  height: 43px;
+  overflow: hidden;
+  border: 1px solid var(--control);
+  border-radius: 10px;
+  padding-inline: 12px;
+  background: #fff;
+}
+.settings-reminder-control input {
+  display: block;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.settings-reminder-control:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.settings-reminder-control input:focus-visible {
+  outline: none;
 }
 .time-zone-options {
   margin-top: 4px;
@@ -2230,10 +2239,6 @@ select,
     padding-right: 24px;
     padding-left: 24px;
   }
-  .overview-grid {
-    grid-template-columns: minmax(0, 1fr) 240px;
-    gap: 16px;
-  }
   .space-filters {
     gap: 5px;
   }
@@ -2346,16 +2351,7 @@ select,
     font-size: 12px;
   }
   .space-cards {
-    display: flex;
-    overflow-x: auto;
-    margin: 0 -20px 23px;
-    padding: 0 20px 8px;
-    scroll-snap-type: x mandatory;
-  }
-  .space-card {
-    width: min(82vw, 310px);
-    min-width: min(82vw, 310px);
-    scroll-snap-align: start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .overview-controls {
     align-items: flex-start;
@@ -2375,15 +2371,6 @@ select,
   }
   .segmented button {
     min-height: 33px;
-  }
-  .overview-grid {
-    grid-template-columns: 1fr;
-  }
-  .overview-aside {
-    grid-template-columns: 1fr;
-  }
-  .overview-aside .note-card {
-    display: none;
   }
   .day-card {
     padding: 14px 15px;
@@ -2507,10 +2494,7 @@ select,
     padding-left: 16px;
   }
   .space-cards {
-    margin-right: -16px;
-    margin-left: -16px;
-    padding-right: 16px;
-    padding-left: 16px;
+    grid-template-columns: minmax(0, 1fr);
   }
   .space-filters,
   .place-filters {
@@ -2537,17 +2521,11 @@ select,
   .page-header > .button svg {
     width: 15px;
   }
-  .space-card {
-    min-width: 82vw;
-  }
   .overview-controls {
     margin-bottom: 15px;
   }
   .segmented {
     align-self: flex-start;
-  }
-  .overview-grid {
-    gap: 12px;
   }
   .timeline {
     gap: 12px;
@@ -2908,6 +2886,10 @@ a {
 .event-modal .form-field textarea {
   min-height: 88px;
 }
+.event-modal .event-date-grid input {
+  min-width: 0;
+  max-width: 100%;
+}
 .task-modal .modal-grid,
 .event-modal .modal-grid {
   gap: 28px;
@@ -2977,21 +2959,59 @@ a {
   border: 0;
   padding: 0;
 }
-.task-modal .task-reminders {
-  margin: 2px 0 22px;
+.reminder-picker {
+  min-inline-size: 0;
+  margin: 12px 0 16px;
+  border: 0;
+  padding: 0;
 }
-.task-modal .task-reminders h3 {
-  margin: 0 0 10px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+.reminder-picker legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.reminder-rows {
+  display: grid;
+  gap: 8px;
+}
+.reminder-row {
+  position: relative;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.reminder-row > svg,
+.reminder-row > span {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.reminder-row > svg {
+  left: 12px;
+  color: var(--muted);
+}
+.reminder-row > span {
+  left: 38px;
   font-size: 14px;
 }
-.task-modal .task-reminders > p {
-  margin: 0;
-  font-size: 14px;
+.reminder-row select {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: inherit;
+  padding: 0 36px 0 108px;
+  background-color: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  text-align: end;
+  cursor: pointer;
 }
-.task-modal .task-reminders fieldset.form-field {
-  margin: 0;
+.reminder-row select:focus-visible {
+  position: relative;
+  z-index: 1;
 }
 .modal-context {
   margin: -16px 0 30px;
@@ -3070,8 +3090,12 @@ a {
 }
 
 @media (max-width: 850px) {
-  .modal .event-date-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .event-modal .event-date-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 0;
+  }
+  .event-date-grid > :first-child {
+    grid-column: 1 / -1;
   }
 }
 
@@ -3119,9 +3143,6 @@ a {
   }
   .calendar-free-day .button {
     align-self: flex-end;
-  }
-  .event-date-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
   .modal .modal-grid:not(.event-date-grid) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -3188,8 +3209,8 @@ a {
   .task-modal .modal-grid:not(.event-date-grid) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .event-modal .modal-grid.event-date-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .event-modal .event-date-grid {
+    gap: 0 12px;
   }
   .modal .setting-row {
     flex-wrap: nowrap;

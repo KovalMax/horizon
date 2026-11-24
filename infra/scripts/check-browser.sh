@@ -21,6 +21,10 @@ case "${1:-}" in
     ;;
   stack)
     HORIZON_CERT_DIR="$certs" sh infra/scripts/local-certs.sh >/dev/null
+    openssl x509 -in "$certs/horizon.pem" -pubkey -noout > "$certs/public.pem"
+    openssl pkey -pubin -in "$certs/public.pem" -outform DER > "$certs/public.der"
+    HORIZON_BROWSER_TLS_SPKI=$(openssl dgst -sha256 -binary "$certs/public.der" | openssl base64 -A)
+    export HORIZON_BROWSER_TLS_SPKI
     compose build stack-browser api web
     compose up --detach --wait traefik api web
     compose run --rm --no-deps stack-browser

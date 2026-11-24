@@ -15,6 +15,7 @@ services:
     network_mode: service:traefik
     environment:
       HORIZON_MAILPIT_URL: http://mailpit:8025
+      HORIZON_BROWSER_TLS_SPKI: ${HORIZON_BROWSER_TLS_SPKI:-}
     command: npm run test:e2e:stack
 
   traefik:

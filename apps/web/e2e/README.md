@@ -31,3 +31,11 @@ and uploads only deterministic failure traces.
 For a manual review, start the development stack with `make up`, then open
 `https://horizon.localhost/` through the browser or Playwright MCP. Mailpit's
 development inbox is `http://localhost:8025`.
+
+The service worker registers only in production builds. The signed-in stack
+checks the manifest and verifies that an offline launch shows a public
+fallback, without caching Settings, API data, or sign-in callbacks.
+To check iPhone installation on a deployed HTTPS build, open Horizon in
+Safari, choose **Share → Add to Home Screen**, and launch it from the Home
+Screen. Installability and the offline message do not imply push delivery
+or offline access to saved plans.

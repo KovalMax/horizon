@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         web::Data::new(notifications::NotificationsApplication::new(pool.clone()));
     let reminder_worker =
         task_reminders::TaskReminderWorker::new(pool.clone(), auth_state.email_sender());
+    let calendar_reminders = events::CalendarReminderWorker::new(pool.clone());
     let purge_spaces = spaces_state.clone();
     let purge_notifications = notifications_state.clone();
     let reminders = reminder_worker.clone();
@@ -56,6 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             interval.tick().await;
             if let Err(error) = reminder_worker.run_once().await {
                 log::error!("Failed to process Task reminders: {error}");
+            }
+            if let Err(error) = calendar_reminders.run_once_at(chrono::Utc::now()).await {
+                log::error!("Failed to process Calendar reminders: {error}");
             }
         }
     });

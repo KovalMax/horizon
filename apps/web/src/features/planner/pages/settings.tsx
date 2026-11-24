@@ -172,11 +172,13 @@ export function SettingsPage({
         </div>
         <label className="form-field">
           Default reminder time
-          <input
-            type="time"
-            value={reminderTime}
-            onChange={(event) => setReminderTime(event.target.value)}
-          />
+          <span className="settings-reminder-control">
+            <input
+              type="time"
+              value={reminderTime}
+              onChange={(event) => setReminderTime(event.target.value)}
+            />
+          </span>
         </label>
       </section>
       <section className="list-card">

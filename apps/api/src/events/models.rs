@@ -16,6 +16,7 @@ pub(super) struct CalendarEvent {
     pub recurrence_ends_on: Option<NaiveDate>,
     pub space_name: String,
     pub space_kind: String,
+    pub my_reminder_offsets_minutes: Vec<i32>,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,7 @@ pub(super) struct EventDraft {
     pub notes: Option<String>,
     pub recurrence: Option<String>,
     pub recurrence_ends_on: Option<NaiveDate>,
+    pub my_reminder_offsets_minutes: Option<Vec<i32>>,
 }
 
 #[derive(Clone, Debug)]

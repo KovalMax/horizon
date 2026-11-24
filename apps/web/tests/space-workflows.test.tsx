@@ -838,9 +838,24 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
     within(newTaskDialog).getByLabelText("Due date (optional)"),
     { target: { value: "2026-11-20" } },
   );
+  const reminders = within(newTaskDialog).getByRole("group", {
+    name: "Reminders",
+  });
+  const reminderRows = () =>
+    within(reminders).getAllByRole<HTMLSelectElement>("combobox");
+  const timings = () => reminderRows().map((row) => row.value);
+  expect(timings()).toEqual([""]);
+  for (const [index, value] of ["60", "1440", "15", "30", "10080"].entries()) {
+    fireEvent.change(reminderRows()[index]!, { target: { value } });
+  }
+  expect(timings()).toEqual(["60", "1440", "15", "30", "10080"]);
   expect(
-    within(newTaskDialog).getByRole("group", { name: "Reminders" }),
-  ).toBeTruthy();
+    within(reminderRows()[0]!).getByRole<HTMLOptionElement>("option", {
+      name: "1 day before",
+    }).disabled,
+  ).toBe(true);
+  fireEvent.change(reminderRows()[2]!, { target: { value: "" } });
+  expect(timings()).toEqual(["60", "1440", "30", "10080", ""]);
   await within(newTaskDialog).findByRole("option", {
     name: "ruth@example.test",
   });
@@ -870,6 +885,15 @@ test("signed-in To-dos load persisted lists and Tasks and save completion change
     expect.objectContaining({
       method: "POST",
       body: expect.stringContaining('"assignee_id":"member-2"'),
+    }),
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/spaces/${space.id}/tasks`,
+    expect.objectContaining({
+      method: "POST",
+      body: expect.stringContaining(
+        '"reminder_offsets_minutes":[60,1440,30,10080]',
+      ),
     }),
   );
 

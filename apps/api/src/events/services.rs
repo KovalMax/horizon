@@ -162,7 +162,10 @@ impl EventsApplication {
         request: &CreateEventRequest,
     ) -> Result<EventResponse, EventError> {
         let draft = validate(request)?;
-        if draft.recurrence.is_some() || draft.recurrence_ends_on.is_some() {
+        if draft.recurrence.is_some()
+            || draft.recurrence_ends_on.is_some()
+            || draft.my_reminder_offsets_minutes.is_some()
+        {
             return Err(EventError::Invalid);
         }
         let series = self
@@ -277,6 +280,11 @@ fn validate(request: &CreateEventRequest) -> Result<EventDraft, EventError> {
         notes: optional_text(request.notes.as_deref(), 2000)?,
         recurrence: request.recurrence.clone(),
         recurrence_ends_on,
+        my_reminder_offsets_minutes: request
+            .my_reminder_offsets_minutes
+            .as_deref()
+            .map(|offsets| crate::reminder_offsets::validated(offsets).ok_or(EventError::Invalid))
+            .transpose()?,
     })
 }
 

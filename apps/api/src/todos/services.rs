@@ -131,18 +131,10 @@ impl TodosApplication {
         user_id: Uuid,
         offsets: &[i32],
     ) -> Result<(), TodoError> {
-        if offsets.iter().any(|offset| ![1440, 60].contains(offset))
-            || offsets
-                .iter()
-                .collect::<std::collections::HashSet<_>>()
-                .len()
-                != offsets.len()
-        {
-            return Err(TodoError::Invalid);
-        }
+        let offsets = validate_reminder_offsets(offsets)?;
         if self
             .repository
-            .set_my_reminder_preference(task_id, user_id, offsets)
+            .set_my_reminder_preference(task_id, user_id, &offsets)
             .await
             .map_err(|_| TodoError::Unavailable)?
         {
@@ -172,6 +164,10 @@ fn validate_list_name(name: &str) -> Result<&str, TodoError> {
     Ok(name)
 }
 
+fn validate_reminder_offsets(offsets: &[i32]) -> Result<Vec<i32>, TodoError> {
+    crate::reminder_offsets::validated(offsets).ok_or(TodoError::Invalid)
+}
+
 fn validate_task_fields(
     title: &str,
     list_name: &str,
@@ -199,15 +195,7 @@ fn validate_task_fields(
                 .map_err(|_| TodoError::Invalid)
         })
         .transpose()?;
-    if reminder_offsets_minutes
-        .iter()
-        .any(|offset| ![1440, 60].contains(offset))
-    {
-        return Err(TodoError::Invalid);
-    }
-    let mut reminder_offsets_minutes = reminder_offsets_minutes.to_vec();
-    reminder_offsets_minutes.sort_unstable();
-    reminder_offsets_minutes.dedup();
+    let reminder_offsets_minutes = validate_reminder_offsets(reminder_offsets_minutes)?;
     Ok(TaskDraft {
         title: title.to_owned(),
         list_name: list_name.to_owned(),

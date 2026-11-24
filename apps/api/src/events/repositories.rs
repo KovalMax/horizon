@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::pagination::PageWindow;
@@ -23,10 +23,12 @@ impl PostgresEventsRepository {
     ) -> Result<Vec<CalendarEvent>, sqlx::Error> {
         let rows = sqlx::query_as::<_, EventRow>(
             "SELECT e.id, e.space_id, e.title, e.starts_at, e.ends_at, e.time_zone, \
-             e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, s.name AS space_name, s.kind AS space_kind \
+              e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, s.name AS space_name, s.kind AS space_kind, \
+              COALESCE(p.offsets_minutes, '{}') AS my_reminder_offsets_minutes \
              FROM calendar_events e \
              JOIN spaces s ON s.id = e.space_id \
-             JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+              JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+              LEFT JOIN calendar_reminder_preferences p ON p.event_id = e.id AND p.user_id = m.user_id \
              ORDER BY e.starts_at, e.id LIMIT $2 OFFSET $3",
         )
         .bind(user_id)
@@ -46,9 +48,11 @@ impl PostgresEventsRepository {
         sqlx::query_as::<_, EventRow>(
             "SELECT e.id, e.space_id, e.title, e.starts_at, e.ends_at, e.time_zone, \
              e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, \
-             s.name AS space_name, s.kind AS space_kind \
+              s.name AS space_name, s.kind AS space_kind, \
+              COALESCE(p.offsets_minutes, '{}') AS my_reminder_offsets_minutes \
              FROM calendar_events e JOIN spaces s ON s.id = e.space_id \
-             JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+              JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+              LEFT JOIN calendar_reminder_preferences p ON p.event_id = e.id AND p.user_id = m.user_id \
              WHERE e.starts_at < (($3::date + 1)::timestamp AT TIME ZONE e.time_zone) \
                AND ((e.recurrence IS NOT NULL AND \
                      (e.recurrence_ends_on IS NULL OR e.recurrence_ends_on >= $2)) \
@@ -303,6 +307,9 @@ impl PostgresEventsRepository {
         if inserted.is_none() {
             return Err(self.membership_error(space_id, user_id).await?);
         }
+        if let Some(offsets) = &draft.my_reminder_offsets_minutes {
+            save_reminders(&mut transaction, id, user_id, offsets).await?;
+        }
         let space_name = sqlx::query_scalar::<_, String>("SELECT name FROM spaces WHERE id = $1")
             .bind(space_id)
             .fetch_one(&mut *transaction)
@@ -354,6 +361,9 @@ impl PostgresEventsRepository {
         let Some(space_id) = space_id else {
             return Err(self.event_access_error(event_id, user_id).await?);
         };
+        if let Some(offsets) = &draft.my_reminder_offsets_minutes {
+            save_reminders(&mut transaction, event_id, user_id, offsets).await?;
+        }
         let updated = sqlx::query_scalar::<_, Uuid>(
             "UPDATE calendar_events e SET title = $3, starts_at = $4, ends_at = $5, \
              time_zone = $6, all_day = $7, location = $8, notes = $9, recurrence = $10, recurrence_ends_on = $11, updated_at = now() \
@@ -477,10 +487,12 @@ impl PostgresEventsRepository {
     ) -> Result<Option<CalendarEvent>, EventError> {
         sqlx::query_as::<_, EventRow>(
             "SELECT e.id, e.space_id, e.title, e.starts_at, e.ends_at, e.time_zone, \
-             e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, s.name AS space_name, s.kind AS space_kind \
+              e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, s.name AS space_name, s.kind AS space_kind, \
+              COALESCE(p.offsets_minutes, '{}') AS my_reminder_offsets_minutes \
              FROM calendar_events e \
              JOIN spaces s ON s.id = e.space_id \
-             JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $2 \
+              JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $2 \
+              LEFT JOIN calendar_reminder_preferences p ON p.event_id = e.id AND p.user_id = m.user_id \
              WHERE e.id = $1",
         )
         .bind(event_id)
@@ -532,8 +544,38 @@ impl PostgresEventsRepository {
     }
 }
 
+async fn save_reminders(
+    transaction: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    user_id: Uuid,
+    offsets: &[i32],
+) -> Result<(), EventError> {
+    if offsets.is_empty() {
+        sqlx::query(
+            "DELETE FROM calendar_reminder_preferences WHERE event_id = $1 AND user_id = $2",
+        )
+        .bind(event_id)
+        .bind(user_id)
+        .execute(&mut **transaction)
+        .await
+    } else {
+        sqlx::query(
+            "INSERT INTO calendar_reminder_preferences (event_id, user_id, offsets_minutes) \
+             VALUES ($1, $2, $3) ON CONFLICT (event_id, user_id) DO UPDATE \
+             SET offsets_minutes = EXCLUDED.offsets_minutes",
+        )
+        .bind(event_id)
+        .bind(user_id)
+        .bind(offsets)
+        .execute(&mut **transaction)
+        .await
+    }
+    .map(|_| ())
+    .map_err(|_| EventError::Unavailable)
+}
+
 #[derive(sqlx::FromRow)]
-struct EventRow {
+pub(super) struct EventRow {
     id: Uuid,
     space_id: Uuid,
     title: String,
@@ -547,6 +589,7 @@ struct EventRow {
     recurrence_ends_on: Option<NaiveDate>,
     space_name: String,
     space_kind: String,
+    my_reminder_offsets_minutes: Vec<i32>,
 }
 
 impl From<EventRow> for CalendarEvent {
@@ -565,12 +608,13 @@ impl From<EventRow> for CalendarEvent {
             recurrence_ends_on: row.recurrence_ends_on,
             space_name: row.space_name,
             space_kind: row.space_kind,
+            my_reminder_offsets_minutes: row.my_reminder_offsets_minutes,
         }
     }
 }
 
 #[derive(sqlx::FromRow)]
-struct OverrideRow {
+pub(super) struct OverrideRow {
     event_id: Uuid,
     occurrence_date: NaiveDate,
     cancelled: bool,

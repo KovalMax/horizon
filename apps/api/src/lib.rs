@@ -6,6 +6,7 @@ pub mod members;
 pub mod notifications;
 pub mod pagination;
 pub mod places;
+mod reminder_offsets;
 pub mod spaces;
 pub mod task_reminders;
 pub mod time_zones;

@@ -146,7 +146,8 @@ impl TaskReminderWorker {
 
     async fn deliver_claimed(&self, job: &ReminderJob) -> Result<(), String> {
         let row = sqlx::query_as::<_, DeliveryRow>(
-            "SELECT t.title, s.name AS space_name, \
+            "SELECT t.title, s.name AS space_name, t.due_date, t.due_time, \
+               u.time_zone, u.default_reminder_time, j.scheduled_at, \
                to_char(t.due_date, 'YYYY-MM-DD') || COALESCE(' ' || to_char(t.due_time, 'HH24:MI'), '') AS due, \
                e.email_normalized AS email, \
                COALESCE((SELECT enabled FROM notification_preferences WHERE user_id = j.recipient_id \
@@ -161,9 +162,6 @@ impl TaskReminderWorker {
              JOIN LATERAL (SELECT email_normalized FROM email_identities \
                WHERE user_id = j.recipient_id ORDER BY created_at LIMIT 1) e ON TRUE \
              WHERE j.id = $1 AND NOT t.done AND t.due_date IS NOT NULL \
-               AND j.scheduled_at = CASE WHEN t.due_time IS NOT NULL THEN \
-                 ((t.due_date + t.due_time) AT TIME ZONE u.time_zone) - j.offset_minutes * interval '1 minute' \
-                 ELSE ((t.due_date - (j.offset_minutes / 1440))::timestamp + u.default_reminder_time) AT TIME ZONE u.time_zone END \
                AND ((t.due_time IS NOT NULL AND ((t.due_date + t.due_time) AT TIME ZONE u.time_zone) > now()) \
                  OR (t.due_time IS NULL AND t.due_date >= (now() AT TIME ZONE u.time_zone)::date)) \
                AND j.recipient_id = COALESCE(t.assignee_id, t.creator_id) \
@@ -174,7 +172,17 @@ impl TaskReminderWorker {
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| error.to_string())?;
-        let Some(row) = row.filter(|row| !row.muted && (row.in_app || row.email_enabled)) else {
+        let Some(row) = row.filter(|row| {
+            !row.muted
+                && (row.in_app || row.email_enabled)
+                && reminder_time(
+                    row.due_date,
+                    row.due_time,
+                    &row.time_zone,
+                    row.default_reminder_time,
+                    job.offset_minutes,
+                ) == Some(row.scheduled_at)
+        }) else {
             return Ok(());
         };
 
@@ -222,7 +230,6 @@ struct ReminderJob {
     id: Uuid,
     task_id: Uuid,
     recipient_id: Uuid,
-    #[allow(dead_code)]
     offset_minutes: i32,
     attempts: i32,
 }
@@ -240,24 +247,34 @@ struct ReminderCandidate {
 
 impl ReminderCandidate {
     fn scheduled_at(&self, offset_minutes: i32) -> Option<chrono::DateTime<Utc>> {
-        let time_zone = self.time_zone.parse::<chrono_tz::Tz>().ok()?;
-        let local_due = if let Some(due_time) = self.due_time {
-            NaiveDateTime::new(self.due_date, due_time)
-        } else {
-            let due_date = if offset_minutes >= 1440 {
-                self.due_date.checked_sub_days(Days::new(1))?
-            } else {
-                self.due_date
-            };
-            NaiveDateTime::new(due_date, self.default_reminder_time)
-        };
-        let due_at = resolve_local_time(time_zone, local_due)?;
-        Some(if self.due_time.is_some() {
-            due_at - Duration::minutes(i64::from(offset_minutes))
-        } else {
-            due_at
-        })
+        reminder_time(
+            self.due_date,
+            self.due_time,
+            &self.time_zone,
+            self.default_reminder_time,
+            offset_minutes,
+        )
     }
+}
+
+fn reminder_time(
+    due_date: NaiveDate,
+    due_time: Option<NaiveTime>,
+    time_zone: &str,
+    default_reminder_time: NaiveTime,
+    offset_minutes: i32,
+) -> Option<chrono::DateTime<Utc>> {
+    let time_zone = time_zone.parse::<chrono_tz::Tz>().ok()?;
+    let (date, time, minutes) = match due_time {
+        Some(time) => (due_date, time, offset_minutes),
+        None => (
+            due_date.checked_sub_days(Days::new((offset_minutes / 1440) as u64))?,
+            default_reminder_time,
+            offset_minutes % 1440,
+        ),
+    };
+    resolve_local_time(time_zone, date.and_time(time))?
+        .checked_sub_signed(Duration::minutes(i64::from(minutes)))
 }
 
 fn resolve_local_time(
@@ -281,6 +298,11 @@ fn resolve_local_time(
 
 #[derive(FromRow)]
 struct DeliveryRow {
+    due_date: NaiveDate,
+    due_time: Option<NaiveTime>,
+    time_zone: String,
+    default_reminder_time: NaiveTime,
+    scheduled_at: chrono::DateTime<Utc>,
     title: String,
     space_name: String,
     due: String,

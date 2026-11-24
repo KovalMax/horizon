@@ -134,6 +134,40 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
     .unwrap();
     assert_eq!(sent_count, 1);
 
+    let date_only_task = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO tasks (id, list_id, creator_id, title, due_date, reminder_offsets_minutes) \
+         VALUES ($1, $2, $3, 'Date-only reminders', CURRENT_DATE + 21, ARRAY[30, 2880, 10080])",
+    )
+    .bind(date_only_task)
+    .bind(list_id)
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    worker.run_once().await.unwrap();
+    let date_only_jobs: Vec<(i32, String)> = sqlx::query_as(
+        "SELECT offset_minutes, to_char(scheduled_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') \
+         FROM task_reminder_jobs WHERE task_id = $1 ORDER BY offset_minutes",
+    )
+    .bind(date_only_task)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let date: chrono::NaiveDate = sqlx::query_scalar("SELECT due_date FROM tasks WHERE id = $1")
+        .bind(date_only_task)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        date_only_jobs,
+        vec![
+            (30, format!("{date} 08:30")),
+            (2880, format!("{} 09:00", date - chrono::Days::new(2))),
+            (10080, format!("{} 09:00", date - chrono::Days::new(7))),
+        ]
+    );
+
     let lifecycle_task_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO tasks (id, list_id, creator_id, title, due_date, due_time, reminder_offsets_minutes) \

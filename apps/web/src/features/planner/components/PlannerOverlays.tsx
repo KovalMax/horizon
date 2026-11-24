@@ -3,6 +3,7 @@ import { dateLabel } from "../domain";
 import type { PlannerAppState } from "../usePlannerApp";
 import { AppLink, Button, Icon } from "../../../shared/ui";
 import { SpaceSwitcher } from "./SpaceSwitcher";
+import { ReminderPicker, reminderOffsetsFromForm } from "./ReminderPicker";
 
 const eventTimeValidationMessage = "The end time must be after the start time.";
 const dialogFocusableSelector =
@@ -50,6 +51,7 @@ function taskDateAtOffset(offset: number): string {
 
 export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
   const [taskDueDate, setTaskDueDate] = useState("");
+  const [eventAllDay, setEventAllDay] = useState(false);
   const [confirmationText, setConfirmationText] = useState("");
   const {
     mobileMenu,
@@ -118,6 +120,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
   useEffect(() => {
     setConfirmationText("");
   }, [confirmation]);
+  useEffect(() => {
+    if (modal === "event") setEventAllDay(editingEvent?.allDay ?? false);
+  }, [modal, editingEvent]);
   useEffect(() => {
     const current = overlayStateRef.current;
     const surface = current.confirmation
@@ -350,9 +355,10 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       role="switch"
                       aria-label="All-day event"
                       defaultChecked={editingEvent?.allDay}
-                      onChange={(event) =>
-                        clearCorrectedEventTimeError(event, appState)
-                      }
+                      onChange={(event) => {
+                        setEventAllDay(event.currentTarget.checked);
+                        clearCorrectedEventTimeError(event, appState);
+                      }}
                     />
                   </label>
                 )}
@@ -463,6 +469,21 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         defaultValue={editingEvent?.notes}
                       />
                     </label>
+                    {appState.eventEditScope !== "occurrence" && (
+                      <>
+                        <ReminderPicker
+                          name="eventReminderOffset"
+                          legend="Remind me"
+                          initialOffsets={
+                            editingEvent?.myReminderOffsetsMinutes
+                          }
+                          disabled={eventAllDay}
+                        />
+                        {eventAllDay && (
+                          <p>Reminders are available for timed events.</p>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
                 {modal === "task" && (
@@ -541,35 +562,15 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         />
                       </label>
                     </div>
-                    <section className="task-reminders">
-                      <h3 id="task-reminders-heading">Reminders</h3>
-                      {taskDueDate ? (
-                        <fieldset
-                          className="form-field"
-                          aria-labelledby="task-reminders-heading"
-                        >
-                          {[
-                            { value: 1440, label: "1 day before" },
-                            { value: 60, label: "1 hour before" },
-                          ].map((offset) => (
-                            <label className="setting-row" key={offset.value}>
-                              <span>{offset.label}</span>
-                              <input
-                                type="checkbox"
-                                name="reminderOffset"
-                                value={offset.value}
-                                defaultChecked={(
-                                  appState.editingTask
-                                    ?.reminderOffsetsMinutes ?? [1440, 60]
-                                ).includes(offset.value)}
-                              />
-                            </label>
-                          ))}
-                        </fieldset>
-                      ) : (
-                        <p>Add a due date to set reminders.</p>
-                      )}
-                    </section>
+                    <ReminderPicker
+                      key={appState.editingTask?.id ?? "new-task"}
+                      name="reminderOffset"
+                      initialOffsets={
+                        appState.editingTask?.reminderOffsetsMinutes
+                      }
+                      disabled={!taskDueDate}
+                    />
+                    {!taskDueDate && <p>Add a due date to set reminders.</p>}
                   </>
                 )}
                 {modal === "place" && (
@@ -718,45 +719,36 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   : ""}
               </p>
             )}
-            {"list" in selected && (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const offsets = Array.from(
-                    new FormData(event.currentTarget).getAll("myReminder"),
-                    Number,
-                  );
-                  void appState.saveMyTaskReminders(
-                    String(selected.id),
-                    offsets,
-                  );
-                }}
-              >
-                <fieldset className="form-field">
-                  <legend>Your reminders only</legend>
-                  {[
-                    { value: 1440, label: "1 day before" },
-                    { value: 60, label: "1 hour before" },
-                  ].map((offset) => (
-                    <label className="setting-row" key={offset.value}>
-                      <span>{offset.label}</span>
-                      <input
-                        type="checkbox"
-                        name="myReminder"
-                        value={offset.value}
-                        defaultChecked={(
-                          selected.myReminderOffsetsMinutes ??
-                          selected.reminderOffsetsMinutes ?? [1440, 60]
-                        ).includes(offset.value)}
-                      />
-                    </label>
-                  ))}
-                </fieldset>
-                <button className="button primary" type="submit">
-                  Save my reminders
-                </button>
-              </form>
-            )}
+            {"list" in selected &&
+              selected.day !== undefined &&
+              !selected.done && (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const offsets = reminderOffsetsFromForm(
+                      new FormData(event.currentTarget),
+                      "myReminder",
+                    );
+                    void appState.saveMyTaskReminders(
+                      String(selected.id),
+                      offsets,
+                    );
+                  }}
+                >
+                  <ReminderPicker
+                    key={selected.id}
+                    name="myReminder"
+                    legend="Your reminders only"
+                    initialOffsets={
+                      selected.myReminderOffsetsMinutes ??
+                      selected.reminderOffsetsMinutes
+                    }
+                  />
+                  <button className="button primary" type="submit">
+                    Save my reminders
+                  </button>
+                </form>
+              )}
             <div className="modal-actions">
               <Button variant="outline" onClick={() => setSelected(null)}>
                 Close

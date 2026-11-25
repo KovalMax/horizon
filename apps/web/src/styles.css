@@ -2789,6 +2789,12 @@ a {
 .event-date-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+.event-date-grid-all-day > :first-child {
+  grid-column: 1 / -1;
+}
+.event-date-grid > [hidden] {
+  display: none;
+}
 .modal {
   width: min(100%, 576px);
   gap: 0;
@@ -3269,7 +3275,6 @@ a {
   }
   .modal .setting-row {
     flex-wrap: nowrap;
-    padding: 0;
   }
   .modal .setting-row > span {
     min-width: 0;

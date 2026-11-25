@@ -5,9 +5,15 @@ RUN apt-get update \
 RUN rustup component add rustfmt clippy
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
+# Cache third-party dependencies across application and test changes.
+RUN mkdir src \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && printf '\n' > src/lib.rs \
+    && cargo build --locked
 COPY src ./src
-COPY tests ./tests
 COPY migrations ./migrations
-RUN cargo build --locked
+RUN touch src/main.rs src/lib.rs migrations/*.sql \
+    && cargo build --locked
+COPY tests ./tests
 EXPOSE 8000
 CMD ["cargo", "run", "--locked"]

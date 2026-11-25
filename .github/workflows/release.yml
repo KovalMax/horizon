@@ -32,68 +32,11 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-  api-build:
-    name: API / Build
+  api:
     needs: release-tag
-    runs-on: ubuntu-26.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Build API check container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Compile API and test targets
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
-
-  api-test:
-    name: API / Tests
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    env:
-      COMPOSE_PROJECT_NAME: horizon-release-${{ github.run_id }}-${{ github.run_attempt }}-api-test
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Build API test container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Start PostgreSQL
-        run: docker compose --file infra/compose.checks.yaml up --detach --wait db
-      - name: Run API tests
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo test --locked
-      - name: Stop PostgreSQL and remove test containers
-        if: always()
-        run: docker compose --file infra/compose.checks.yaml down --remove-orphans
-
-  api-format:
-    name: API / Format
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Build API tooling container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Check Rust formatting
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
-
-  api-clippy:
-    name: API / Clippy
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Build API tooling container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Run Rust Clippy
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+    uses: ./.github/workflows/api.yml
+    with:
+      check-migrations: true
 
   web-build:
     name: Web / Build
@@ -141,29 +84,6 @@ jobs:
     needs: release-tag
     uses: ./.github/workflows/browser.yml
 
-  release-migrations:
-    name: Release / Migrations
-    needs: api-test
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    env:
-      COMPOSE_PROJECT_NAME: horizon-release-${{ github.run_id }}-${{ github.run_attempt }}-migrations
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Build API migration container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Start fresh PostgreSQL database
-        run: docker compose --file infra/compose.checks.yaml up --detach --wait db
-      - name: Apply database migrations
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo run --locked -- migrate
-      - name: Verify migrations are already up to date
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo run --locked -- migrate
-      - name: Stop PostgreSQL and remove migration containers
-        if: always()
-        run: docker compose --file infra/compose.checks.yaml down --remove-orphans
-
   production-compose:
     name: Release / Production Compose
     needs: release-tag
@@ -190,15 +110,11 @@ jobs:
     name: Publish / GHCR images
     needs:
       - release-tag
-      - api-build
-      - api-test
-      - api-format
-      - api-clippy
+      - api
       - web-build
       - web-test
       - web-format
       - browser
-      - release-migrations
       - production-compose
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 90
@@ -226,8 +142,8 @@ jobs:
           tags: ghcr.io/kovalmax/horizon/api:${{ github.event.release.tag_name }}
           sbom: true
           provenance: true
-          cache-from: type=gha,scope=horizon-api
-          cache-to: type=gha,mode=max,scope=horizon-api
+          cache-from: type=registry,ref=ghcr.io/kovalmax/horizon/api:buildcache-arm64
+          cache-to: type=registry,ref=ghcr.io/kovalmax/horizon/api:buildcache-arm64,mode=max,ignore-error=true
       - name: Build and publish web image to GHCR (ARM64)
         uses: docker/build-push-action@v7
         with:

@@ -7,59 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  api-build:
-    name: API / Build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build API check container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Compile API and test targets
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo build --locked --all-targets
-
-  api-test:
-    name: API / Tests
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    env:
-      COMPOSE_PROJECT_NAME: horizon-checks-${{ github.run_id }}-${{ github.run_attempt }}-api-test
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build API test container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Start PostgreSQL
-        run: docker compose --file infra/compose.checks.yaml up --detach --wait db
-      - name: Run Rust tests
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo test --locked
-      - name: Stop PostgreSQL and remove test containers
-        if: always()
-        run: docker compose --file infra/compose.checks.yaml down --remove-orphans
-
-  api-format:
-    name: API / Format
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build API tooling container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Check Rust formatting
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo fmt --all -- --check
-
-  api-clippy:
-    name: API / Clippy
-    needs: api-build
-    runs-on: ubuntu-26.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build API tooling container
-        run: docker compose --file infra/compose.checks.yaml build api
-      - name: Run Rust Clippy
-        run: docker compose --file infra/compose.checks.yaml run --rm --no-deps api cargo clippy --locked --all-targets -- -D warnings
+  api:
+    uses: ./.github/workflows/api.yml
 
   web-build:
     name: Web / Build

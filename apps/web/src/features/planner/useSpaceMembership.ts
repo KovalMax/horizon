@@ -1,4 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { emailValidationMessage } from "../../shared/emailValidation";
 import type { Space } from "./domain";
 import {
   acceptSpaceInvitation,
@@ -169,12 +170,17 @@ export function useSpaceMembership({
       showToast(`Invitation sent to ${invitation.email}.`);
       return true;
     } catch (error) {
+      const validation =
+        error instanceof MembersApiError
+          ? emailValidationMessage(error.code, email)
+          : undefined;
       setMembershipError(
-        error instanceof MembersApiError && error.status === 403
-          ? "Only Owners can invite people."
-          : error instanceof MembersApiError && error.status === 409
-            ? "This email is already a Member or has a pending invitation."
-            : "The invitation couldn’t be sent. Check the email address and try again.",
+        validation ??
+          (error instanceof MembersApiError && error.status === 403
+            ? "Only Owners can invite people."
+            : error instanceof MembersApiError && error.status === 409
+              ? "This email is already a Member or has a pending invitation."
+              : "The invitation couldn’t be sent. Check the email address and try again."),
       );
       return false;
     } finally {

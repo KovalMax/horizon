@@ -141,7 +141,7 @@ impl MembersApplication {
         inviter_id: Uuid,
         email: &str,
     ) -> Result<SpaceInvitationResponse, MemberError> {
-        let email = normalize_email(email).ok_or(MemberError::Invalid)?;
+        let email = crate::auth::normalize_email(email).ok_or(MemberError::Invalid)?;
         self.require_owner(space_id, inviter_id).await?;
         let space = sqlx::query_as::<_, (String, bool)>(
             "SELECT s.name, EXISTS(SELECT 1 FROM email_identities \
@@ -158,6 +158,10 @@ impl MembersApplication {
         if space.1 {
             return Err(MemberError::AlreadyMember);
         }
+        self.mailer
+            .validate_recipient_domain(&email)
+            .await
+            .map_err(MemberError::EmailDomain)?;
 
         let invitation_id = Uuid::new_v4();
         let expires_at = Utc::now() + Duration::days(7);
@@ -480,19 +484,9 @@ enum MemberError {
     AlreadyInvited,
     InvalidRole,
     OwnerProtected,
+    EmailDomain(crate::auth::EmailDomainError),
     EmailDelivery,
     Unavailable,
-}
-
-fn normalize_email(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() || value.len() > 320 || value.chars().any(char::is_whitespace) {
-        return None;
-    }
-    value
-        .parse::<lettre::Address>()
-        .ok()
-        .map(|email| email.to_string().to_ascii_lowercase())
 }
 
 enum AuthenticationFailure {
@@ -588,6 +582,16 @@ fn error_response(error: MemberError) -> HttpResponse {
             StatusCode::CONFLICT,
             "Owners cannot be changed or removed in this workflow",
             "owner_membership_protected",
+        ),
+        MemberError::EmailDomain(crate::auth::EmailDomainError::NoMail) => problem(
+            StatusCode::BAD_REQUEST,
+            "Email domain does not receive mail",
+            "email_domain_no_mail",
+        ),
+        MemberError::EmailDomain(crate::auth::EmailDomainError::Unavailable) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Email domain could not be checked",
+            "email_domain_unavailable",
         ),
         MemberError::EmailDelivery => problem(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -705,7 +709,7 @@ pub async fn list_space_invitations(
     }
 }
 
-#[utoipa::path(post, path = "/spaces/{space_id}/invitations", params(("space_id" = Uuid, Path)), request_body = CreateInvitationRequest, security(("accessBearer" = [])), responses((status = 201, body = SpaceInvitationResponse), (status = 400, body = Problem), (status = 403, body = Problem), (status = 409, body = Problem)))]
+#[utoipa::path(post, path = "/spaces/{space_id}/invitations", params(("space_id" = Uuid, Path)), request_body = CreateInvitationRequest, security(("accessBearer" = [])), responses((status = 201, body = SpaceInvitationResponse), (status = 400, description = "Malformed email address or domain that does not receive mail", body = Problem), (status = 403, body = Problem), (status = 409, body = Problem), (status = 503, description = "Email domain lookup or delivery is temporarily unavailable", body = Problem)))]
 #[post("/spaces/{space_id}/invitations")]
 pub async fn create_invitation(
     request: HttpRequest,

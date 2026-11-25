@@ -1,3 +1,4 @@
+import { readProblemCode } from "../../shared/emailValidation";
 import { authenticatedFetch } from "../auth/api";
 export type SpaceMember = {
   user_id: string;
@@ -39,13 +40,18 @@ export type SpaceJoinRequest = {
 };
 
 export class MembersApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly code = "",
+  ) {
     super("Space membership could not be loaded or changed.");
   }
 }
 
 async function readJson<T>(response: Response): Promise<T> {
-  if (!response.ok) throw new MembersApiError(response.status);
+  if (!response.ok) {
+    throw new MembersApiError(response.status, await readProblemCode(response));
+  }
   return (await response.json()) as T;
 }
 

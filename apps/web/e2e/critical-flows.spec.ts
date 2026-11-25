@@ -55,6 +55,36 @@ test("shows a useful sign-in failure and allows another attempt", async ({
   expect(requests).toBe(2);
 });
 
+test("distinguishes an invalid mail domain from a temporary lookup failure", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/magic-links", async (route) => {
+    const { email } = route.request().postDataJSON();
+    const unavailable = email.endsWith("@gmail.com");
+    await route.fulfill({
+      status: unavailable ? 503 : 400,
+      contentType: "application/problem+json",
+      json: {
+        code: unavailable ? "email_domain_unavailable" : "email_domain_no_mail",
+      },
+    });
+  });
+  await page.goto("/welcome");
+  const email = page.getByLabel("Email address");
+  const send = page.getByRole("button", { name: "Send sign-in link" });
+  await email.fill("someone@gmail.con");
+  await send.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Did you mean gmail.com?",
+  );
+  await expect(email).toHaveValue("someone@gmail.con");
+  await email.fill("someone@gmail.com");
+  await send.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "We couldn’t check this email address. Please try again.",
+  );
+});
+
 test("explains a temporary rate limit without suggesting the account is disabled", async ({
   page,
 }) => {

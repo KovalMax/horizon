@@ -1,5 +1,6 @@
 pub mod controllers;
 mod email;
+mod email_domain;
 mod factories;
 mod jwt_tokens;
 mod models;
@@ -14,6 +15,8 @@ pub use controllers::{
     revoke_current_session,
 };
 pub use email::{EmailSender, SmtpEmailSender};
+pub(crate) use email_domain::normalize_email;
+pub use email_domain::EmailDomainError;
 pub use factories::AuthSettings;
 pub use models::{AccessPrincipal, Account, AuthError, AuthenticatedSession, TokenSet};
 pub use repositories::{AuthRepository, PostgresAuthRepository, SignInProof};

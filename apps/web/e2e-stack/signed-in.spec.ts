@@ -258,6 +258,17 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   await expect(page.getByLabel("Email address")).toBeVisible();
 });
 
+test("rejects a nonexistent mail domain before sending a sign-in email", async ({
+  page,
+}) => {
+  await page.goto("/welcome");
+  await page.getByLabel("Email address").fill(`${randomUUID()}@horizon.invalid`);
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "This email domain doesn’t receive mail.",
+  );
+});
+
 test("signs in with the emailed code without opening the magic link", async ({
   page,
 }) => {

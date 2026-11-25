@@ -54,6 +54,7 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
             .service(spaces::create_shared_space)
             .service(places::list_places)
             .service(places::create_place)
+            .service(places::preview_place_import)
             .service(places::delete_place),
     )
     .await;
@@ -96,6 +97,74 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let space: SpaceResponse = actix_test::read_body_json(response).await;
+
+    let preview_request = |space_id, link: &str| {
+        actix_test::TestRequest::post()
+            .uri(&format!("/spaces/{space_id}/places/import-preview"))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .set_json(serde_json::json!({ "url": link }))
+            .to_request()
+    };
+    let response = actix_test::call_service(&app, preview_request(space.id,
+        "https://maps.google.com?q=Pepella+georgisches+Restaurant+und+Bar,+Augustastra%C3%9Fe+30,+40477+D%C3%BCsseldorf-Stadtbezirk+1,+Germany&ftid=0x47b8c988bbf31717:0x744e25ef6964ea62",
+    )).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+    let preview: serde_json::Value = actix_test::read_body_json(response).await;
+    assert_eq!(
+        preview,
+        serde_json::json!({
+            "name": "Pepella georgisches Restaurant und Bar",
+            "address": "Augustastraße 30, 40477 Düsseldorf-Stadtbezirk 1, Germany",
+        })
+    );
+    let response = actix_test::call_service(
+        &app,
+        preview_request(
+            space.id,
+            "https://www.google.com/maps/place/Caf%C3%A9+%26+Bakery/",
+        ),
+    )
+    .await;
+    let preview: serde_json::Value = actix_test::read_body_json(response).await;
+    assert_eq!(
+        preview,
+        serde_json::json!({ "name": "Café & Bakery", "address": null })
+    );
+    for (link, status) in [
+        (
+            "https://maps.google.com/?q=restaurants",
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            "https://www.google.com/maps/dir/?api=1",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "https://maps.app.goo.gl.example.test/token",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "https://maps.app.goo.gl@localhost/token",
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = actix_test::call_service(&app, preview_request(space.id, link)).await;
+        assert_eq!(response.status(), status);
+    }
+    let response = actix_test::call_service(
+        &app,
+        preview_request(Uuid::new_v4(), "https://maps.app.goo.gl/example"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let place_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM saved_places WHERE space_id = $1")
+            .bind(space.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(place_count, 0);
 
     let place_request = || CreatePlaceRequest {
         name: "Neighborhood bakery".to_owned(),
@@ -214,6 +283,12 @@ async fn saved_places_are_space_scoped_and_viewers_cannot_create_them() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::OK);
     let viewer_places: PlacePageResponse = actix_test::read_body_json(response).await;
+    let response = actix_test::call_service(
+        &app,
+        preview_request(space.id, "https://maps.app.goo.gl/example"),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(viewer_places.items.len(), 1);
     assert_eq!(viewer_places.items[0].id, created.id);
     let request = actix_test::TestRequest::post()

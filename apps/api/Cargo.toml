@@ -24,5 +24,6 @@ tokio = { version = "1", features = ["macros", "sync", "time"] }
 utoipa = { version = "5", features = ["actix_extras", "uuid"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+url = "2"
 chrono-tz = "0.10.4"
 web-push = { version = "0.11", default-features = false }

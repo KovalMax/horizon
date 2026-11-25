@@ -9,9 +9,10 @@ use crate::auth::{AuthApplication, AuthError, Problem};
 use crate::pagination::PageWindow;
 
 use super::{
+    maps_import::ImportError,
     models::PlaceError,
-    requests::{CreatePlaceRequest, PlacesPageQuery},
-    services::PlacesApplication,
+    requests::{CreatePlaceRequest, PlaceImportRequest, PlacesPageQuery},
+    services::{ImportPreviewError, PlacesApplication},
 };
 
 fn bearer_token(request: &HttpRequest) -> Option<&str> {
@@ -22,6 +23,68 @@ fn bearer_token(request: &HttpRequest) -> Option<&str> {
         .ok()?
         .strip_prefix("Bearer ")
         .filter(|token| !token.is_empty())
+}
+
+#[utoipa::path(
+    post,
+    path = "/spaces/{space_id}/places/import-preview",
+    params(("space_id" = Uuid, Path)),
+    request_body = PlaceImportRequest,
+    security(("accessBearer" = [])),
+    responses(
+        (status = 200, body = super::PlaceImportPreview),
+        (status = 400, body = Problem),
+        (status = 401, body = Problem),
+        (status = 403, body = Problem),
+        (status = 404, body = Problem),
+        (status = 422, body = Problem),
+        (status = 429, body = Problem),
+        (status = 503, body = Problem)
+    )
+)]
+#[post("/spaces/{space_id}/places/import-preview")]
+pub async fn preview_place_import(
+    request: HttpRequest,
+    path: web::Path<Uuid>,
+    auth: web::Data<AuthApplication>,
+    places: web::Data<PlacesApplication>,
+    body: web::Json<PlaceImportRequest>,
+) -> HttpResponse {
+    let user_id = match authenticated_user(&auth, &request).await {
+        Ok(user_id) => user_id,
+        Err(error) => return error.into_response(),
+    };
+    match places
+        .import_preview(path.into_inner(), user_id, &body.url)
+        .await
+    {
+        Ok(preview) => HttpResponse::Ok()
+            .insert_header((header::CACHE_CONTROL, "no-store"))
+            .json(preview),
+        Err(ImportPreviewError::Access(error)) => place_error(error),
+        Err(ImportPreviewError::Import(error)) => match error {
+            ImportError::Invalid => problem(
+                StatusCode::BAD_REQUEST,
+                "Unsupported Maps link",
+                "unsupported_maps_link",
+            ),
+            ImportError::NoDetails => problem(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "No place details in the link",
+                "maps_details_missing",
+            ),
+            ImportError::Upstream => problem(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Maps link could not be opened",
+                "maps_link_unavailable",
+            ),
+            ImportError::RateLimited => problem(
+                StatusCode::TOO_MANY_REQUESTS,
+                "Too many import requests",
+                "maps_import_rate_limited",
+            ),
+        },
+    }
 }
 
 async fn authenticated_user(

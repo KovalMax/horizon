@@ -90,6 +90,30 @@ export async function createSavedPlace(
   return toPlace(saved);
 }
 
+export type PlaceImportPreview = {
+  name: string | null;
+  address: string | null;
+};
+
+export async function previewPlaceImport(
+  accessToken: string,
+  spaceId: string,
+  url: string,
+  signal: AbortSignal,
+) {
+  return readJson<PlaceImportPreview>(
+    await authenticatedFetch(`/api/spaces/${spaceId}/places/import-preview`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url }),
+      signal,
+    }),
+  );
+}
+
 export async function deleteSavedPlace(
   accessToken: string,
   spaceId: string,

@@ -19,6 +19,16 @@ const eventTimeZones = [
   ["UTC", "UTC"],
 ] as const;
 
+function PlannerDateTimeInput(
+  props: React.ComponentPropsWithoutRef<"input"> & { type: "date" | "time" },
+) {
+  return (
+    <span className="planner-date-time-control">
+      <input {...props} />
+    </span>
+  );
+}
+
 function clearCorrectedEventTimeError(
   event: React.ChangeEvent<HTMLInputElement>,
   appState: PlannerAppState,
@@ -366,7 +376,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   <div className="modal-grid event-date-grid">
                     <label className="form-field">
                       Date
-                      <input
+                      <PlannerDateTimeInput
                         name="date"
                         type="date"
                         defaultValue={
@@ -377,7 +387,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     </label>
                     <label className="form-field">
                       Starts
-                      <input
+                      <PlannerDateTimeInput
                         name="time"
                         type="time"
                         defaultValue={editingEvent?.time ?? "18:00"}
@@ -388,7 +398,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     </label>
                     <label className="form-field">
                       Ends
-                      <input
+                      <PlannerDateTimeInput
                         name="end"
                         type="time"
                         defaultValue={editingEvent?.end ?? "19:00"}
@@ -444,7 +454,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         <summary>Set an end date (optional)</summary>
                         <label className="form-field">
                           Repeat through
-                          <input
+                          <PlannerDateTimeInput
                             name="recurrenceEndsOn"
                             type="date"
                             defaultValue={editingEvent?.recurrenceEndsOn}
@@ -539,7 +549,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                     <div className="modal-grid">
                       <label className="form-field">
                         Due date (optional)
-                        <input
+                        <PlannerDateTimeInput
                           name="dueDate"
                           type="date"
                           defaultValue={
@@ -554,7 +564,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       </label>
                       <label className="form-field">
                         Due time (optional)
-                        <input
+                        <PlannerDateTimeInput
                           name="taskTime"
                           type="time"
                           disabled={!taskDueDate}

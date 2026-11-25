@@ -262,7 +262,9 @@ test("rejects a nonexistent mail domain before sending a sign-in email", async (
   page,
 }) => {
   await page.goto("/welcome");
-  await page.getByLabel("Email address").fill(`${randomUUID()}@horizon.invalid`);
+  await page
+    .getByLabel("Email address")
+    .fill(`${randomUUID()}@horizon.invalid`);
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "This email domain doesn’t receive mail.",

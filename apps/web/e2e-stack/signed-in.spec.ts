@@ -741,6 +741,32 @@ test("mobile WebKit keeps planner date and time fields inside their sheets", asy
     const ends = (await event.getByLabel("Ends").boundingBox())!;
     expect(Math.abs(starts.y - ends.y)).toBeLessThanOrEqual(1);
     expect(starts.x + starts.width).toBeLessThan(ends.x);
+    await event.getByLabel("Starts").fill("17:15");
+    const allDay = event.getByRole("switch", { name: "All-day event" });
+    const insets = await allDay.evaluate((toggle) => {
+      const row = toggle.closest("label")!;
+      const bounds = row.getBoundingClientRect();
+      const text = row.querySelector("span")!.getBoundingClientRect();
+      return {
+        text: text.left - bounds.left,
+        toggle: bounds.right - toggle.getBoundingClientRect().right,
+      };
+    });
+    expect(insets.text).toBeGreaterThanOrEqual(12);
+    expect(insets.toggle).toBeGreaterThanOrEqual(12);
+    expect(Math.abs(insets.text - insets.toggle)).toBeLessThanOrEqual(1);
+    await allDay.tap();
+    await expect(allDay).toBeChecked();
+    await expect(event.getByLabel("Starts", { exact: true })).toBeHidden();
+    await expect(event.getByLabel("Ends", { exact: true })).toBeHidden();
+    const date = event.getByLabel("Date", { exact: true });
+    await expect(date).toBeVisible();
+    await date.fill("2026-12-02");
+    await expectSheetFits("New event");
+    await allDay.tap();
+    await expect(event.getByLabel("Starts")).toBeVisible();
+    await expect(event.getByLabel("Starts")).toHaveValue("17:15");
+    await expect(date).toHaveValue("2026-12-02");
     await event.getByText("Set an end date (optional)").tap();
     await event.getByLabel("Repeat through").fill("2026-12-02");
     await expectSheetFits("New event");

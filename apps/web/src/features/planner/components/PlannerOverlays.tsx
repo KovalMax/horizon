@@ -373,7 +373,9 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   </label>
                 )}
                 {modal === "event" && (
-                  <div className="modal-grid event-date-grid">
+                  <div
+                    className={`modal-grid event-date-grid${eventAllDay ? " event-date-grid-all-day" : ""}`}
+                  >
                     <label className="form-field">
                       Date
                       <PlannerDateTimeInput
@@ -385,22 +387,24 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                         }
                       />
                     </label>
-                    <label className="form-field">
+                    <label className="form-field" hidden={eventAllDay}>
                       Starts
                       <PlannerDateTimeInput
                         name="time"
                         type="time"
+                        disabled={eventAllDay}
                         defaultValue={editingEvent?.time ?? "18:00"}
                         onChange={(event) =>
                           clearCorrectedEventTimeError(event, appState)
                         }
                       />
                     </label>
-                    <label className="form-field">
+                    <label className="form-field" hidden={eventAllDay}>
                       Ends
                       <PlannerDateTimeInput
                         name="end"
                         type="time"
+                        disabled={eventAllDay}
                         defaultValue={editingEvent?.end ?? "19:00"}
                         onChange={(event) =>
                           clearCorrectedEventTimeError(event, appState)

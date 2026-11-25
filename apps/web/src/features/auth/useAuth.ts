@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { emailValidationMessage } from "../../shared/emailValidation";
 import {
   AuthApiError,
   getAuthTokens,
@@ -141,12 +142,17 @@ export function useAuth(): AuthState {
       setRequestStatus("sent");
     } catch (failure) {
       setRequestStatus("idle");
+      const validation =
+        failure instanceof AuthApiError
+          ? emailValidationMessage(failure.code, email)
+          : undefined;
       setError(
-        failure instanceof AuthApiError && failure.status === 429
-          ? `Too many sign-in requests were made recently. Please wait ${formatRetryDelay(failure.retryAfterSeconds)} before trying again. This does not affect your account.`
-          : failure instanceof AuthApiError && failure.status === 503
-            ? "Sign-in email is temporarily unavailable. Your account is safe; please try again later."
-            : "We couldn’t send the sign-in link. Please check your connection and try again.",
+        validation ??
+          (failure instanceof AuthApiError && failure.status === 429
+            ? `Too many sign-in requests were made recently. Please wait ${formatRetryDelay(failure.retryAfterSeconds)} before trying again. This does not affect your account.`
+            : failure instanceof AuthApiError && failure.status === 503
+              ? "Sign-in email is temporarily unavailable. Your account is safe; please try again later."
+              : "We couldn’t send the sign-in link. Please check your connection and try again."),
       );
     }
   };

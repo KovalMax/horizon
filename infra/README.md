@@ -23,6 +23,14 @@ reporting code.
 See [the shared production Traefik contract](SHARED-TRAEFIK.md) before changing
 edge routing or deployment.
 
+## Email validation
+
+The API uses the container's configured DNS resolver before sending sign-in
+emails and Space invitations. The production API needs working DNS as well
+as SMTP. A DNS failure asks the user to retry; the API doesn't probe individual
+mailboxes. Local stacks using the `mailpit` relay accept synthetic
+`@example.test` recipients without a DNS lookup.
+
 ## Web Push
 
 Set these together in `.env.production` in the server's deployment directory:

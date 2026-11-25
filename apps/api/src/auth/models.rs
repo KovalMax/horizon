@@ -37,6 +37,7 @@ pub struct AccessPrincipal {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuthError {
     InvalidRequest,
+    EmailDomain(super::EmailDomainError),
     RateLimited { retry_after_seconds: i64 },
     Unauthorized,
     Unavailable,

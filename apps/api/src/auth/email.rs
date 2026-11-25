@@ -6,8 +6,14 @@ use lettre::{
 };
 use std::env;
 
+use super::email_domain::{self, EmailDomainError};
+
 #[async_trait]
 pub trait EmailSender: Send + Sync {
+    async fn validate_recipient_domain(&self, _recipient: &str) -> Result<(), EmailDomainError> {
+        Ok(())
+    }
+
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String>;
 
     async fn send_sign_in(&self, recipient: &str, link: &str, _code: &str) -> Result<(), String> {
@@ -39,6 +45,8 @@ pub trait EmailSender: Send + Sync {
 pub struct SmtpEmailSender {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     from: Mailbox,
+    resolver: Option<hickory_resolver::TokioAsyncResolver>,
+    allow_test_domain: bool,
 }
 
 fn log_smtp_delivery_failure(kind: &str, recipient: &str, error: &lettre::transport::smtp::Error) {
@@ -91,12 +99,25 @@ impl SmtpEmailSender {
         Ok(Self {
             transport: builder.build(),
             from,
+            resolver: hickory_resolver::TokioAsyncResolver::tokio_from_system_conf().ok(),
+            allow_test_domain: host == "mailpit",
         })
     }
 }
 
 #[async_trait]
 impl EmailSender for SmtpEmailSender {
+    async fn validate_recipient_domain(&self, recipient: &str) -> Result<(), EmailDomainError> {
+        if self.allow_test_domain && recipient.ends_with("@example.test") {
+            return Ok(());
+        }
+        let resolver = self
+            .resolver
+            .as_ref()
+            .ok_or(EmailDomainError::Unavailable)?;
+        email_domain::check(resolver, recipient).await
+    }
+
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String> {
         self.send_sign_in(recipient, link, "").await
     }

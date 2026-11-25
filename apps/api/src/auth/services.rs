@@ -156,7 +156,7 @@ impl AuthApplication {
         ip: &str,
         time_zone: Option<&str>,
     ) -> Result<Uuid, AuthError> {
-        let email = normalized_email(email).ok_or(AuthError::InvalidRequest)?;
+        let email = super::normalize_email(email).ok_or(AuthError::InvalidRequest)?;
         let time_zone = time_zone
             .and_then(|value| value.parse::<chrono_tz::Tz>().ok())
             .map(|zone| {
@@ -182,6 +182,13 @@ impl AuthApplication {
                 expires_at,
             )
             .await?;
+        if let Err(error) = self.mailer.validate_recipient_domain(&email).await {
+            let _ = self
+                .repository
+                .consume_magic_link_challenge(challenge_id)
+                .await;
+            return Err(AuthError::EmailDomain(error));
+        }
         let link = format!("{}#token={secret}", self.public_url.trim_end_matches('/'));
         if self
             .mailer
@@ -197,13 +204,4 @@ impl AuthApplication {
         }
         Ok(challenge_id)
     }
-}
-
-pub(super) fn normalized_email(email: &str) -> Option<String> {
-    let email = email.trim();
-    if email.is_empty() || email.len() > 320 || email.chars().any(char::is_whitespace) {
-        return None;
-    }
-    let parsed = email.parse::<lettre::Address>().ok()?;
-    Some(parsed.to_string().to_ascii_lowercase())
 }

@@ -1,4 +1,5 @@
 import { authDebug } from "./authDebug";
+import { readProblemCode } from "../../shared/emailValidation";
 
 export type AuthAccount = {
   id: string;
@@ -223,6 +224,7 @@ export class AuthApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly retryAfterSeconds: number | null = null,
+    public readonly code = "",
   ) {
     super("The request could not be completed.");
   }
@@ -239,6 +241,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     throw new AuthApiError(
       response.status,
       Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+      await readProblemCode(response),
     );
   }
   return response.json() as Promise<T>;

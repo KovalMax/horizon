@@ -4,7 +4,9 @@ use actix_web::{
 };
 use async_trait::async_trait;
 use horizon_api::{
-    auth::{self, AuthSettings, EmailSender, MagicLinkRequest, RedeemMagicLinkRequest},
+    auth::{
+        self, AuthSettings, EmailDomainError, EmailSender, MagicLinkRequest, RedeemMagicLinkRequest,
+    },
     members::{
         self, CreateInvitationRequest, SpaceInvitationResponse, SpaceMemberResponse,
         UpdateMemberRoleRequest,
@@ -58,6 +60,14 @@ macro_rules! authenticate {
 
 #[async_trait]
 impl EmailSender for Mailbox {
+    async fn validate_recipient_domain(&self, recipient: &str) -> Result<(), EmailDomainError> {
+        match recipient.rsplit_once('@').map(|(_, domain)| domain) {
+            Some("no-mail.test") => Err(EmailDomainError::NoMail),
+            Some("dns-unavailable.test") => Err(EmailDomainError::Unavailable),
+            _ => Ok(()),
+        }
+    }
+
     async fn send_magic_link(&self, recipient: &str, link: &str) -> Result<(), String> {
         self.0
             .lock()
@@ -147,6 +157,60 @@ async fn email_invitation_is_verified_and_accepted_as_viewer() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let space: SpaceResponse = actix_test::read_body_json(response).await;
+
+    for (domain, status, code) in [
+        (
+            "no-mail.test",
+            StatusCode::BAD_REQUEST,
+            "email_domain_no_mail",
+        ),
+        (
+            "dns-unavailable.test",
+            StatusCode::SERVICE_UNAVAILABLE,
+            "email_domain_unavailable",
+        ),
+    ] {
+        let email = format!("{}@{domain}", Uuid::new_v4());
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::post()
+                .uri("/auth/magic-links")
+                .set_json(MagicLinkRequest {
+                    email: email.clone(),
+                    time_zone: None,
+                })
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), status);
+        let problem: serde_json::Value = actix_test::read_body_json(response).await;
+        assert_eq!(problem["code"], code);
+
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::post()
+                .uri(&format!("/spaces/{}/invitations", space.id))
+                .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+                .set_json(CreateInvitationRequest {
+                    email: email.clone(),
+                })
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), status);
+        let problem: serde_json::Value = actix_test::read_body_json(response).await;
+        assert_eq!(problem["code"], code);
+        assert!(!mailbox.0.lock().unwrap().iter().any(|(to, _)| *to == email));
+        let invitation_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM space_invitations WHERE space_id = $1 AND email_normalized = $2)",
+        )
+        .bind(space.id)
+        .bind(&email)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(!invitation_exists);
+    }
 
     let invitee_email = format!("invitee-{}@example.test", Uuid::new_v4());
     let request = actix_test::TestRequest::post()

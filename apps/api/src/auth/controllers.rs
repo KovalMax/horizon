@@ -78,9 +78,9 @@ fn bearer_token(request: &HttpRequest) -> Option<&str> {
     request_body = MagicLinkRequest,
     responses(
         (status = 202, description = "Request accepted without revealing account existence", body = MagicLinkAccepted),
-        (status = 400, description = "Invalid email address", body = Problem, content_type = "application/problem+json"),
+        (status = 400, description = "Malformed email address or domain that does not receive mail", body = Problem, content_type = "application/problem+json"),
         (status = 429, description = "Magic-link request limit exceeded", body = Problem, content_type = "application/problem+json"),
-        (status = 503, description = "Email delivery is temporarily unavailable", body = Problem, content_type = "application/problem+json")
+        (status = 503, description = "Email domain lookup or delivery is temporarily unavailable", body = Problem, content_type = "application/problem+json")
     )
 )]
 #[post("/auth/magic-links")]
@@ -102,6 +102,16 @@ pub async fn request_magic_link(
         Err(AuthError::InvalidRequest) => {
             problem(StatusCode::BAD_REQUEST, "Invalid request", "invalid_email")
         }
+        Err(AuthError::EmailDomain(super::EmailDomainError::NoMail)) => problem(
+            StatusCode::BAD_REQUEST,
+            "Email domain does not receive mail",
+            "email_domain_no_mail",
+        ),
+        Err(AuthError::EmailDomain(super::EmailDomainError::Unavailable)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Email domain could not be checked",
+            "email_domain_unavailable",
+        ),
         Err(AuthError::RateLimited {
             retry_after_seconds,
         }) => rate_limited(retry_after_seconds),

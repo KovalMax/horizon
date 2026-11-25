@@ -2034,11 +2034,13 @@ select,
 .more-drawer {
   display: grid;
   width: min(100%, 470px);
-  max-height: 85vh;
+  max-height: 85dvh;
   gap: 9px;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   border-radius: 22px 22px 0 0;
   padding: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
   background: #fff;
   box-shadow: 0 -8px 40px #15201d2b;
   animation: sheet-in 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -2066,6 +2068,11 @@ select,
   transition:
     background-color 0.16s ease,
     transform 0.16s ease;
+}
+.more-drawer .drawer-heading > button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
 }
 .drawer-heading > button:hover {
   background: #e7ece8;
@@ -2843,6 +2850,7 @@ a {
 }
 .task-modal .form-field,
 .event-modal .form-field {
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 10px;
   margin: 0 0 24px;
@@ -2896,9 +2904,46 @@ a {
 .event-modal .form-field textarea {
   min-height: 88px;
 }
-.event-modal .event-date-grid input {
+.planner-date-time-control {
+  /* Size the field independently of Safari's native date/time editor. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  height: 48px;
+  border: 1px solid var(--control);
+  border-radius: 12px;
+  padding-inline: 12px;
+  background: #fff;
+}
+.modal .form-field .planner-date-time-control input {
+  display: block;
   min-width: 0;
-  max-width: 100%;
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  appearance: none;
+}
+.modal .form-field .planner-date-time-control input:disabled {
+  color: var(--muted);
+  opacity: 0.65;
+}
+.planner-date-time-control input::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: start;
+}
+.planner-date-time-control input::-webkit-datetime-edit {
+  padding: 0;
+}
+.planner-date-time-control:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.planner-date-time-control input:focus-visible {
+  outline: none;
 }
 .task-modal .modal-grid,
 .event-modal .modal-grid {

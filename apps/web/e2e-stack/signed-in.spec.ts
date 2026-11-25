@@ -690,6 +690,87 @@ test("keeps Settings time controls usable on mobile WebKit", async () => {
   }
 });
 
+test("mobile WebKit keeps planner date and time fields inside their sheets", async () => {
+  const browser = await webkit.launch({ args: [] });
+  try {
+    const page = await browser.newPage({
+      ...devices["iPhone 13"],
+      baseURL: origin,
+      ignoreHTTPSErrors: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signIn(page, fixtureEmail());
+    const space = await createSpace(page, "Mobile planning");
+    await page.goto(`${space}/tasks`);
+    await createList(page, "Mobile tasks");
+    await page.goto(`${space}/calendar`);
+
+    const expectSheetFits = async (name: string) => {
+      const sheet = page.getByRole("dialog", { name });
+      for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: 640 });
+        expect(
+          await sheet.evaluate(
+            (element) => element.scrollWidth - element.clientWidth,
+          ),
+        ).toBe(0);
+        expect(
+          await sheet
+            .locator('input:is([type="date"], [type="time"])')
+            .evaluateAll((inputs) =>
+              inputs
+                .filter((input) => input.getClientRects().length)
+                .every((input) => {
+                  const control = input.getBoundingClientRect();
+                  const field = input.closest("label")!.getBoundingClientRect();
+                  return (
+                    control.left >= field.left - 1 &&
+                    control.right <= field.right + 1
+                  );
+                }),
+            ),
+        ).toBe(true);
+      }
+    };
+
+    await page.setViewportSize({ width: 390, height: 640 });
+    await page.getByRole("button", { name: "New event", exact: true }).tap();
+    const event = page.getByRole("dialog", { name: "New event" });
+    await expectSheetFits("New event");
+    const starts = (await event.getByLabel("Starts").boundingBox())!;
+    const ends = (await event.getByLabel("Ends").boundingBox())!;
+    expect(Math.abs(starts.y - ends.y)).toBeLessThanOrEqual(1);
+    expect(starts.x + starts.width).toBeLessThan(ends.x);
+    await event.getByText("Set an end date (optional)").tap();
+    await event.getByLabel("Repeat through").fill("2026-12-02");
+    await expectSheetFits("New event");
+    await event.getByRole("button", { name: "Close dialog" }).tap();
+
+    const more = page.getByRole("button", { name: "More", exact: true });
+    await more.tap();
+    const drawer = page.getByRole("dialog", { name: "More" });
+    const close = drawer.getByRole("button", { name: "Close More menu" });
+    await expect(close).toBeFocused();
+    expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await close.tap();
+    await expect(drawer).toBeHidden();
+    await expect(more).toBeFocused();
+    await more.tap();
+    await drawer.getByRole("link", { name: "Space settings" }).tap();
+    await expect(drawer).toBeHidden();
+
+    await page.getByRole("button", { name: "To-dos", exact: true }).tap();
+    await page.getByRole("button", { name: "New Task", exact: true }).tap();
+    const task = page.getByRole("dialog", { name: "New Task" });
+    await expect(task.getByLabel("Due time (optional)")).toBeDisabled();
+    await task.getByLabel("Due date (optional)").fill("2026-12-02");
+    await task.getByLabel("Due time (optional)").fill("21:45");
+    await expectSheetFits("New Task");
+  } finally {
+    await browser.close();
+  }
+});
+
 test("an approved Editor writes shared content that an invited Viewer can only read", async ({
   page: owner,
   browser,

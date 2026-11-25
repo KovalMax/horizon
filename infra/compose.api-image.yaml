@@ -1,0 +1,5 @@
+# CI loads the API image into the runner before starting Compose.
+services:
+  api:
+    image: ${HORIZON_CHECK_API_IMAGE:?Set HORIZON_CHECK_API_IMAGE}
+    pull_policy: never

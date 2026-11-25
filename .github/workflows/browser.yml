@@ -27,7 +27,18 @@ jobs:
     name: Playwright / Signed-in stack
     runs-on: ubuntu-26.04
     timeout-minutes: 25
+    env:
+      HORIZON_CHECK_API_IMAGE: horizon-ci-api:${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Prepare cached API image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./apps/api
+          file: ./infra/docker/api/Dockerfile
+          load: true
+          tags: ${{ env.HORIZON_CHECK_API_IMAGE }}
+          cache-from: type=gha,scope=horizon-api-checks-amd64
       - name: Run signed-in browser checks
         run: HORIZON_BROWSER_RESULTS="$RUNNER_TEMP/horizon/browser" make test-e2e-stack

@@ -1,0 +1,54 @@
+name: API gates
+
+on:
+  workflow_call:
+    inputs:
+      check-migrations:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: API / Checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    env:
+      HORIZON_CHECK_API_IMAGE: horizon-ci-api:${{ github.sha }}
+      COMPOSE_PROJECT_NAME: horizon-api-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_FILE: infra/compose.checks.yaml:infra/compose.api-image.yaml
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build API check image once
+        uses: docker/build-push-action@v7
+        with:
+          context: ./apps/api
+          file: ./infra/docker/api/Dockerfile
+          load: true
+          tags: ${{ env.HORIZON_CHECK_API_IMAGE }}
+          cache-from: type=gha,scope=horizon-api-checks-amd64
+          cache-to: type=gha,mode=max,scope=horizon-api-checks-amd64,ignore-error=true
+      - name: Check Rust formatting
+        run: docker compose run --rm --no-deps api cargo fmt --all -- --check
+      - name: Start PostgreSQL
+        run: docker compose up --detach --wait db
+      - name: Verify fresh and repeat migrations
+        if: inputs.check-migrations
+        run: |
+          docker compose run --rm --no-deps api target/debug/horizon-api migrate
+          docker compose run --rm --no-deps api target/debug/horizon-api migrate
+          docker compose down --remove-orphans
+          docker compose up --detach --wait db
+      - name: Compile API targets, run tests, and lint
+        run: |
+          docker compose run --rm --no-deps api sh -ec '
+            cargo build --locked --all-targets
+            cargo test --locked
+            cargo clippy --locked --all-targets -- -D warnings
+          '
+      - name: Remove isolated test containers
+        if: always()
+        run: docker compose down --remove-orphans

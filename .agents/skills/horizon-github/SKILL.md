@@ -10,6 +10,11 @@ description: Use for Horizon pull requests, stacked merges, GitHub Actions check
   calls it for the tag before publishing. `Quality / Required` is the
   aggregate PR check, not proof that a branch ruleset enforces it. Verify
   current rules and run status in GitHub; do not change settings without scope.
+- `api.yml` reuses one Docker build for formatting, compilation, tests and
+  Clippy; release runs also check fresh and repeat migrations on disposable
+  PostgreSQL. Signed-in browser checks reuse the same AMD64 BuildKit cache.
+  The optimized ARM64 production build has a separate, release-only GHCR
+  cache; never deploy the cache tag.
 - `.github/workflows/performance.yml` is manual and report-only. CI artifacts
   go to `$RUNNER_TEMP/horizon`, not `.local/`. Upload only named reports and
   deterministic browser traces; signed-in traces, callback URLs and join

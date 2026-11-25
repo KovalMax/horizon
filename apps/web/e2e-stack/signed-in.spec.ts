@@ -543,6 +543,60 @@ test("the mobile time-zone list does not block the reminder time", async ({
   await expect(timeZone).toBeFocused();
 });
 
+test("reviews and saves a Maps place with appended notes on mobile", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  const space = await createSpace(page, "Restaurant plans");
+  await page.goto(`${space}/places`);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.getByRole("button", { name: "Save a place" }).click();
+  const dialog = page.getByRole("dialog", { name: "Save a place" });
+  const name = dialog.getByLabel("Place name");
+  await name.fill("Dinner spot");
+  await dialog.getByText("Import from Google Maps", { exact: true }).click();
+  const mapsLink = dialog.getByLabel("Google Maps link");
+  await mapsLink.fill("https://www.google.com/maps/dir/?api=1");
+  const importDetails = dialog.getByRole("button", { name: "Import details" });
+  await importDetails.click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "supported Google Maps",
+  );
+  await expect(name).toHaveValue("Dinner spot");
+  await mapsLink.fill(
+    "https://maps.google.com?q=Pepella+georgisches+Restaurant+und+Bar,+Augustastra%C3%9Fe+30,+40477+D%C3%BCsseldorf-Stadtbezirk+1,+Germany&ftid=0x47b8c988bbf31717:0x744e25ef6964ea62",
+  );
+  await importDetails.click();
+  await expect(dialog.getByLabel("Address")).toHaveValue(
+    "Augustastraße 30, 40477 Düsseldorf-Stadtbezirk 1, Germany",
+  );
+  await expect(name).toHaveValue("Dinner spot");
+  await dialog.getByRole("button", { name: /Use imported name/ }).click();
+  await expect(name).toHaveValue("Pepella georgisches Restaurant und Bar");
+  const note = dialog.getByLabel("Note (optional)");
+  await note.fill("Book a table.");
+  await dialog.getByText("Add opening hours, cuisine, or website").click();
+  await dialog.getByLabel("Opening hours").fill("Tue–Fri 17:00–23:00");
+  await dialog.getByLabel("Cuisine").fill("Georgian");
+  await dialog
+    .getByLabel("Website", { exact: true })
+    .fill("https://www.restaurantpepella.com/");
+  await dialog.getByRole("button", { name: "Add to note" }).click();
+  await expect(note).toHaveValue(
+    "Book a table.\n\nHours: Tue–Fri 17:00–23:00\nCuisine: Georgian\nWebsite: https://www.restaurantpepella.com/",
+  );
+  expect(await dialog.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(
+    0,
+  );
+  await dialog.getByRole("button", { name: "Save place", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Pepella georgisches Restaurant und Bar",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/Cuisine: Georgian/)).toBeVisible();
+});
+
 test("Saved places filters expose selection and count only the current Space", async ({
   page,
 }) => {

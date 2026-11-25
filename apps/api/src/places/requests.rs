@@ -24,3 +24,9 @@ pub struct CreatePlaceRequest {
     pub address: String,
     pub note: Option<String>,
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct PlaceImportRequest {
+    #[schema(max_length = 4096)]
+    pub url: String,
+}

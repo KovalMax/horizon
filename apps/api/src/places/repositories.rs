@@ -172,6 +172,26 @@ impl PostgresPlacesRepository {
             PlaceError::NotFound
         })
     }
+
+    pub(super) async fn require_space_writer(
+        &self,
+        space_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), PlaceError> {
+        let role = sqlx::query_scalar::<_, String>(
+            "SELECT role FROM space_memberships WHERE space_id = $1 AND user_id = $2",
+        )
+        .bind(space_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| PlaceError::Unavailable)?;
+        match role.as_deref() {
+            Some("owner" | "editor") => Ok(()),
+            Some(_) => Err(PlaceError::Forbidden),
+            None => Err(PlaceError::NotFound),
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]

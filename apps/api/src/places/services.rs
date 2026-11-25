@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::pagination::{Page, PageWindow};
 
 use super::{
+    maps_import::{ImportError, MapsImport, PlaceImportPreview},
     models::{PlaceError, SavedPlaceDraft},
     repositories::PostgresPlacesRepository,
     requests::CreatePlaceRequest,
@@ -15,13 +16,36 @@ const PLACE_CATEGORIES: [&str; 4] = ["Food & drink", "Groceries", "Health", "Ser
 #[derive(Clone)]
 pub struct PlacesApplication {
     repository: PostgresPlacesRepository,
+    maps_import: MapsImport,
+}
+
+pub(super) enum ImportPreviewError {
+    Access(PlaceError),
+    Import(ImportError),
 }
 
 impl PlacesApplication {
     pub fn new(pool: PgPool) -> Self {
         Self {
             repository: PostgresPlacesRepository::new(pool),
+            maps_import: MapsImport::default(),
         }
+    }
+
+    pub(super) async fn import_preview(
+        &self,
+        space_id: Uuid,
+        user_id: Uuid,
+        url: &str,
+    ) -> Result<PlaceImportPreview, ImportPreviewError> {
+        self.repository
+            .require_space_writer(space_id, user_id)
+            .await
+            .map_err(ImportPreviewError::Access)?;
+        self.maps_import
+            .resolve(user_id, url)
+            .await
+            .map_err(ImportPreviewError::Import)
     }
 
     pub async fn list_for_member(

@@ -1383,6 +1383,8 @@ select:focus-visible {
 }
 .place-note {
   font-style: italic;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .map-canvas {
   position: relative;
@@ -2202,6 +2204,32 @@ select,
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.place-modal .form-field,
+.place-extra-fields .form-field {
+  grid-template-columns: minmax(0, 1fr);
+}
+.place-extra-fields {
+  min-width: 0;
+  margin-block: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.place-extra-fields summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 650;
+}
+.place-modal .button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 520px) {
+  .place-modal .form-field :is(input, select, textarea) {
+    font-size: 16px;
+  }
 }
 .modal-actions {
   display: flex;

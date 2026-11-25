@@ -3,6 +3,7 @@ import { dateLabel } from "../domain";
 import type { PlannerAppState } from "../usePlannerApp";
 import { AppLink, Button, Icon } from "../../../shared/ui";
 import { SpaceSwitcher } from "./SpaceSwitcher";
+import { SavedPlaceFields } from "./SavedPlaceFields";
 import { ReminderPicker, reminderOffsetsFromForm } from "./ReminderPicker";
 
 const eventTimeValidationMessage = "The end time must be after the start time.";
@@ -316,6 +317,12 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   placeholder="e.g. Weekend prep"
                 />
               </label>
+            ) : modal === "place" ? (
+              <SavedPlaceFields
+                key={appState.space.id}
+                accessToken={appState.accessToken}
+                spaceId={appState.space.id}
+              />
             ) : (
               <>
                 {modal === "event" && (
@@ -337,7 +344,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                   </label>
                 )}
                 <label className="form-field">
-                  {modal === "place" ? "Place name" : "Title"}
+                  Title
                   <input
                     name="title"
                     required
@@ -585,35 +592,6 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                       disabled={!taskDueDate}
                     />
                     {!taskDueDate && <p>Add a due date to set reminders.</p>}
-                  </>
-                )}
-                {modal === "place" && (
-                  <>
-                    <label className="form-field">
-                      Address
-                      <input
-                        name="address"
-                        placeholder="Street, city"
-                        required
-                      />
-                    </label>
-                    <label className="form-field">
-                      Category
-                      <select name="category">
-                        <option>Food & drink</option>
-                        <option>Groceries</option>
-                        <option>Health</option>
-                        <option>Services</option>
-                      </select>
-                    </label>
-                    <label className="form-field">
-                      Note (optional)
-                      <textarea
-                        name="note"
-                        rows={2}
-                        placeholder="A useful detail for everyone"
-                      />
-                    </label>
                   </>
                 )}
               </>

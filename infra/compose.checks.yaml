@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17.11-trixie
+    image: postgres:17.12-trixie
     environment:
       POSTGRES_DB: horizon_test
       POSTGRES_USER: horizon_test

@@ -1,7 +1,10 @@
 use hickory_resolver::{
-    error::ResolveErrorKind,
-    proto::{op::ResponseCode, rr::Name},
-    TokioAsyncResolver,
+    net::{DnsError, NetError, NoRecords},
+    proto::{
+        op::ResponseCode,
+        rr::{Name, RData},
+    },
+    TokioResolver,
 };
 use std::time::Duration;
 
@@ -33,18 +36,17 @@ pub fn normalize_email(value: &str) -> Option<String> {
     Some(email.to_string().to_ascii_lowercase())
 }
 
-fn no_records(error: &hickory_resolver::error::ResolveError) -> bool {
-    matches!(
-        error.kind(),
-        ResolveErrorKind::NoRecordsFound {
-            response_code: ResponseCode::NoError | ResponseCode::NXDomain,
-            ..
+fn no_records_code(error: &NetError) -> Option<ResponseCode> {
+    match error {
+        NetError::Dns(DnsError::NoRecordsFound(NoRecords { response_code, .. })) => {
+            Some(*response_code)
         }
-    )
+        _ => None,
+    }
 }
 
 pub(super) async fn check(
-    resolver: &TokioAsyncResolver,
+    resolver: &TokioResolver,
     recipient: &str,
 ) -> Result<(), EmailDomainError> {
     let (_, domain) = recipient.rsplit_once('@').ok_or(EmailDomainError::NoMail)?;
@@ -54,35 +56,38 @@ pub(super) async fn check(
     tokio::time::timeout(Duration::from_secs(3), async {
         match resolver.mx_lookup(domain.clone()).await {
             Ok(records) => {
-                return if records.iter().any(|mx| !mx.exchange().is_root()) {
+                return if records
+                    .answers()
+                    .iter()
+                    .any(|record| matches!(&record.data, RData::MX(mx) if !mx.exchange.is_root()))
+                {
                     Ok(())
                 } else {
                     // Null MX explicitly opts out of email, even if A/AAAA exist.
                     Err(EmailDomainError::NoMail)
                 };
             }
-            Err(error) => match error.kind() {
-                ResolveErrorKind::NoRecordsFound {
-                    response_code: ResponseCode::NXDomain,
-                    ..
-                } => return Err(EmailDomainError::NoMail),
-                ResolveErrorKind::NoRecordsFound {
-                    response_code: ResponseCode::NoError,
-                    ..
-                } => {}
+            Err(error) => match no_records_code(&error) {
+                Some(ResponseCode::NXDomain) => return Err(EmailDomainError::NoMail),
+                Some(ResponseCode::NoError) => {}
                 _ => return Err(EmailDomainError::Unavailable),
             },
         }
 
         // SMTP allows an implicit MX at the domain itself if no MX exists.
         async fn address_exists<T>(
-            lookup: impl std::future::Future<
-                Output = Result<T, hickory_resolver::error::ResolveError>,
-            >,
+            lookup: impl std::future::Future<Output = Result<T, NetError>>,
         ) -> Result<bool, EmailDomainError> {
             match lookup.await {
                 Ok(_) => Ok(true),
-                Err(error) if no_records(&error) => Ok(false),
+                Err(error)
+                    if matches!(
+                        no_records_code(&error),
+                        Some(ResponseCode::NoError | ResponseCode::NXDomain)
+                    ) =>
+                {
+                    Ok(false)
+                }
                 Err(_) => Err(EmailDomainError::Unavailable),
             }
         }

@@ -5,7 +5,7 @@ use actix_web::{
 };
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -17,6 +17,43 @@ pub use join_links::{
 };
 
 use crate::auth::{AuthApplication, AuthError, EmailSender, Problem};
+
+enum OwnerAuthorizationError {
+    NotFound,
+    NotOwner,
+    Unavailable,
+}
+
+async fn lock_active_space_owner(
+    transaction: &mut Transaction<'_, Postgres>,
+    space_id: Uuid,
+    actor_id: Uuid,
+) -> Result<(), OwnerAuthorizationError> {
+    // Serialize with transfer and deletion in Space-first order. The weaker
+    // lock still lets unrelated foreign-key inserts reference the Space.
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM spaces WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE",
+    )
+    .bind(space_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(|_| OwnerAuthorizationError::Unavailable)?
+    .ok_or(OwnerAuthorizationError::NotFound)?;
+
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM space_memberships WHERE space_id = $1 AND user_id = $2 FOR NO KEY UPDATE",
+    )
+    .bind(space_id)
+    .bind(actor_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(|_| OwnerAuthorizationError::Unavailable)?;
+    match role.as_deref() {
+        Some("owner") => Ok(()),
+        Some(_) => Err(OwnerAuthorizationError::NotOwner),
+        None => Err(OwnerAuthorizationError::NotFound),
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 pub struct SpaceMemberResponse {
@@ -170,6 +207,7 @@ impl MembersApplication {
             .begin()
             .await
             .map_err(|_| MemberError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, inviter_id).await?;
         sqlx::query(
             "UPDATE space_invitations SET status = 'expired' \
              WHERE space_id = $1 AND email_normalized = $2 \
@@ -279,15 +317,15 @@ impl MembersApplication {
         member_id: Uuid,
         role: &str,
     ) -> Result<SpaceMemberResponse, MemberError> {
-        self.require_owner(space_id, actor_id).await?;
-        if !matches!(role, "viewer" | "editor") {
-            return Err(MemberError::InvalidRole);
-        }
         let mut transaction = self
             .pool
             .begin()
             .await
             .map_err(|_| MemberError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
+        if !matches!(role, "viewer" | "editor") {
+            return Err(MemberError::InvalidRole);
+        }
         let row = sqlx::query_as::<_, (Uuid, String, String)>(
             "UPDATE space_memberships m SET role = $3 \
              FROM email_identities e \
@@ -362,12 +400,12 @@ impl MembersApplication {
         actor_id: Uuid,
         member_id: Uuid,
     ) -> Result<(), MemberError> {
-        self.require_owner(space_id, actor_id).await?;
         let mut transaction = self
             .pool
             .begin()
             .await
             .map_err(|_| MemberError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
         let result = sqlx::query_scalar::<_, Uuid>(
             "DELETE FROM space_memberships WHERE space_id = $1 AND user_id = $2 AND role <> 'owner' RETURNING user_id",
         )
@@ -417,18 +455,26 @@ impl MembersApplication {
         actor_id: Uuid,
         invitation_id: Uuid,
     ) -> Result<(), MemberError> {
-        self.require_owner(space_id, actor_id).await?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| MemberError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
         let result = sqlx::query(
             "UPDATE space_invitations SET status = 'revoked' \
              WHERE id = $1 AND space_id = $2 AND status = 'pending' AND expires_at > now()",
         )
         .bind(invitation_id)
         .bind(space_id)
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(|_| MemberError::Unavailable)?;
         if result.rows_affected() == 1 {
-            Ok(())
+            transaction
+                .commit()
+                .await
+                .map_err(|_| MemberError::Unavailable)
         } else {
             Err(MemberError::NotFound)
         }
@@ -487,6 +533,16 @@ enum MemberError {
     EmailDomain(crate::auth::EmailDomainError),
     EmailDelivery,
     Unavailable,
+}
+
+impl From<OwnerAuthorizationError> for MemberError {
+    fn from(error: OwnerAuthorizationError) -> Self {
+        match error {
+            OwnerAuthorizationError::NotFound => Self::NotFound,
+            OwnerAuthorizationError::NotOwner => Self::NotOwner,
+            OwnerAuthorizationError::Unavailable => Self::Unavailable,
+        }
+    }
 }
 
 enum AuthenticationFailure {

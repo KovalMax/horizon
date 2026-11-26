@@ -13,6 +13,17 @@ allowance. Traefik stores this limiter in memory per instance; if the edge is
 scaled to multiple Traefik instances, configure distributed rate limiting with
 Redis or the instances will enforce independent buckets.
 
+Horizon also limits sign-in requests in PostgreSQL. The Horizon API router
+removes RFC 7239 `Forwarded`, and the API accepts only a single
+`X-Forwarded-For` address from the exact `AUTH_TRUSTED_PROXY_IP` peer
+(production Compose defaults to Traefik's `172.30.0.250`). The API uses the
+socket peer for every other connection and for absent or malformed proxy
+metadata. Keep insecure forwarded-header trust off and keep the API port
+unpublished. This policy assumes the shared Traefik is the direct public
+edge and replaces incoming `X-Forwarded-For`; review it before adding an
+upstream proxy/CDN or moving Traefik to another address. Do not trust the
+entire shared subnet.
+
 The edge Traefik file provider must watch the host directory
 `~/traefik/dynamic/`, mounted read-only into the Traefik container as a
 directory. This repository owns `infra/traefik/dynamic.yml`; its release

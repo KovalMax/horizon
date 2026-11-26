@@ -1,5 +1,5 @@
 use chrono::{NaiveDate, NaiveTime};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::pagination::PageWindow;
@@ -228,17 +228,9 @@ impl PostgresTodosRepository {
             }
         }
 
-        let list_id = sqlx::query_scalar::<_, Uuid>(
-            "INSERT INTO todo_lists (id, space_id, name) VALUES ($1, $2, $3) \
-             ON CONFLICT (space_id, name) DO UPDATE SET name = EXCLUDED.name \
-             RETURNING id",
-        )
-        .bind(Uuid::new_v4())
-        .bind(space_id)
-        .bind(&draft.list_name)
-        .fetch_one(&mut *transaction)
-        .await
-        .map_err(|_| TodoError::Unavailable)?;
+        let list_id = resolve_list_for_task(&mut transaction, space_id, &draft.list_name)
+            .await
+            .map_err(|_| TodoError::Unavailable)?;
         let task_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO tasks (id, list_id, creator_id, title, due_date, due_time, assignee_id, reminder_offsets_minutes) \
@@ -517,6 +509,42 @@ impl PostgresTodosRepository {
             TodoError::NotFound
         })
     }
+}
+
+async fn resolve_list_for_task(
+    transaction: &mut Transaction<'_, Postgres>,
+    space_id: Uuid,
+    name: &str,
+) -> Result<Uuid, sqlx::Error> {
+    for _ in 0..3 {
+        // Compatible with other Task writers, but protects the list's key
+        // from deletion or rename until the Task insert commits.
+        if let Some(id) = sqlx::query_scalar(
+            "SELECT id FROM todo_lists WHERE space_id = $1 AND name = $2 FOR KEY SHARE",
+        )
+        .bind(space_id)
+        .bind(name)
+        .fetch_optional(&mut **transaction)
+        .await?
+        {
+            return Ok(id);
+        }
+        if let Some(id) = sqlx::query_scalar(
+            "INSERT INTO todo_lists (id, space_id, name) VALUES ($1, $2, $3) \
+             ON CONFLICT (space_id, name) DO NOTHING RETURNING id",
+        )
+        .bind(Uuid::new_v4())
+        .bind(space_id)
+        .bind(name)
+        .fetch_optional(&mut **transaction)
+        .await?
+        {
+            return Ok(id);
+        }
+        // A competing creator won. Read again in a new statement snapshot,
+        // also allowing for the winner's list to have been removed meanwhile.
+    }
+    Err(sqlx::Error::RowNotFound)
 }
 
 #[derive(sqlx::FromRow)]

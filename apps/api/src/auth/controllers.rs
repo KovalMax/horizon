@@ -11,25 +11,32 @@ use actix_web::{
     http::{header, StatusCode},
     post, web, HttpRequest, HttpResponse,
 };
-use std::{
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-};
+use std::net::IpAddr;
 
 fn request_ip(request: &HttpRequest) -> String {
-    let connection_info = request.connection_info();
-    let candidate = connection_info
-        .realip_remote_addr()
-        .unwrap_or("unknown")
-        .split(',')
-        .next()
-        .unwrap_or("unknown")
-        .trim();
-    SocketAddr::from_str(candidate)
-        .map(|address| address.ip().to_string())
-        .or_else(|_| IpAddr::from_str(candidate).map(|address| address.to_string()))
-        .unwrap_or_else(|_| "unknown".to_owned())
+    let Some(peer) = request.peer_addr().map(|peer| peer.ip().to_canonical()) else {
+        return "unknown".to_owned();
+    };
+    if request
+        .app_data::<TrustedSignInProxy>()
+        .is_some_and(|proxy| proxy.0 == peer)
+    {
+        let mut values = request.headers().get_all("x-forwarded-for");
+        if let (Some(value), None) = (values.next(), values.next()) {
+            if let Some(client) = value
+                .to_str()
+                .ok()
+                .and_then(|value| value.trim().parse::<IpAddr>().ok())
+            {
+                return client.to_canonical().to_string();
+            }
+        }
+    }
+    peer.to_string()
 }
+
+/// A single directly connected proxy that replaces untrusted client-IP headers.
+pub struct TrustedSignInProxy(pub IpAddr);
 
 fn problem(status: StatusCode, title: &'static str, code: &'static str) -> HttpResponse {
     HttpResponse::build(status)

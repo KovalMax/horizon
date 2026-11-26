@@ -11,14 +11,24 @@ use horizon_api::{
         self, CreateInvitationRequest, SpaceInvitationResponse, SpaceMemberResponse,
         UpdateMemberRoleRequest,
     },
-    spaces::{self, CreateSpaceRequest, SpaceResponse},
+    spaces::{self, CreateSpaceRequest, SpaceResponse, TransferOwnershipRequest},
 };
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tokio::sync::Notify;
 use uuid::Uuid;
 
+#[derive(Clone, Default)]
+struct Mailbox(Arc<Mutex<Vec<(String, String)>>>, Arc<DomainCheckGate>);
+
 #[derive(Default)]
-struct Mailbox(Arc<Mutex<Vec<(String, String)>>>);
+struct DomainCheckGate {
+    started: Notify,
+    resume: Notify,
+}
 
 macro_rules! authenticate {
     ($app:expr, $mailbox:expr, $email:expr) => {{
@@ -64,6 +74,11 @@ impl EmailSender for Mailbox {
         match recipient.rsplit_once('@').map(|(_, domain)| domain) {
             Some("no-mail.test") => Err(EmailDomainError::NoMail),
             Some("dns-unavailable.test") => Err(EmailDomainError::Unavailable),
+            Some("ownership-check.test") => {
+                self.1.started.notify_one();
+                self.1.resume.notified().await;
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -102,7 +117,7 @@ async fn email_invitation_is_verified_and_accepted_as_viewer() {
     let mailbox = Mailbox::default();
     let auth_state = auth::AuthApplication::with_email_sender(
         pool.clone(),
-        Arc::new(Mailbox(mailbox.0.clone())),
+        Arc::new(mailbox.clone()),
         AuthSettings {
             jwt_secret: "test-only-space-membership-secret-32bytes".to_owned(),
             issuer: "horizon-test".to_owned(),
@@ -127,6 +142,7 @@ async fn email_invitation_is_verified_and_accepted_as_viewer() {
             .service(auth::request_magic_link)
             .service(auth::redeem_magic_link)
             .service(spaces::create_shared_space)
+            .service(spaces::transfer_space_ownership)
             .service(members::list_members)
             .service(members::update_member_role)
             .service(members::remove_member)
@@ -675,13 +691,51 @@ async fn email_invitation_is_verified_and_accepted_as_viewer() {
     let response = actix_test::call_service(&app, request).await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    sqlx::query(
-        "UPDATE space_memberships SET role = 'editor' WHERE space_id = $1 AND role = 'owner'",
+    let pending_email = format!("invite-{}@ownership-check.test", Uuid::new_v4());
+    let invitation_request = actix_test::TestRequest::post()
+        .uri(&format!("/spaces/{}/invitations", space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .set_json(CreateInvitationRequest {
+            email: pending_email.clone(),
+        })
+        .to_request();
+    let transfer_request = actix_test::TestRequest::patch()
+        .uri(&format!("/spaces/{}/owner", space.id))
+        .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+        .set_json(TransferOwnershipRequest {
+            new_owner_id: join_request.requester_id,
+        })
+        .to_request();
+    let (response, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(actix_test::call_service(&app, invitation_request), async {
+            mailbox.1.started.notified().await;
+            assert_eq!(
+                actix_test::call_service(&app, transfer_request)
+                    .await
+                    .status(),
+                StatusCode::OK
+            );
+            mailbox.1.resume.notify_one();
+        })
+    })
+    .await
+    .expect("ownership should transfer while the invitation is awaiting DNS");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let pending_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM space_invitations WHERE space_id = $1 AND email_normalized = $2)",
     )
     .bind(space.id)
-    .execute(&pool)
+    .bind(&pending_email)
+    .fetch_one(&pool)
     .await
-    .expect("test should be able to switch Owner to Editor");
+    .unwrap();
+    assert!(!pending_exists);
+    assert!(!mailbox
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(recipient, _)| recipient == &pending_email));
     let request = actix_test::TestRequest::post()
         .uri(&format!("/spaces/{}/invitations", space.id))
         .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))

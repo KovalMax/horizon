@@ -6,6 +6,9 @@ use uuid::Uuid;
 
 use crate::auth::EmailSender;
 
+const RECONCILE_BATCH_SIZE: i64 = 256;
+const DELIVERY_BATCH_SIZE: usize = 50;
+
 #[derive(Clone)]
 pub struct TaskReminderWorker {
     pool: PgPool,
@@ -24,20 +27,58 @@ impl TaskReminderWorker {
 
     /// Drains work against an explicit clock, useful for deterministic worker tests.
     pub async fn run_once_at(&self, now: chrono::DateTime<Utc>) -> Result<(), sqlx::Error> {
-        self.reconcile(Utc::now()).await?;
-        while let Some(job) = self.claim(now).await? {
-            self.deliver(job).await;
-        }
+        self.reconcile_pending().await?;
+        self.deliver_due_at(now).await?;
         Ok(())
     }
 
+    pub async fn reconcile_pending(&self) -> Result<(), sqlx::Error> {
+        self.reconcile(Utc::now()).await
+    }
+
+    /// Claim one job at a time so a slow send does not tie up a batch of leases.
+    pub async fn deliver_due_at(&self, now: chrono::DateTime<Utc>) -> Result<usize, sqlx::Error> {
+        for claimed in 0..DELIVERY_BATCH_SIZE {
+            let Some(job) = self.claim(now).await? else {
+                return Ok(claimed);
+            };
+            self.deliver(job).await;
+        }
+        Ok(DELIVERY_BATCH_SIZE)
+    }
+
     async fn reconcile(&self, now: chrono::DateTime<Utc>) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query(
-            "UPDATE task_reminder_jobs j SET status = 'cancelled', locked_at = NULL \
-             WHERE j.status = 'pending' AND NOT EXISTS ( \
-               SELECT 1 FROM tasks t JOIN todo_lists l ON l.id = t.list_id \
-               JOIN users u ON u.id = COALESCE(t.assignee_id, t.creator_id) \
+        let mut after = None;
+        while let Some(last) = self.cancel_batch(after).await? {
+            after = Some(last);
+        }
+
+        let mut after = None;
+        loop {
+            let page = self.candidate_batch(after).await?;
+            let Some(last) = page.last() else {
+                return Ok(());
+            };
+            // An ineligible Task still advances the raw page's cursor.
+            after = Some(last.task_id);
+            self.upsert_batch(&page, now).await?;
+        }
+    }
+
+    async fn cancel_batch(&self, after: Option<Uuid>) -> Result<Option<Uuid>, sqlx::Error> {
+        // Advance over checked jobs, not just cancelled jobs, so valid jobs
+        // don't pin the cursor. The update and cursor selection share a snapshot.
+        sqlx::query_scalar(
+            "WITH batch AS MATERIALIZED ( \
+               SELECT id FROM task_reminder_jobs WHERE status = 'pending' \
+               AND id >= $1 AND ($2 OR id > $1) ORDER BY id LIMIT $3 \
+              ), cancelled AS ( \
+              UPDATE task_reminder_jobs j SET status = 'cancelled', locked_at = NULL \
+              FROM batch WHERE j.id = batch.id AND j.status = 'pending' AND NOT EXISTS ( \
+                SELECT 1 FROM tasks t JOIN todo_lists l ON l.id = t.list_id \
+                JOIN spaces s ON s.id = l.space_id AND s.deleted_at IS NULL \
+                JOIN space_memberships m ON m.space_id = s.id AND m.user_id = j.recipient_id \
+                JOIN users u ON u.id = COALESCE(t.assignee_id, t.creator_id) \
                LEFT JOIN task_reminder_preferences p \
                  ON p.task_id = t.id AND p.user_id = u.id \
                WHERE t.id = j.task_id AND NOT t.done AND t.due_date IS NOT NULL \
@@ -50,66 +91,122 @@ impl TaskReminderWorker {
                        WHERE user_id = j.recipient_id AND event_type = 'due_reminder' AND channel = 'email'), FALSE) \
                     OR EXISTS (SELECT 1 FROM web_push_subscriptions WHERE user_id = j.recipient_id AND task_reminders)) \
                  AND j.offset_minutes = ANY(COALESCE(p.offsets_minutes, t.reminder_offsets_minutes)) \
-             )",
+              ) RETURNING j.id \
+              ) SELECT id FROM batch ORDER BY id DESC LIMIT 1",
         )
-        .execute(&mut *tx)
-        .await?;
-        let candidates = sqlx::query_as::<_, ReminderCandidate>(
-            "SELECT t.id AS task_id, u.id AS recipient_id, \
-               COALESCE(p.offsets_minutes, t.reminder_offsets_minutes) AS offsets_minutes, \
-               t.due_date, t.due_time, u.time_zone, u.default_reminder_time \
-             FROM tasks t JOIN todo_lists l ON l.id = t.list_id \
-             JOIN users u ON u.id = COALESCE(t.assignee_id, t.creator_id) \
+        .bind(after.unwrap_or_default())
+        .bind(after.is_none())
+        .bind(RECONCILE_BATCH_SIZE)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    async fn candidate_batch(
+        &self,
+        after: Option<Uuid>,
+    ) -> Result<Vec<ReminderCandidate>, sqlx::Error> {
+        sqlx::query_as::<_, ReminderCandidate>(
+            "WITH batch AS MATERIALIZED ( \
+               SELECT id, list_id, creator_id, assignee_id, due_date, due_time, reminder_offsets_minutes \
+               FROM tasks WHERE NOT done AND due_date IS NOT NULL \
+                 AND id >= $1 AND ($2 OR id > $1) ORDER BY id LIMIT $3 \
+             ), eligible AS ( \
+              SELECT t.id, u.id AS recipient_id, u.time_zone, u.default_reminder_time, \
+                 COALESCE(p.offsets_minutes, t.reminder_offsets_minutes) AS offsets_minutes \
+              FROM batch t JOIN todo_lists l ON l.id = t.list_id \
+              JOIN spaces s ON s.id = l.space_id AND s.deleted_at IS NULL \
+              JOIN users u ON u.id = COALESCE(t.assignee_id, t.creator_id) \
+              JOIN space_memberships m ON m.space_id = s.id AND m.user_id = u.id \
              LEFT JOIN task_reminder_preferences p ON p.task_id = t.id AND p.user_id = u.id \
-             WHERE NOT t.done AND t.due_date IS NOT NULL \
-               AND NOT EXISTS (SELECT 1 FROM space_notification_preferences mute \
+              WHERE NOT EXISTS (SELECT 1 FROM space_notification_preferences mute \
                  WHERE mute.user_id = u.id AND mute.space_id = l.space_id AND mute.muted) \
                AND (COALESCE((SELECT enabled FROM notification_preferences \
                     WHERE user_id = u.id AND event_type = 'due_reminder' AND channel = 'in_app'), TRUE) \
                  OR COALESCE((SELECT enabled FROM notification_preferences \
                      WHERE user_id = u.id AND event_type = 'due_reminder' AND channel = 'email'), FALSE) \
-                  OR EXISTS (SELECT 1 FROM web_push_subscriptions WHERE user_id = u.id AND task_reminders))",
+                   OR EXISTS (SELECT 1 FROM web_push_subscriptions WHERE user_id = u.id AND task_reminders)) \
+             ) SELECT b.id AS task_id, e.recipient_id, e.offsets_minutes, \
+                      b.due_date, b.due_time, e.time_zone, e.default_reminder_time \
+               FROM batch b LEFT JOIN eligible e ON e.id = b.id ORDER BY b.id",
         )
-        .fetch_all(&mut *tx)
-        .await?;
-        for candidate in candidates {
-            for offset_minutes in &candidate.offsets_minutes {
-                let Some(scheduled_at) = candidate.scheduled_at(*offset_minutes) else {
+        .bind(after.unwrap_or_default())
+        .bind(after.is_none())
+        .bind(RECONCILE_BATCH_SIZE)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    async fn upsert_batch(
+        &self,
+        batch: &[ReminderCandidate],
+        now: chrono::DateTime<Utc>,
+    ) -> Result<(), sqlx::Error> {
+        let mut task_ids = Vec::new();
+        let mut recipients = Vec::new();
+        let mut offsets = Vec::new();
+        let mut schedules = Vec::new();
+        for candidate in batch {
+            let (Some(recipient_id), Some(candidate_offsets)) =
+                (candidate.recipient_id, &candidate.offsets_minutes)
+            else {
+                continue;
+            };
+            for &offset in candidate_offsets {
+                let Some(scheduled_at) = candidate.scheduled_at(offset) else {
                     continue;
                 };
-                if scheduled_at <= now {
-                    continue;
+                if scheduled_at > now {
+                    task_ids.push(candidate.task_id);
+                    recipients.push(recipient_id);
+                    offsets.push(offset);
+                    schedules.push(scheduled_at);
                 }
-                sqlx::query(
-                    "INSERT INTO task_reminder_jobs \
-                     (id, task_id, recipient_id, offset_minutes, scheduled_at, available_at) \
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $4) \
-                     ON CONFLICT (task_id, recipient_id, offset_minutes) DO UPDATE \
-                       SET status = 'pending', sent_at = NULL, last_error = NULL, \
-                           scheduled_at = EXCLUDED.scheduled_at, \
-                           available_at = CASE WHEN task_reminder_jobs.scheduled_at IS DISTINCT FROM EXCLUDED.scheduled_at \
-                             THEN EXCLUDED.available_at ELSE task_reminder_jobs.available_at END \
-                       WHERE task_reminder_jobs.status IN ('pending', 'cancelled') \
-                         AND EXCLUDED.scheduled_at > $5",
-                )
-                .bind(candidate.task_id)
-                .bind(candidate.recipient_id)
-                .bind(*offset_minutes)
-                .bind(scheduled_at)
-                .bind(now)
-                .execute(&mut *tx)
-                .await?;
             }
         }
-        tx.commit().await
+        if task_ids.is_empty() {
+            return Ok(());
+        }
+        sqlx::query(
+                "INSERT INTO task_reminder_jobs \
+                 (id, task_id, recipient_id, offset_minutes, scheduled_at, available_at) \
+                 SELECT gen_random_uuid(), candidate.task_id, candidate.recipient_id, \
+                        candidate.offset_minutes, candidate.scheduled_at, candidate.scheduled_at \
+                 FROM (SELECT DISTINCT * FROM unnest($1::uuid[], $2::uuid[], $3::int[], $4::timestamptz[]) \
+                    AS job(task_id, recipient_id, offset_minutes, scheduled_at)) candidate \
+                 WHERE NOT EXISTS (SELECT 1 FROM task_reminder_jobs j \
+                    WHERE (j.task_id, j.recipient_id, j.offset_minutes) \
+                        = (candidate.task_id, candidate.recipient_id, candidate.offset_minutes) \
+                      AND (j.status IN ('sending', 'sent', 'failed') \
+                        OR (j.status = 'pending' AND j.scheduled_at = candidate.scheduled_at))) \
+                 ORDER BY candidate.task_id, candidate.recipient_id, candidate.offset_minutes \
+                 ON CONFLICT (task_id, recipient_id, offset_minutes) DO UPDATE \
+                    SET status = 'pending', sent_at = NULL, last_error = NULL, \
+                        scheduled_at = EXCLUDED.scheduled_at, \
+                        available_at = CASE WHEN task_reminder_jobs.scheduled_at IS DISTINCT FROM EXCLUDED.scheduled_at \
+                          THEN EXCLUDED.available_at ELSE task_reminder_jobs.available_at END \
+                    WHERE task_reminder_jobs.status = 'cancelled' \
+                       OR (task_reminder_jobs.status = 'pending' \
+                         AND task_reminder_jobs.scheduled_at IS DISTINCT FROM EXCLUDED.scheduled_at)",
+            )
+            .bind(&task_ids)
+            .bind(&recipients)
+            .bind(&offsets)
+            .bind(&schedules)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     async fn claim(&self, now: chrono::DateTime<Utc>) -> Result<Option<ReminderJob>, sqlx::Error> {
         sqlx::query_as::<_, ReminderJob>(
             "UPDATE task_reminder_jobs SET status = 'sending', locked_at = now(), attempts = attempts + 1 \
-             WHERE id = (SELECT id FROM task_reminder_jobs \
-               WHERE status = 'pending' AND scheduled_at <= $1 AND available_at <= $1 \
-               ORDER BY scheduled_at, id FOR UPDATE SKIP LOCKED LIMIT 1) \
+             WHERE id = (SELECT j.id FROM task_reminder_jobs j \
+               WHERE j.status = 'pending' AND j.scheduled_at <= $1 AND j.available_at <= $1 \
+                 AND EXISTS (SELECT 1 FROM tasks t JOIN todo_lists l ON l.id = t.list_id \
+                   JOIN spaces s ON s.id = l.space_id AND s.deleted_at IS NULL \
+                   JOIN space_memberships m ON m.space_id = s.id AND m.user_id = j.recipient_id \
+                   WHERE t.id = j.task_id) \
+               ORDER BY j.scheduled_at, j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1) \
              RETURNING id, task_id, recipient_id, offset_minutes, attempts",
         )
         .bind(now)
@@ -120,11 +217,15 @@ impl TaskReminderWorker {
     async fn deliver(&self, job: ReminderJob) {
         let result = self.deliver_claimed(&job).await;
         match result {
-            Ok(()) => {
+            Ok(delivered) => {
                 let _ = sqlx::query(
-                    "UPDATE task_reminder_jobs SET status = 'sent', sent_at = now(), locked_at = NULL, last_error = NULL WHERE id = $1",
+                    "UPDATE task_reminder_jobs SET status = $2, \
+                     sent_at = CASE WHEN $2 = 'sent' THEN now() END, locked_at = NULL, last_error = NULL \
+                     WHERE id = $1 AND status = 'sending' AND attempts = $3",
                 )
                 .bind(job.id)
+                .bind(if delivered { "sent" } else { "cancelled" })
+                .bind(job.attempts)
                 .execute(&self.pool)
                 .await;
             }
@@ -134,23 +235,24 @@ impl TaskReminderWorker {
                     60_i64.saturating_mul(1_i64 << (job.attempts.saturating_sub(1).min(10)));
                 let _ = sqlx::query(
                     "UPDATE task_reminder_jobs SET status = $2, locked_at = NULL, \
-                     available_at = now() + ($3 * interval '1 second'), last_error = $4 WHERE id = $1",
+                      available_at = now() + ($3 * interval '1 second'), last_error = $4 \
+                      WHERE id = $1 AND status = 'sending' AND attempts = $5",
                 )
                 .bind(job.id)
                 .bind(if terminal { "failed" } else { "pending" })
                 .bind(delay_seconds)
                 .bind(error)
+                .bind(job.attempts)
                 .execute(&self.pool)
                 .await;
             }
         }
     }
 
-    async fn deliver_claimed(&self, job: &ReminderJob) -> Result<(), String> {
+    async fn deliver_claimed(&self, job: &ReminderJob) -> Result<bool, String> {
         let row = sqlx::query_as::<_, DeliveryRow>(
-            "SELECT t.title, s.name AS space_name, s.id AS space_id, t.due_date, t.due_time, \
+            "SELECT t.title, s.id AS space_id, t.due_date, t.due_time, \
                u.time_zone, u.default_reminder_time, j.scheduled_at, \
-               to_char(t.due_date, 'YYYY-MM-DD') || COALESCE(' ' || to_char(t.due_time, 'HH24:MI'), '') AS due, \
                e.email_normalized AS email, \
                COALESCE((SELECT enabled FROM notification_preferences WHERE user_id = j.recipient_id \
                   AND event_type = 'due_reminder' AND channel = 'in_app'), TRUE) AS in_app, \
@@ -158,8 +260,9 @@ impl TaskReminderWorker {
                   AND event_type = 'due_reminder' AND channel = 'email'), FALSE) AS email_enabled, \
                EXISTS (SELECT 1 FROM space_notification_preferences WHERE user_id = j.recipient_id \
                   AND space_id = l.space_id AND muted) AS muted \
-             FROM task_reminder_jobs j JOIN tasks t ON t.id = j.task_id \
-             JOIN todo_lists l ON l.id = t.list_id JOIN spaces s ON s.id = l.space_id \
+              FROM task_reminder_jobs j JOIN tasks t ON t.id = j.task_id \
+              JOIN todo_lists l ON l.id = t.list_id JOIN spaces s ON s.id = l.space_id \
+              JOIN space_memberships m ON m.space_id = s.id AND m.user_id = j.recipient_id \
              JOIN users u ON u.id = j.recipient_id \
              JOIN LATERAL (SELECT email_normalized FROM email_identities \
                WHERE user_id = j.recipient_id ORDER BY created_at LIMIT 1) e ON TRUE \
@@ -184,8 +287,32 @@ impl TaskReminderWorker {
                     job.offset_minutes,
                 ) == Some(row.scheduled_at)
         }) else {
-            return Ok(());
+            // Reconciliation may not have caught a schedule change yet. A
+            // skipped claim must remain eligible for a new, future schedule.
+            return Ok(false);
         };
+
+        let mut tx = self.pool.begin().await.map_err(|error| error.to_string())?;
+        // Match Space deletion's lock order so membership cannot disappear while
+        // we write the in-app notification or outbox item.
+        let active_space = sqlx::query_scalar::<_, Uuid>(
+            "SELECT id FROM spaces WHERE id = $1 AND deleted_at IS NULL FOR KEY SHARE",
+        )
+        .bind(row.space_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        let current_member = sqlx::query_scalar::<_, Uuid>(
+            "SELECT user_id FROM space_memberships WHERE space_id = $1 AND user_id = $2 FOR KEY SHARE",
+        )
+        .bind(row.space_id)
+        .bind(job.recipient_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        if active_space.is_none() || current_member.is_none() {
+            return Ok(false);
+        }
 
         sqlx::query(
             "INSERT INTO web_push_outbox \
@@ -201,12 +328,11 @@ impl TaskReminderWorker {
         .bind(job.task_id)
         .bind(row.scheduled_at)
         .bind(job.offset_minutes)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(|error| error.to_string())?;
 
         if row.in_app {
-            let mut tx = self.pool.begin().await.map_err(|error| error.to_string())?;
             sqlx::query(
                 "INSERT INTO notifications (id, recipient_id, space_id, event_type, title, body, destination, reminder_job_id) \
                  SELECT gen_random_uuid(), $1, l.space_id, 'due_reminder', 'Task reminder', $3, 'tasks', $4 \
@@ -220,14 +346,24 @@ impl TaskReminderWorker {
             .execute(&mut *tx)
             .await
             .map_err(|error| error.to_string())?;
-            tx.commit().await.map_err(|error| error.to_string())?;
         }
+        tx.commit().await.map_err(|error| error.to_string())?;
         if row.email_enabled {
-            self.email
-                .send_task_reminder(&row.email, &row.title, &row.space_name, &row.due)
-                .await?;
+            let may_email = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS (SELECT 1 FROM space_memberships m \
+                 JOIN spaces s ON s.id = m.space_id AND s.deleted_at IS NULL \
+                 WHERE m.space_id = $1 AND m.user_id = $2)",
+            )
+            .bind(row.space_id)
+            .bind(job.recipient_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|error| error.to_string())?;
+            if may_email {
+                self.email.send_task_reminder(&row.email).await?;
+            }
         }
-        Ok(())
+        Ok(true)
     }
 
     pub async fn purge_stuck_claims(&self) -> Result<u64, sqlx::Error> {
@@ -256,12 +392,12 @@ struct ReminderJob {
 #[derive(FromRow)]
 struct ReminderCandidate {
     task_id: Uuid,
-    recipient_id: Uuid,
-    offsets_minutes: Vec<i32>,
+    recipient_id: Option<Uuid>,
+    offsets_minutes: Option<Vec<i32>>,
     due_date: NaiveDate,
     due_time: Option<NaiveTime>,
-    time_zone: String,
-    default_reminder_time: NaiveTime,
+    time_zone: Option<String>,
+    default_reminder_time: Option<NaiveTime>,
 }
 
 impl ReminderCandidate {
@@ -269,8 +405,8 @@ impl ReminderCandidate {
         reminder_time(
             self.due_date,
             self.due_time,
-            &self.time_zone,
-            self.default_reminder_time,
+            self.time_zone.as_deref()?,
+            self.default_reminder_time?,
             offset_minutes,
         )
     }
@@ -324,8 +460,6 @@ struct DeliveryRow {
     default_reminder_time: NaiveTime,
     scheduled_at: chrono::DateTime<Utc>,
     title: String,
-    space_name: String,
-    due: String,
     email: String,
     in_app: bool,
     email_enabled: bool,

@@ -19,6 +19,8 @@ pub struct NotificationResponse {
 pub struct NotificationPageResponse {
     pub items: Vec<NotificationResponse>,
     pub next_offset: Option<i64>,
+    /// Opaque continuation for the same inbox, if more items remain.
+    pub next_cursor: Option<String>,
     pub unread_count: i64,
 }
 

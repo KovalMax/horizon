@@ -20,14 +20,7 @@ pub trait EmailSender: Send + Sync {
         self.send_magic_link(recipient, link).await
     }
 
-    async fn send_task_reminder(
-        &self,
-        recipient: &str,
-        task_title: &str,
-        space_name: &str,
-        due: &str,
-    ) -> Result<(), String> {
-        let _ = (recipient, task_title, space_name, due);
+    async fn send_task_reminder(&self, _recipient: &str) -> Result<(), String> {
         Err("task reminders are not supported by this email sender".to_owned())
     }
 
@@ -45,7 +38,7 @@ pub trait EmailSender: Send + Sync {
 pub struct SmtpEmailSender {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     from: Mailbox,
-    resolver: Option<hickory_resolver::TokioAsyncResolver>,
+    resolver: Option<hickory_resolver::TokioResolver>,
     allow_test_domain: bool,
 }
 
@@ -99,7 +92,9 @@ impl SmtpEmailSender {
         Ok(Self {
             transport: builder.build(),
             from,
-            resolver: hickory_resolver::TokioAsyncResolver::tokio_from_system_conf().ok(),
+            resolver: hickory_resolver::TokioResolver::builder_tokio()
+                .and_then(|builder| builder.build())
+                .ok(),
             allow_test_domain: host == "mailpit",
         })
     }
@@ -151,13 +146,7 @@ impl EmailSender for SmtpEmailSender {
             })
     }
 
-    async fn send_task_reminder(
-        &self,
-        recipient: &str,
-        task_title: &str,
-        space_name: &str,
-        due: &str,
-    ) -> Result<(), String> {
+    async fn send_task_reminder(&self, recipient: &str) -> Result<(), String> {
         let recipient = recipient
             .parse::<Mailbox>()
             .map_err(|_| "recipient email is invalid".to_owned())?;
@@ -165,10 +154,9 @@ impl EmailSender for SmtpEmailSender {
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
-            .subject(format!("Reminder: {task_title}"))
-            .body(format!(
-                "A Task in {space_name} is due {due}.\n\n{task_title}\n\nSign in to Horizon to view the Task."
-            ))
+            .subject("Horizon Task reminder")
+            // Queued mail cannot be recalled if Space membership changes after sending.
+            .body("A Task is due soon. Sign in to Horizon to view your Tasks.".to_owned())
             .map_err(|_| "could not create task reminder email".to_owned())?;
         self.transport
             .send(message)

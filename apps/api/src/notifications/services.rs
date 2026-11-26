@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::pagination::PageWindow;
 
 use super::{
+    cursor::NotificationCursor,
     repositories::PostgresNotificationsRepository,
     requests::NotificationPreferenceInput,
     responses::{NotificationPageResponse, NotificationSettingsResponse},
@@ -32,13 +33,14 @@ impl NotificationsApplication {
         }
     }
 
-    pub async fn list_for_user(
+    pub(super) async fn list_for_user(
         &self,
         user_id: Uuid,
         page: PageWindow,
+        cursor: Option<NotificationCursor>,
     ) -> Result<NotificationPageResponse, NotificationError> {
         self.repository
-            .list_for_user(user_id, page)
+            .list_for_user(user_id, page, cursor)
             .await
             .map_err(|_| NotificationError::Unavailable)
     }

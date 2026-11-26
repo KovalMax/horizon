@@ -1,13 +1,40 @@
 use async_trait::async_trait;
 use horizon_api::{
-    auth::EmailSender, database_connection_options, task_reminders::TaskReminderWorker,
+    auth::EmailSender, database_connection_options, events::CalendarReminderWorker,
+    task_reminders::TaskReminderWorker,
 };
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use tokio::sync::Notify;
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
 struct RecordingMailer(Arc<Mutex<Vec<String>>>);
+
+#[derive(Default)]
+struct PausedMailer {
+    paused_once: AtomicBool,
+    started: Notify,
+    resume: Notify,
+}
+
+#[async_trait]
+impl EmailSender for PausedMailer {
+    async fn send_magic_link(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn send_task_reminder(&self, _: &str) -> Result<(), String> {
+        if !self.paused_once.swap(true, Ordering::Relaxed) {
+            self.started.notify_one();
+            self.resume.notified().await;
+        }
+        Ok(())
+    }
+}
 
 #[async_trait]
 impl EmailSender for RecordingMailer {
@@ -15,15 +42,9 @@ impl EmailSender for RecordingMailer {
         Ok(())
     }
 
-    async fn send_task_reminder(
-        &self,
-        _: &str,
-        task_title: &str,
-        _: &str,
-        _: &str,
-    ) -> Result<(), String> {
+    async fn send_task_reminder(&self, recipient: &str) -> Result<(), String> {
         let mut attempts = self.0.lock().unwrap();
-        attempts.push(task_title.to_owned());
+        attempts.push(recipient.to_owned());
         if attempts.len() == 1 {
             Err("temporary SMTP failure".to_owned())
         } else {
@@ -35,7 +56,7 @@ impl EmailSender for RecordingMailer {
 #[actix_web::test]
 async fn worker_delivers_due_email_once_and_records_in_app_notification() {
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(1)
         .connect_lazy_with(database_connection_options());
     sqlx::migrate!("./migrations")
         .run(&pool)
@@ -59,9 +80,8 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO spaces (id, name, kind, personal_owner_id) VALUES ($1, 'Reminder test', 'personal', $2)")
+    sqlx::query("INSERT INTO spaces (id, name, kind) VALUES ($1, 'Reminder test', 'shared')")
         .bind(space_id)
-        .bind(user_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -126,10 +146,7 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
         .await
         .expect("successful jobs should not repeat");
 
-    assert_eq!(
-        mailer.0.lock().unwrap().as_slice(),
-        &["Check the greenhouse", "Check the greenhouse"]
-    );
+    assert_eq!(mailer.0.lock().unwrap().as_slice(), &[email.clone(), email]);
     let inbox_count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM notifications WHERE recipient_id = $1 AND event_type = 'due_reminder'",
     )
@@ -261,6 +278,36 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
             .unwrap();
     assert_eq!(rescheduled, "pending");
 
+    // A future, unchanged job may already have retry metadata. Reconciliation
+    // must neither rewrite the row nor erase its backoff or diagnostic state.
+    let retry_state: (chrono::DateTime<chrono::Utc>, String) = sqlx::query_as(
+        "UPDATE task_reminder_jobs SET available_at = scheduled_at + interval '5 minutes', \
+             attempts = 2, last_error = 'temporary SMTP failure' \
+         WHERE task_id = $1 RETURNING available_at, xmin::text",
+    )
+    .bind(lifecycle_task_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    worker.run_once().await.unwrap();
+    let unchanged: (chrono::DateTime<chrono::Utc>, String, i32, Option<String>) = sqlx::query_as(
+        "SELECT available_at, xmin::text, attempts, last_error \
+             FROM task_reminder_jobs WHERE task_id = $1",
+    )
+    .bind(lifecycle_task_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        unchanged,
+        (
+            retry_state.0,
+            retry_state.1,
+            2,
+            Some("temporary SMTP failure".to_owned())
+        )
+    );
+
     sqlx::query(
         "INSERT INTO space_notification_preferences (user_id, space_id, muted) VALUES ($1, $2, TRUE) \
          ON CONFLICT (user_id, space_id) DO UPDATE SET muted = TRUE",
@@ -299,4 +346,254 @@ async fn worker_delivers_due_email_once_and_records_in_app_notification() {
             .await
             .unwrap();
     assert_eq!(muted_reminder, "cancelled");
+
+    let former_member = Uuid::new_v4();
+    let former_email = format!("{former_member}@example.test");
+    sqlx::query("INSERT INTO users (id) VALUES ($1)")
+        .bind(former_member)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO email_identities (id, user_id, email_normalized, verified_at) \
+         VALUES ($1, $2, $3, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(former_member)
+    .bind(former_email)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO space_memberships (space_id, user_id, role) VALUES ($1, $2, 'editor')",
+    )
+    .bind(space_id)
+    .bind(former_member)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO notification_preferences (user_id, event_type, channel, enabled) VALUES ($1, 'due_reminder', 'email', TRUE)")
+        .bind(former_member)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut pending_tasks = Vec::new();
+    for (creator, assignee) in [(former_member, None), (user_id, Some(former_member))] {
+        let task = Uuid::new_v4();
+        pending_tasks.push(task);
+        sqlx::query(
+            "INSERT INTO tasks (id, list_id, creator_id, assignee_id, title, \
+                                due_date, due_time, reminder_offsets_minutes) \
+             SELECT $1, $2, $3, $4, 'Shared Task', (now() + interval '62 minutes')::date, \
+                    (now() + interval '62 minutes')::time, ARRAY[60]::integer[]",
+        )
+        .bind(task)
+        .bind(list_id)
+        .bind(creator)
+        .bind(assignee)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    worker.run_once().await.unwrap();
+    let pending: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1) AND status = 'pending'",
+    )
+    .bind(&pending_tasks)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(pending, 2);
+
+    sqlx::query("DELETE FROM space_memberships WHERE space_id = $1 AND user_id = $2")
+        .bind(space_id)
+        .bind(former_member)
+        .execute(&pool)
+        .await
+        .unwrap();
+    worker
+        .run_once_at(chrono::Utc::now() + chrono::Duration::minutes(3))
+        .await
+        .unwrap();
+    let cancelled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1) AND status = 'cancelled'",
+    )
+    .bind(&pending_tasks)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(cancelled, 2);
+    let sent: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notifications WHERE recipient_id = $1 AND event_type = 'due_reminder'",
+    )
+    .bind(former_member)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(sent, 0);
+    assert_eq!(mailer.0.lock().unwrap().len(), 2);
+
+    // The first raw page has no eligible recipients. Include the nil UUID
+    // to exercise the inclusive initial cursor; later pages must still run.
+    let ineligible_tasks: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO tasks (id, list_id, creator_id, title, due_date, reminder_offsets_minutes) \
+         SELECT lpad(to_hex(n), 32, '0')::uuid, $1, $2, 'Ineligible Task', \
+                CURRENT_DATE + 21, ARRAY[60] \
+         FROM generate_series(0, 255) n RETURNING id",
+    )
+    .bind(list_id)
+    .bind(former_member)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let batch_tasks: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO tasks (id, list_id, creator_id, title, due_date, reminder_offsets_minutes) \
+         SELECT gen_random_uuid(), $1, $2, 'Batched Task', CURRENT_DATE + 21, ARRAY[60, 60] \
+         FROM generate_series(1, 260) RETURNING id",
+    )
+    .bind(list_id)
+    .bind(user_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    worker.run_once().await.unwrap();
+    let jobs: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1) AND status = 'pending'",
+    )
+    .bind(&batch_tasks)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(jobs, 260, "later candidate pages must not be skipped");
+    let ineligible_jobs: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1)")
+            .bind(&ineligible_tasks)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(ineligible_jobs, 0);
+
+    sqlx::query("UPDATE tasks SET done = TRUE WHERE id = ANY($1)")
+        .bind(&batch_tasks)
+        .execute(&pool)
+        .await
+        .unwrap();
+    worker.run_once().await.unwrap();
+    let cancelled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1) AND status = 'cancelled'",
+    )
+    .bind(&batch_tasks)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        cancelled, 260,
+        "later cancellation pages must not be skipped"
+    );
+
+    let due_tasks: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO tasks (id, list_id, creator_id, title, due_date, due_time, reminder_offsets_minutes) \
+         SELECT gen_random_uuid(), $1, $2, 'Delivery batch Task', \
+                (now() + interval '62 minutes')::date, (now() + interval '62 minutes')::time, ARRAY[60] \
+         FROM generate_series(1, 51) RETURNING id",
+    )
+    .bind(list_id)
+    .bind(user_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let event_id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    let delivery_time = now + chrono::Duration::minutes(3);
+    sqlx::query(
+        "INSERT INTO calendar_events (id, space_id, creator_id, title, starts_at, time_zone) \
+         VALUES ($1, $2, $3, 'Independent Calendar reminder', $4, 'UTC')",
+    )
+    .bind(event_id)
+    .bind(space_id)
+    .bind(user_id)
+    .bind(delivery_time + chrono::Duration::hours(1))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO calendar_reminder_preferences (event_id, user_id, offsets_minutes) \
+         VALUES ($1, $2, ARRAY[60])",
+    )
+    .bind(event_id)
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    worker.reconcile_pending().await.unwrap();
+
+    // This claim should be skipped, not marked sent, when delivery sees a
+    // schedule edit before the independent reconciler has applied it.
+    sqlx::query("UPDATE tasks SET due_date = due_date + 1 WHERE id = $1")
+        .bind(due_tasks[0])
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let paused_mailer = Arc::new(PausedMailer::default());
+    let delivery = TaskReminderWorker::new(pool.clone(), paused_mailer.clone());
+    let calendar = CalendarReminderWorker::new(pool.clone());
+    let deliver = delivery.deliver_due_at(delivery_time);
+    tokio::pin!(deliver);
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::select! {
+            _ = paused_mailer.started.notified() => {}
+            result = &mut deliver => panic!("delivery completed before SMTP started: {result:?}"),
+        }
+        calendar.run_once_at(delivery_time).await.unwrap();
+        let calendar_delivered: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM calendar_reminder_deliveries WHERE event_id = $1)",
+        )
+        .bind(event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(
+            calendar_delivered,
+            "Calendar must make progress while SMTP is paused"
+        );
+        paused_mailer.resume.notify_one();
+    })
+    .await
+    .expect("Calendar must not wait on the paused delivery or its database connection");
+
+    let claimed = tokio::time::timeout(std::time::Duration::from_secs(5), deliver)
+        .await
+        .expect("the first tick should finish after 50 claims")
+        .unwrap();
+    assert_eq!(claimed, 50);
+    let remaining: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM task_reminder_jobs WHERE task_id = ANY($1) AND status = 'pending'",
+    )
+    .bind(&due_tasks)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    // If the stale job was last in the queue, it is still pending here; the
+    // second tick skips it. Otherwise the second tick sends the last valid job.
+    assert_eq!(remaining, 1);
+    assert_eq!(worker.deliver_due_at(delivery_time).await.unwrap(), 1);
+    let stale: String =
+        sqlx::query_scalar("SELECT status FROM task_reminder_jobs WHERE task_id = $1")
+            .bind(due_tasks[0])
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stale, "cancelled");
+    worker.reconcile_pending().await.unwrap();
+    let rescheduled: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM task_reminder_jobs WHERE task_id = $1 \
+         AND status = 'pending' AND scheduled_at > $2)",
+    )
+    .bind(due_tasks[0])
+    .bind(delivery_time)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(rescheduled);
 }

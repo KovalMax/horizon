@@ -15,6 +15,7 @@ export type NotificationItem = {
 export type NotificationPage = {
   items: NotificationItem[];
   next_offset: number | null;
+  next_cursor?: string | null;
   unread_count: number;
 };
 
@@ -39,13 +40,20 @@ export class NotificationsApiError extends Error {
 
 export async function listNotifications(
   accessToken: string,
-  offset = 0,
+  continuation: string | number = 0,
   limit = 50,
+  signal?: AbortSignal,
 ): Promise<NotificationPage> {
-  const response = await authenticatedFetch(
-    `/api/notifications?offset=${offset}&limit=${limit}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+  const params = new URLSearchParams();
+  params.set(
+    typeof continuation === "string" ? "cursor" : "offset",
+    String(continuation),
   );
+  params.set("limit", String(limit));
+  const response = await authenticatedFetch(`/api/notifications?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal,
+  });
   if (!response.ok) throw new NotificationsApiError(response.status);
   return (await response.json()) as NotificationPage;
 }

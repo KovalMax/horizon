@@ -7,7 +7,7 @@ use horizon_api::{
     auth::{self, AuthSettings, EmailSender, MagicLinkRequest, RedeemMagicLinkRequest},
     spaces::{self, CreateSpaceRequest, SpaceResponse},
     todos::{
-        self, CreateTaskListRequest, CreateTaskRequest, TaskBoardResponse,
+        self, CreateTaskListRequest, CreateTaskRequest, TaskBoardResponse, TaskResponse,
         UpdateTaskCompletionRequest, UpdateTaskListRequest, UpdateTaskRequest,
     },
 };
@@ -549,6 +549,70 @@ async fn tasks_persist_in_lists_with_membership_scoped_reads_and_editor_writes()
             .await
             .expect("test should verify cascade deletion");
     assert_eq!(cascaded_task_count, 0);
+
+    let post_to_list = |title: &str| {
+        actix_test::TestRequest::post()
+            .uri(&format!("/spaces/{}/tasks", space.id))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .set_json(CreateTaskRequest {
+                title: title.to_owned(),
+                list_name: "Concurrent To-dos".to_owned(),
+                assignee_id: None,
+                ..create_task()
+            })
+            .to_request()
+    };
+    let (first, second) = tokio::join!(
+        actix_test::call_service(&app, post_to_list("First concurrent Task")),
+        actix_test::call_service(&app, post_to_list("Second concurrent Task")),
+    );
+    assert_eq!(first.status(), StatusCode::CREATED);
+    assert_eq!(second.status(), StatusCode::CREATED);
+    let first: TaskResponse = actix_test::read_body_json(first).await;
+    let second: TaskResponse = actix_test::read_body_json(second).await;
+    assert_ne!(first.id, second.id);
+    assert_eq!(first.list_id, second.list_id);
+
+    let list_version = |list_id: Uuid| {
+        sqlx::query_scalar::<_, String>("SELECT xmin::text FROM todo_lists WHERE id = $1")
+            .bind(list_id)
+            .fetch_one(&pool)
+    };
+    let before = list_version(first.list_id).await.unwrap();
+    let response =
+        actix_test::call_service(&app, post_to_list("Another Task in the same list")).await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let task: TaskResponse = actix_test::read_body_json(response).await;
+    assert_eq!(task.list_id, first.list_id);
+    assert_eq!(list_version(first.list_id).await.unwrap(), before);
+
+    let mut deletion = pool.begin().await.unwrap();
+    sqlx::query("DELETE FROM todo_lists WHERE id = $1")
+        .bind(first.list_id)
+        .execute(&mut *deletion)
+        .await
+        .unwrap();
+    let creation = actix_test::call_service(&app, post_to_list("Task in replacement list"));
+    tokio::pin!(creation);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), &mut creation)
+            .await
+            .is_err(),
+        "Task creation must wait for an in-flight list deletion"
+    );
+    deletion.commit().await.unwrap();
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), creation)
+        .await
+        .expect("Task creation should continue after deletion commits");
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let replacement: TaskResponse = actix_test::read_body_json(response).await;
+    assert_ne!(replacement.list_id, first.list_id);
+    let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM tasks WHERE list_id = $1")
+        .bind(first.list_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(remaining, 0);
     let _ = sqlx::query("DELETE FROM spaces WHERE id = $1")
         .bind(space.id)
         .execute(&pool)

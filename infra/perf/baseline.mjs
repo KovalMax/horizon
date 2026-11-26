@@ -99,7 +99,8 @@ async function browserStartup(browser, api, profile) {
       const started = performance.now();
       try {
         await page.reload({ waitUntil: "networkidle" });
-        await page.getByRole("link", { name: new RegExp(`Perf ${profile} 1 Owner`) }).first()
+        await page.getByRole("navigation", { name: "Spaces", exact: true })
+          .getByRole("button", { name: new RegExp(`^Perf ${profile} 1 owner$`, "i") })
           .waitFor();
       } finally {
         page.off("response", count);
@@ -153,12 +154,25 @@ function summarize(observations) {
 async function profileApi(api, name, token) {
   const spaceId = fixtureId(`${name}:space:1`);
   const large = name === "large";
+  const inboxOffset = large ? 10000 : 300;
+  const boundary = await api.get(`/notifications?limit=1&offset=${inboxOffset - 1}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  let cursor;
+  try {
+    if (!boundary.ok()) throw new Error("Notification boundary lookup failed");
+    cursor = (await boundary.json()).next_cursor;
+    if (!cursor) throw new Error("Missing Notification cursor for deep page");
+  } finally {
+    await boundary.dispose();
+  }
   const workloads = {
     ...paths,
     tasksDeep: `/tasks?lists_offset=${large ? 125 : 8}&tasks_offset=${large ? 9000 : 280}`,
     placesFirst: `/places?space_id=${spaceId}`,
     placesDeep: `/places?space_id=${spaceId}&limit=10&offset=${large ? 200 : 50}`,
-    notificationsDeep: `/notifications?offset=${large ? 10000 : 300}`,
+    notificationsDeep: `/notifications?offset=${inboxOffset}`,
+    notificationsDeepCursor: `/notifications?cursor=${encodeURIComponent(cursor)}`,
     eventFanout: `/spaces/${spaceId}/events`,
   };
   const results = {};
@@ -216,12 +230,20 @@ async function explainSql() {
       `'${fixtureId("large:space:1")}', '${fixtureId("large")}'`],
     ["notifications/repositories.rs", "SELECT n.id", "OFFSET $3", "notifications", "uuid,bigint,bigint",
       `'${fixtureId("large")}', 51, 10000`],
+    ["notifications/repositories.rs", "SELECT n.id", "(n.created_at, n.id) <", "notifications_cursor", "uuid,timestamptz,uuid,bigint",
+      `'${fixtureId("large")}', :'notification_boundary_time', :'notification_boundary_id', 51`],
     ["notifications.rs", "INSERT INTO notifications", "SELECT $1, $2, $3", "notification_insert", "uuid,uuid,uuid,text,text,text,text",
       `gen_random_uuid(), '${fixtureId("large:peer:1")}', '${fixtureId("large:space:1")}', 'event_change', 'Plan probe', 'Plan probe', 'calendar'`],
-    ["task_reminders.rs", "SELECT t.id AS task_id", null, "reminder_candidates", null, ""],
+    ["task_reminders.rs", "WITH batch AS MATERIALIZED", "e.recipient_id, e.offsets_minutes", "reminder_candidates", "uuid,boolean,bigint",
+      "'00000000-0000-0000-0000-000000000000', true, 256"],
+    ["task_reminders.rs", "WITH batch AS MATERIALIZED", "UPDATE task_reminder_jobs", "reminder_cancel", "uuid,boolean,bigint",
+      "'00000000-0000-0000-0000-000000000000', true, 256"],
     ["task_reminders.rs", "UPDATE task_reminder_jobs SET status = 'sending'", null, "reminder_claim", "timestamptz", "now()"],
   ];
-  const statements = ["SET TIME ZONE 'UTC';"];
+  const statements = [
+    "SET TIME ZONE 'UTC';",
+    `SELECT created_at AS notification_boundary_time, id AS notification_boundary_id FROM notifications WHERE recipient_id = '${fixtureId("large")}' ORDER BY created_at DESC, id DESC OFFSET 9999 LIMIT 1 \\gset`,
+  ];
   for (const [file, prefix, contains, name, types, args] of cases) {
     const source = await readFile(`/api-source/${file}`, "utf8");
     // Pull the exact SQL string from the implementation; a changed seam fails

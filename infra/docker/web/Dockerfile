@@ -1,4 +1,4 @@
-FROM node:26.13.0-trixie-slim
+FROM node:26.13.1-trixie-slim
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

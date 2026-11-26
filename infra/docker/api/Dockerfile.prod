@@ -1,5 +1,5 @@
 # Production API runtime image. Scan and validate the exact build before deployment.
-FROM rust:1.99.1-slim AS build
+FROM rust:1.100.0-slim AS build
 RUN apt-get update \
     && apt-get install -y --no-install-recommends make perl \
     && rm -rf /var/lib/apt/lists/*

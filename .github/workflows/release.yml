@@ -84,28 +84,6 @@ jobs:
     needs: release-tag
     uses: ./.github/workflows/browser.yml
 
-  production-compose:
-    name: Release / Production Compose
-    needs: release-tag
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
-      - name: Validate production Compose configuration
-        env:
-          IMAGE_TAG: release-check
-          POSTGRES_DB: horizon_check
-          POSTGRES_USER: horizon_check
-          POSTGRES_PASSWORD: ci-only-password
-          AUTH_JWT_SECRET: ci-only-secret
-          AUTH_JWT_ISSUER: https://horizon.false.tel
-          AUTH_PUBLIC_URL: https://horizon.false.tel/auth/complete
-          SMTP_HOST: localhost
-          SMTP_FROM: Horizon <no-reply@example.invalid>
-        run: docker compose --file infra/compose.prod.yaml config --quiet
-
   publish:
     name: Publish / GHCR images
     needs:
@@ -115,7 +93,6 @@ jobs:
       - web-test
       - web-format
       - browser
-      - production-compose
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 90
     permissions:
@@ -190,25 +167,26 @@ jobs:
         run: |
           scp -i "$HOME/.ssh/id_ed25519" \
             infra/compose.prod.yaml \
-            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.prod.yaml.next"
       - name: Stage release image tag on deployment host
         run: |
           scp -i "$HOME/.ssh/id_ed25519" .image-tag \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.image-tag.next"
-      - name: Activate release tag and preserve previous tag
+      - name: Validate production Compose with host credentials
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && docker compose --env-file .env.production \
+             --env-file .image-tag.next --project-name horizon \
+             --file compose.prod.yaml.next config --quiet"
+      - name: Activate release configuration and preserve previous tag
         run: |
           echo 'DEPLOY_STARTED=true' >> "$GITHUB_ENV"
           ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd '$DEPLOY_PATH' && set -eu && test -s .image-tag.next && \
              if [ -f .image-tag ]; then cp .image-tag .image-tag.previous; \
              else rm -f .image-tag.previous; fi && \
+             mv compose.prod.yaml.next compose.prod.yaml && \
              mv .image-tag.next .image-tag"
-      - name: Validate production Compose configuration
-        run: |
-          ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && docker compose --env-file .env.production \
-             --env-file .image-tag --project-name horizon \
-             --file compose.prod.yaml config --quiet"
       - name: Pull release images
         run: |
           ssh -i "$HOME/.ssh/id_ed25519" "$DEPLOY_USER@$DEPLOY_HOST" \

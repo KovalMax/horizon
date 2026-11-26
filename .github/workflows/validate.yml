@@ -7,6 +7,26 @@ permissions:
   contents: read
 
 jobs:
+  production-compose:
+    name: Production Compose / Config
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate production Compose with fixture values
+        env:
+          IMAGE_TAG: ci-check
+          POSTGRES_DB: horizon_check
+          POSTGRES_USER: horizon_check
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_RUNTIME_PASSWORD: ci-only-runtime-password
+          AUTH_JWT_SECRET: ci-only-secret
+          AUTH_JWT_ISSUER: https://horizon.false.tel
+          AUTH_PUBLIC_URL: https://horizon.false.tel/auth/complete
+          SMTP_HOST: localhost
+          SMTP_FROM: Horizon <no-reply@example.invalid>
+        run: docker compose --file infra/compose.prod.yaml config --quiet
+
   api:
     uses: ./.github/workflows/api.yml
 

@@ -47,9 +47,30 @@ impl PushWorker {
     }
 
     pub async fn run_once(&self) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM web_push_outbox WHERE expires_at < now() - interval '1 day'")
-            .execute(&self.pool)
-            .await?;
+        self.deliver_due().await?;
+        Self::purge_expired_batch(&self.pool, Utc::now()).await?;
+        Ok(())
+    }
+
+    /// Run one retention batch after delivery so cleanup never drains an
+    /// entire backlog before the next delivery pass.
+    pub async fn purge_expired_batch(
+        pool: &PgPool,
+        now: DateTime<Utc>,
+    ) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
+            "WITH batch AS MATERIALIZED ( \
+                 SELECT id FROM web_push_outbox WHERE expires_at < $1::timestamptz - interval '1 day' \
+                 ORDER BY expires_at, id LIMIT 500 FOR UPDATE SKIP LOCKED \
+             ) DELETE FROM web_push_outbox o USING batch WHERE o.id = batch.id",
+        )
+        .bind(now)
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    async fn deliver_due(&self) -> Result<(), sqlx::Error> {
         for _ in 0..50 {
             let job = sqlx::query_as::<_, PushJob>(
                 "WITH claimed AS ( \

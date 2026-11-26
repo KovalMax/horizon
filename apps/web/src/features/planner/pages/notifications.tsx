@@ -139,7 +139,7 @@ export function NotificationsPage({
             )}
           </>
         )}
-      {state.notificationsNextOffset !== null && (
+      {state.hasMoreNotifications && (
         <Button
           variant="outline"
           disabled={state.loadingMoreNotifications}

@@ -42,7 +42,7 @@ function defaultSettings() {
   };
 }
 
-async function setup(path: string) {
+async function setup(path: string, continuation?: string) {
   window.history.replaceState({}, "", "/auth/complete#token=one-time-secret");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   let readAt: string | null = null;
@@ -75,12 +75,28 @@ async function setup(path: string) {
         return Response.json(defaultSettings());
       if (url === "/api/notifications/preferences" && init?.method === "PUT")
         return Response.json(JSON.parse(String(init.body)));
-      if (url.startsWith("/api/notifications?"))
+      if (url.startsWith("/api/notifications?")) {
+        const params = new URLSearchParams(url.split("?")[1]);
+        if (continuation && params.get("cursor") === continuation)
+          return Response.json({
+            items: [
+              {
+                ...notification,
+                id: "older-notification",
+                title: "Older item",
+              },
+            ],
+            next_offset: null,
+            next_cursor: null,
+            unread_count: unreadCount,
+          });
         return Response.json({
           items: [{ ...notification, read_at: readAt }],
-          next_offset: null,
+          next_offset: continuation ? 50 : null,
+          next_cursor: continuation,
           unread_count: unreadCount,
         });
+      }
       if (
         url === `/api/notifications/${notification.id}/read` &&
         init?.method === "PUT"
@@ -163,6 +179,22 @@ test("inbox displays persisted items and supports explicit read state", async ()
       "/api/notifications/read-all",
       expect.objectContaining({ method: "POST" }),
     ),
+  );
+});
+
+test("inbox prefers a cursor over an offset when loading older notifications", async () => {
+  const fetchMock = await setup("/notifications", "opaque_cursor");
+  fireEvent.click(await screen.findByRole("button", { name: /load more/i }));
+  expect(
+    await screen.findByRole("heading", { name: "Older item" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("heading", { name: "Task assigned to you" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/notifications?cursor=opaque_cursor&limit=50",
+    expect.anything(),
   );
 });
 

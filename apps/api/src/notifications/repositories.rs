@@ -2,8 +2,9 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pagination::{Page, PageWindow};
+use crate::pagination::PageWindow;
 
+use super::cursor::NotificationCursor;
 use super::responses::{
     NotificationPageResponse, NotificationPreferenceResponse, NotificationResponse,
     NotificationSettingsResponse,
@@ -33,21 +34,42 @@ impl PostgresNotificationsRepository {
         &self,
         user_id: Uuid,
         window: PageWindow,
+        cursor: Option<NotificationCursor>,
     ) -> Result<NotificationPageResponse, sqlx::Error> {
-        let rows = sqlx::query_as::<_, NotificationRow>(
-            "SELECT n.id, n.space_id, s.name AS space_name, n.event_type, n.title, n.body, \
+        let mut rows = if let Some(cursor) = &cursor {
+            sqlx::query_as::<_, NotificationRow>(
+                "SELECT n.id, n.space_id, s.name AS space_name, n.event_type, n.title, n.body, \
+                        n.destination, n.created_at, n.read_at \
+                 FROM notifications n JOIN spaces s ON s.id = n.space_id \
+                 WHERE n.recipient_id = $1 AND (n.created_at, n.id) < ($2, $3) \
+                 ORDER BY n.created_at DESC, n.id DESC LIMIT $4",
+            )
+            .bind(user_id)
+            .bind(cursor.created_at)
+            .bind(cursor.id)
+            .bind(window.limit + 1)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, NotificationRow>(
+                "SELECT n.id, n.space_id, s.name AS space_name, n.event_type, n.title, n.body, \
                     n.destination, n.created_at, n.read_at \
              FROM notifications n JOIN spaces s ON s.id = n.space_id \
              WHERE n.recipient_id = $1 \
              ORDER BY n.created_at DESC, n.id DESC LIMIT $2 OFFSET $3",
-        )
-        .bind(user_id)
-        .bind(window.limit + 1)
-        .bind(window.offset)
-        .fetch_all(&self.pool)
-        .await?;
-        let page: Page<NotificationResponse> =
-            Page::from_rows(rows.into_iter().map(Into::into).collect(), window);
+            )
+            .bind(user_id)
+            .bind(window.limit + 1)
+            .bind(window.offset)
+            .fetch_all(&self.pool)
+            .await?
+        };
+        let has_more = rows.len() > window.limit as usize;
+        rows.truncate(window.limit as usize);
+        let next_cursor = rows
+            .last()
+            .filter(|_| has_more)
+            .map(|row| NotificationCursor::encode(row.created_at, row.id));
         let unread_count = sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM notifications WHERE recipient_id = $1 AND read_at IS NULL",
         )
@@ -55,8 +77,9 @@ impl PostgresNotificationsRepository {
         .fetch_one(&self.pool)
         .await?;
         Ok(NotificationPageResponse {
-            items: page.items,
-            next_offset: page.next_offset,
+            items: rows.into_iter().map(Into::into).collect(),
+            next_offset: (has_more && cursor.is_none()).then_some(window.offset + window.limit),
+            next_cursor,
             unread_count,
         })
     }

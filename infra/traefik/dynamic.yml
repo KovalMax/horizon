@@ -13,7 +13,7 @@ http:
       entryPoints: [websecure]
       priority: 100
       service: horizon-api
-      middlewares: [horizon-security-headers, horizon-api-cors, horizon-api-rate-limit, horizon-strip-api]
+      middlewares: [horizon-security-headers, horizon-api-cors, horizon-api-rate-limit, horizon-client-ip-headers, horizon-strip-api]
       tls:
         certResolver: letsencrypt
   services:
@@ -26,6 +26,10 @@ http:
         servers:
           - url: http://horizon-api:8000
   middlewares:
+    horizon-client-ip-headers:
+      headers:
+        customRequestHeaders:
+          Forwarded: ""
     # One IP-based bucket shared by both public API routes.
     horizon-api-rate-limit:
       rateLimit:

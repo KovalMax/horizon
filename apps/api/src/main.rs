@@ -24,10 +24,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sqlx::migrate!("./migrations").run(&pool).await?;
         return Ok(());
     }
+    if env::var("HORIZON_PROFILE_REMINDER_BACKLOG").as_deref() == Ok("1") {
+        profile_reminder_backlog(pool.clone());
+    }
     let auth_state = web::Data::new(
         auth::AuthApplication::from_env(pool.clone()).map_err(std::io::Error::other)?,
     );
     let spaces_state = web::Data::new(spaces::SpacesApplication::new(pool.clone()));
+    let trusted_sign_in_proxy = match env::var("AUTH_TRUSTED_PROXY_IP") {
+        Ok(value) if !value.trim().is_empty() => Some(
+            value
+                .trim()
+                .parse::<std::net::IpAddr>()
+                .map_err(|_| {
+                    std::io::Error::other("AUTH_TRUSTED_PROXY_IP must be a single IP address")
+                })?
+                .to_canonical(),
+        ),
+        Ok(_) | Err(env::VarError::NotPresent) => None,
+        Err(error) => return Err(error.into()),
+    };
     let notifications_state =
         web::Data::new(notifications::NotificationsApplication::new(pool.clone()));
     let reminder_worker =
@@ -65,13 +81,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+    let task_reconciliation = reminder_worker.clone();
     actix_web::rt::spawn(async move {
         let mut interval = actix_web::rt::time::interval(Duration::from_secs(60));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            if let Err(error) = reminder_worker.run_once().await {
-                log::error!("Failed to process Task reminders: {error}");
+            if let Err(error) = task_reconciliation.reconcile_pending().await {
+                log::error!("Failed to reconcile Task reminders: {error}");
             }
+        }
+    });
+    actix_web::rt::spawn(async move {
+        let mut interval = actix_web::rt::time::interval(Duration::from_secs(15));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(error) = reminder_worker.deliver_due_at(chrono::Utc::now()).await {
+                log::error!("Failed to deliver Task reminders: {error}");
+            }
+        }
+    });
+    actix_web::rt::spawn(async move {
+        let mut interval = actix_web::rt::time::interval(Duration::from_secs(60));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
             if let Err(error) = calendar_reminders.run_once_at(chrono::Utc::now()).await {
                 log::error!("Failed to process Calendar reminders: {error}");
             }
@@ -176,6 +211,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(members::list_my_join_requests)
             .service(members::list_pending_join_requests)
             .service(members::decide_join_request);
+        let app = if let Some(proxy) = trusted_sign_in_proxy {
+            app.app_data(auth::controllers::TrustedSignInProxy(proxy))
+        } else {
+            app
+        };
         #[cfg(debug_assertions)]
         let app = app
             .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/openapi.json", ApiDoc::openapi()));
@@ -185,4 +225,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!(target: "horizon_api", "API listening on 0.0.0.0:8000");
     server.run().await?;
     Ok(())
+}
+
+fn profile_reminder_backlog(pool: sqlx::PgPool) {
+    actix_web::rt::spawn(async move {
+        let mut interval = actix_web::rt::time::interval(Duration::from_millis(250));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let started = std::time::Instant::now();
+            let acquired = pool.acquire().await.is_ok();
+            let acquire_us = started.elapsed().as_micros();
+            let peak_rss_kib = std::fs::read_to_string("/proc/self/status")
+                .ok()
+                .and_then(|status| {
+                    status.lines().find_map(|line| {
+                        let value = line.strip_prefix("VmHWM:")?.split_whitespace().next()?;
+                        value.parse::<u64>().ok()
+                    })
+                })
+                .unwrap_or_default();
+            log::info!(
+                target: "horizon_api::reminder_backlog_profile",
+                "epoch_ms={} acquire_us={acquire_us} acquired={} peak_rss_kib={peak_rss_kib}",
+                chrono::Utc::now().timestamp_millis(),
+                u8::from(acquired),
+            );
+        }
+    });
 }

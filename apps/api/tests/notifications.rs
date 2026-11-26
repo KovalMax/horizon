@@ -489,6 +489,15 @@ async fn assigned_task_notifications_preferences_mute_and_read_state_are_persist
         event_change_count, 1,
         "an unchanged event update should not duplicate notifications"
     );
+    sqlx::query(
+        "UPDATE notifications SET created_at = date_trunc('second', now()) \
+             - interval '1 day' + interval '0.123456 seconds' \
+         WHERE recipient_id = $1",
+    )
+    .bind(member_id)
+    .execute(&pool)
+    .await
+    .unwrap();
     let request = actix_test::TestRequest::get()
         .uri("/notifications?limit=1&offset=0")
         .insert_header((AUTHORIZATION, format!("Bearer {member_token}")))
@@ -505,7 +514,70 @@ async fn assigned_task_notifications_preferences_mute_and_read_state_are_persist
     let second_page: NotificationPageResponse =
         actix_test::read_body_json(actix_test::call_service(&app, request).await).await;
     assert_eq!(second_page.items.len(), 1);
+    assert_eq!(
+        first_page.items[0].created_at,
+        second_page.items[0].created_at
+    );
     assert_ne!(first_page.items[0].id, second_page.items[0].id);
+    assert!(first_page.items[0].id > second_page.items[0].id);
+
+    let newer_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO notifications (id, recipient_id, space_id, event_type, title, body, destination) \
+         VALUES ($1, $2, $3, 'task_assignment', 'Newer item', '', 'tasks')",
+    )
+    .bind(newer_id)
+    .bind(member_id)
+    .bind(space.id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let cursor = first_page.next_cursor.as_deref().unwrap();
+    let response = actix_test::call_service(
+        &app,
+        actix_test::TestRequest::get()
+            .uri(&format!("/notifications?limit=1&cursor={cursor}"))
+            .insert_header((AUTHORIZATION, format!("Bearer {member_token}")))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let cursor_page: NotificationPageResponse = actix_test::read_body_json(response).await;
+    assert_eq!(cursor_page.items[0].id, second_page.items[0].id);
+    assert_eq!(cursor_page.unread_count, 4);
+    assert_eq!(cursor_page.next_offset, None);
+    assert!(cursor_page.next_cursor.is_some());
+    for url in [
+        "/notifications?cursor=garbage".to_owned(),
+        format!("/notifications?offset=0&cursor={cursor}"),
+    ] {
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::get()
+                .uri(&url)
+                .insert_header((AUTHORIZATION, format!("Bearer {member_token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+    let response = actix_test::call_service(
+        &app,
+        actix_test::TestRequest::get()
+            .uri(&format!("/notifications?cursor={cursor}"))
+            .insert_header((AUTHORIZATION, format!("Bearer {owner_token}")))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let other_inbox: NotificationPageResponse = actix_test::read_body_json(response).await;
+    assert!(other_inbox.items.is_empty());
+    assert_eq!(other_inbox.next_cursor, None);
+    sqlx::query("DELETE FROM notifications WHERE id = $1")
+        .bind(newer_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let preferences = UpdateNotificationPreferencesRequest {
         preferences: settings

@@ -13,6 +13,35 @@ For a short plumbing check:
 PERF_SAMPLES=5 PERF_MIXED_SECONDS=0 make perf-baseline
 ```
 
+For the isolated reminder backlog benchmark:
+
+```sh
+PERF_REMINDER_BACKLOG=1 PERF_SAMPLES=30 PERF_MIXED_SECONDS=110 make perf-baseline
+```
+
+This adds 600 due Task reminder jobs for a synthetic Member with in-app and
+Mailpit email enabled, plus 130 Calendar reminders due at startup. These
+fixtures are in a separate Space from the HTTP workload. `reminder-start.csv`,
+`reminder-end.csv`, and `reminder-samples.txt` record, in order: epoch time
+(milliseconds), pending, sending, sent, failed/cancelled, retried jobs, age of
+the oldest pending job (milliseconds, zero if empty), Calendar deliveries,
+and PostgreSQL sessions currently waiting on a lock. Samples are taken about
+four times per second. `reminder-lock-log-counts.txt` additionally counts
+PostgreSQL lock waits logged at 50 ms or longer.
+
+`reminder-pool.log` contains an opt-in API probe, also sampled about four
+times per second: acquisition duration in microseconds, success, and the
+process peak resident memory (`VmHWM`, KiB). This measures a separate
+acquisition from the API's shared pool, including connection checkout and
+health checking, not the pool-wait component of each real request. Both the
+probe and database sampling add a small amount of work. No probes run in
+the default benchmark or normal production configuration. No worker-off
+control is implied by this run, and sub-50 ms lock waits can be missed.
+The report includes a `Reminder backlog` section when this mode is enabled.
+With 50 Task claims every 15 seconds, the 110-second load window need not
+drain all 600 jobs. Use a longer window (for example, 185 seconds) if full
+drain time is the focus.
+
 Use the default run for comparison: 100 measured requests per read workload
 after three warmups (four concurrent), up to 12 measured writes per fan-out
 workload, and a 65-second mixed-read window spanning at least one interval of

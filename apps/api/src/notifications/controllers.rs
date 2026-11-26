@@ -3,14 +3,16 @@ use actix_web::{
     http::{header, StatusCode},
     post, put, web, HttpRequest, HttpResponse,
 };
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     auth::{AuthApplication, AuthError, Problem},
-    pagination::{PageQuery, PageWindow},
+    pagination::PageWindow,
 };
 
 use super::{
+    cursor::NotificationCursor,
     push::{
         self, PushConfig, PushPreferences, PutPushSubscription, RegistrationError,
         RemovePushSubscription,
@@ -189,17 +191,30 @@ fn notification_error(error: NotificationError) -> HttpResponse {
     }
 }
 
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct NotificationPageQuery {
+    /// Maximum items to return (defaults to 50, maximum 100).
+    #[param(minimum = 1, maximum = 100)]
+    limit: Option<i64>,
+    /// Deprecated offset pagination. Cannot be combined with a cursor.
+    #[param(minimum = 0, maximum = 1000000)]
+    offset: Option<i64>,
+    /// Opaque continuation returned in `next_cursor`.
+    cursor: Option<String>,
+}
+
 #[utoipa::path(
     get,
     path = "/notifications",
-    params(PageQuery),
+    params(NotificationPageQuery),
     security(("accessBearer" = [])),
     responses((status = 200, body = super::responses::NotificationPageResponse), (status = 400, body = Problem), (status = 401, body = Problem))
 )]
 #[get("/notifications")]
 pub async fn list_notifications(
     request: HttpRequest,
-    query: web::Query<PageQuery>,
+    query: web::Query<NotificationPageQuery>,
     auth: web::Data<AuthApplication>,
     notifications: web::Data<NotificationsApplication>,
 ) -> HttpResponse {
@@ -214,7 +229,20 @@ pub async fn list_notifications(
             "invalid_page",
         );
     };
-    match notifications.list_for_user(user_id, page).await {
+    let cursor = match query.cursor.as_deref() {
+        None => None,
+        Some(cursor) => match NotificationCursor::decode(cursor) {
+            Some(cursor) if query.offset.is_none() => Some(cursor),
+            _ => {
+                return problem(
+                    StatusCode::BAD_REQUEST,
+                    "Invalid page cursor",
+                    "invalid_page",
+                )
+            }
+        },
+    };
+    match notifications.list_for_user(user_id, page, cursor).await {
         Ok(page) => HttpResponse::Ok().json(page),
         Err(error) => notification_error(error),
     }

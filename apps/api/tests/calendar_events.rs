@@ -452,6 +452,43 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
             .unwrap();
     assert_eq!(queued_count, 3);
 
+    let batched_events: Vec<Uuid> = sqlx::query_scalar(
+        "WITH inserted AS ( \
+           INSERT INTO calendar_events (id, space_id, creator_id, title, starts_at, time_zone) \
+           SELECT gen_random_uuid(), space_id, creator_id, 'Batched event', \
+                  '2026-03-28T21:00:00Z'::timestamptz, 'UTC' \
+           FROM calendar_events CROSS JOIN generate_series(1, 130) WHERE id = $1 \
+           RETURNING id, creator_id \
+         ) INSERT INTO calendar_reminder_preferences (event_id, user_id, offsets_minutes) \
+         SELECT id, creator_id, ARRAY[60] FROM inserted RETURNING event_id",
+    )
+    .bind(daily_series.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(batched_events.len(), 130);
+    for instant in ["2026-03-28T20:00:00Z", "2026-03-28T20:01:00Z"] {
+        reminder_worker
+            .run_once_at(instant.parse().unwrap())
+            .await
+            .unwrap();
+    }
+    let counts: (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM calendar_reminder_deliveries WHERE event_id = ANY($1)), \
+                (SELECT count(*) FROM web_push_outbox WHERE endpoint = $2 AND item_id = ANY($1))",
+    )
+    .bind(&batched_events)
+    .bind(&endpoint)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(counts, (130, 130), "each batch should enqueue once");
+    sqlx::query("DELETE FROM calendar_events WHERE id = ANY($1)")
+        .bind(&batched_events)
+        .execute(&pool)
+        .await
+        .unwrap();
+
     let request = actix_test::TestRequest::delete()
         .uri(&format!("/events/{}", daily_series.id))
         .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))

@@ -9,6 +9,8 @@ use super::{
     repositories::{EventRow, OverrideRow, PostgresEventsRepository},
 };
 
+const EVENT_BATCH_SIZE: i64 = 128;
+
 #[derive(Clone)]
 pub struct CalendarReminderWorker {
     pool: PgPool,
@@ -20,6 +22,18 @@ impl CalendarReminderWorker {
     }
 
     pub async fn run_once_at(&self, now: DateTime<Utc>) -> Result<(), sqlx::Error> {
+        let mut after = None;
+        while let Some(last) = self.run_batch(now, after).await? {
+            after = Some(last);
+        }
+        Ok(())
+    }
+
+    async fn run_batch(
+        &self,
+        now: DateTime<Utc>,
+        after: Option<Uuid>,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
         // Use a short catch-up window, but never send after an event has started.
         let earliest = now - Duration::minutes(10);
         let latest_start = now + Duration::weeks(1);
@@ -27,32 +41,38 @@ impl CalendarReminderWorker {
         let start = (now - Duration::days(1)).date_naive();
         let end = (latest_start + Duration::days(1)).date_naive();
         let mut tx = self.pool.begin().await?;
-        // Edits, cancellation, and deletion acquire an exclusive lock on the same event.
+        // Keep event edits and reminder generation serialized, but release the
+        // locks at each page boundary instead of retaining them for a full pass.
         let events = sqlx::query_as::<_, EventRow>(
             "SELECT e.id, e.space_id, e.title, e.starts_at, e.ends_at, e.time_zone, \
                     e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, \
                     s.name AS space_name, s.kind AS space_kind, \
                     '{}'::integer[] AS my_reminder_offsets_minutes \
-             FROM calendar_events e JOIN spaces s ON s.id = e.space_id \
-             WHERE s.deleted_at IS NULL \
+              FROM calendar_events e JOIN spaces s ON s.id = e.space_id \
+              WHERE s.deleted_at IS NULL \
+                AND e.id >= $4 AND ($5 OR e.id > $4) \
                AND EXISTS (SELECT 1 FROM calendar_reminder_preferences p WHERE p.event_id = e.id) \
                AND ((e.recurrence IS NULL AND NOT e.all_day AND e.starts_at > $1 AND e.starts_at <= $2) \
                  OR (e.recurrence IS NOT NULL AND ( \
                      (e.starts_at <= $2 AND (e.recurrence_ends_on IS NULL OR e.recurrence_ends_on >= $3)) \
                      OR EXISTS (SELECT 1 FROM calendar_event_occurrence_overrides o \
                                 WHERE o.event_id = e.id AND o.starts_at > $1 AND o.starts_at <= $2)))) \
-             ORDER BY e.id FOR SHARE OF e",
+              ORDER BY e.id LIMIT $6 FOR SHARE OF e",
         )
         .bind(now)
         .bind(latest_start)
         .bind(start)
+        .bind(after.unwrap_or_default())
+        .bind(after.is_none())
+        .bind(EVENT_BATCH_SIZE)
         .fetch_all(&mut *tx)
         .await?;
-        if events.is_empty() {
-            return Ok(());
-        }
         let events: Vec<super::models::CalendarEvent> =
             events.into_iter().map(Into::into).collect();
+        let Some(last) = events.last().map(|event| event.id) else {
+            tx.commit().await?;
+            return Ok(None);
+        };
         let ids: Vec<_> = events.iter().map(|event| event.id).collect();
         let overrides = sqlx::query_as::<_, OverrideRow>(
             "SELECT event_id, occurrence_date, cancelled, title, starts_at, ends_at, \
@@ -140,7 +160,8 @@ impl CalendarReminderWorker {
             .execute(&mut *tx)
             .await?;
         }
-        tx.commit().await
+        tx.commit().await?;
+        Ok(Some(last))
     }
 }
 

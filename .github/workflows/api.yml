@@ -49,6 +49,8 @@ jobs:
             cargo test --locked
             cargo clippy --locked --all-targets -- -D warnings
           '
+      - name: Verify PostgreSQL runtime privileges
+        run: sh infra/scripts/check-postgres-runtime.sh docker compose
       - name: Remove isolated test containers
         if: always()
         run: docker compose down --remove-orphans

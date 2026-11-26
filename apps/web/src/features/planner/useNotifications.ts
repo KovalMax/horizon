@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getNotificationSettings,
   listNotifications,
@@ -49,9 +49,10 @@ export function useNotifications(
   >("idle");
   const [notificationsError, setNotificationsError] = useState("");
   const [notificationActionError, setNotificationActionError] = useState("");
-  const [notificationsNextOffset, setNotificationsNextOffset] = useState<
-    number | null
+  const [notificationsContinuation, setNotificationsContinuation] = useState<
+    string | number | null
   >(null);
+  const loadMoreRequest = useRef<AbortController | null>(null);
   const [notificationsReload, setNotificationsReload] = useState(0);
   const [loadingMoreNotifications, setLoadingMoreNotifications] =
     useState(false);
@@ -103,20 +104,21 @@ export function useNotifications(
   useEffect(() => {
     if (path !== "/notifications") {
       setNotifications([]);
-      setNotificationsNextOffset(null);
+      setNotificationsContinuation(null);
       setNotificationsStatus("idle");
       return;
     }
     let active = true;
     setNotifications([]);
-    setNotificationsNextOffset(null);
+    setNotificationsContinuation(null);
+    setLoadingMoreNotifications(false);
     setNotificationsStatus("loading");
     setNotificationsError("");
     listNotifications(accessToken)
       .then((page) => {
         if (!active) return;
         setNotifications(page.items);
-        setNotificationsNextOffset(page.next_offset);
+        setNotificationsContinuation(page.next_cursor ?? page.next_offset);
         setUnread(page.unread_count);
         setNotificationsStatus("ready");
       })
@@ -129,6 +131,8 @@ export function useNotifications(
       });
     return () => {
       active = false;
+      loadMoreRequest.current?.abort();
+      loadMoreRequest.current = null;
     };
   }, [accessToken, path, notificationsReload]);
 
@@ -177,23 +181,32 @@ export function useNotifications(
   };
 
   const loadMoreNotifications = async () => {
-    if (notificationsNextOffset === null || loadingMoreNotifications) return;
+    if (notificationsContinuation === null || loadMoreRequest.current) return;
+    const request = new AbortController();
+    loadMoreRequest.current = request;
     setNotificationActionError("");
     setLoadingMoreNotifications(true);
     try {
       const page = await listNotifications(
         accessToken,
-        notificationsNextOffset,
+        notificationsContinuation,
+        50,
+        request.signal,
       );
+      if (request.signal.aborted) return;
       setNotifications((all) => [...all, ...page.items]);
-      setNotificationsNextOffset(page.next_offset);
+      setNotificationsContinuation(page.next_cursor ?? page.next_offset);
       setUnread(page.unread_count);
     } catch {
+      if (request.signal.aborted) return;
       setNotificationActionError(
         "More notifications couldn’t be loaded. Retry your action.",
       );
     } finally {
-      setLoadingMoreNotifications(false);
+      if (loadMoreRequest.current === request) {
+        loadMoreRequest.current = null;
+        setLoadingMoreNotifications(false);
+      }
     }
   };
 
@@ -278,7 +291,7 @@ export function useNotifications(
     notificationsStatus,
     notificationsError,
     notificationActionError,
-    notificationsNextOffset,
+    hasMoreNotifications: notificationsContinuation !== null,
     loadingMoreNotifications,
     retryNotifications: () => setNotificationsReload((current) => current + 1),
     markNotificationRead,

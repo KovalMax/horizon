@@ -5,6 +5,7 @@ services:
     command: []
     environment:
       HORIZON_PROFILE_CALENDAR_RANGE: "1"
+      HORIZON_PROFILE_REMINDER_BACKLOG: ${PERF_REMINDER_BACKLOG:-0}
 
   db:
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "track_io_timing=on"]

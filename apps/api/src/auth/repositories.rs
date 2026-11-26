@@ -128,6 +128,7 @@ pub trait AuthRepository: Send + Sync {
     async fn find_active_account(
         &self,
         user_id: Uuid,
+        session_id: Uuid,
     ) -> Result<Option<super::models::Account>, super::models::AuthError>;
 
     async fn revoke_refresh_session(
@@ -224,13 +225,17 @@ impl AuthRepository for PostgresAuthRepository {
     async fn find_active_account(
         &self,
         user_id: Uuid,
+        session_id: Uuid,
     ) -> Result<Option<super::models::Account>, super::models::AuthError> {
         sqlx::query_as::<_, (Uuid, String)>(
             "SELECT users.id, email_identities.email_normalized \
-             FROM users JOIN email_identities ON email_identities.user_id = users.id \
-             WHERE users.id = $1 AND users.status = 'active' \
+             FROM auth_sessions s JOIN users ON users.id = s.user_id \
+             JOIN email_identities ON email_identities.user_id = users.id \
+             WHERE s.id = $1 AND s.user_id = $2 AND users.status = 'active' \
+               AND s.revoked_at IS NULL AND s.idle_expires_at > now() AND s.absolute_expires_at > now() \
              ORDER BY email_identities.created_at LIMIT 1",
         )
+        .bind(session_id)
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await
@@ -443,8 +448,9 @@ impl AuthRepository for PostgresAuthRepository {
             .map_err(|_| AuthError::Unavailable)?;
         let session =
             sqlx::query_as::<_, (Uuid, DateTime<Utc>, DateTime<Utc>, Option<DateTime<Utc>>)>(
-                "SELECT user_id, idle_expires_at, absolute_expires_at, revoked_at \
-             FROM auth_sessions WHERE id = $1 FOR UPDATE",
+                "SELECT s.user_id, s.idle_expires_at, s.absolute_expires_at, s.revoked_at \
+             FROM auth_sessions s JOIN users u ON u.id = s.user_id \
+             WHERE s.id = $1 AND u.status = 'active' FOR UPDATE OF s",
             )
             .bind(session_id)
             .fetch_optional(&mut *transaction)

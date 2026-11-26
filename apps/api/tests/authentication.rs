@@ -57,6 +57,9 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
 
     let app = actix_test::init_service(
         App::new()
+            .app_data(auth::controllers::TrustedSignInProxy(
+                "192.0.2.10".parse().unwrap(),
+            ))
             .app_data(web::Data::new(auth_state))
             .app_data(web::Data::new(spaces::SpacesApplication::new(pool.clone())))
             .service(auth::request_magic_link)
@@ -195,6 +198,44 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
         .expect("Retry-After should be a number of seconds");
     assert!((1..=60).contains(&retry_after));
 
+    // Each request uses a different fixture address and checks the single
+    // stored rate-limit key rather than exercising the public edge.
+    for (peer, forwarded_for, expected) in [
+        ("192.0.2.11:5000", "198.51.100.20", "192.0.2.11"),
+        ("192.0.2.10:5000", "2001:db8::20", "2001:db8::20"),
+        ("192.0.2.10:5000", "bad address", "192.0.2.10"),
+        (
+            "192.0.2.10:5000",
+            "198.51.100.20, 198.51.100.21",
+            "192.0.2.10",
+        ),
+    ] {
+        let fixture_email = format!("proxy-{}@example.test", Uuid::new_v4());
+        let response = actix_test::call_service(
+            &app,
+            actix_test::TestRequest::post()
+                .uri("/auth/magic-links")
+                .peer_addr(peer.parse().unwrap())
+                .insert_header(("Forwarded", "for=203.0.113.7"))
+                .insert_header(("X-Forwarded-For", forwarded_for))
+                .set_json(MagicLinkRequest {
+                    email: fixture_email.clone(),
+                    time_zone: None,
+                })
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let recorded: String = sqlx::query_scalar(
+            "SELECT request_ip FROM auth_challenges WHERE email_normalized = $1",
+        )
+        .bind(fixture_email)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(recorded, expected);
+    }
+
     let replay = actix_test::TestRequest::post()
         .uri("/auth/magic-links/redeem")
         .set_json(RedeemMagicLinkRequest { token: secret })
@@ -269,6 +310,40 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
     let rotated: TokenPair = actix_test::read_body_json(response).await;
     assert_ne!(rotated.refresh_token, old_refresh_token);
 
+    // Advance only this fixture's request timestamp past the resend cooldown.
+    sqlx::query("UPDATE auth_challenges SET created_at = created_at - interval '1 minute' WHERE email_normalized = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let response = actix_test::call_service(
+        &app,
+        actix_test::TestRequest::post()
+            .uri("/auth/magic-links")
+            .set_json(MagicLinkRequest {
+                email,
+                time_zone: None,
+            })
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    let second_link = mailer.0.lock().unwrap().clone().unwrap();
+    let second_secret = second_link.split_once("#token=").unwrap().1.to_owned();
+    let response = actix_test::call_service(
+        &app,
+        actix_test::TestRequest::post()
+            .uri("/auth/magic-links/redeem")
+            .set_json(RedeemMagicLinkRequest {
+                token: second_secret,
+            })
+            .to_request(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let second_session: AuthenticationResult = actix_test::read_body_json(response).await;
+    assert_eq!(second_session.account.id, authentication.account.id);
+
     let replay_refresh = actix_test::TestRequest::post()
         .uri("/auth/token/refresh")
         .insert_header((AUTHORIZATION, format!("Bearer {old_refresh_token}")))
@@ -282,16 +357,46 @@ async fn magic_link_authentication_creates_rotates_and_revokes_a_session() {
 
     let revoke = actix_test::TestRequest::delete()
         .uri("/auth/session/current")
-        .insert_header((AUTHORIZATION, format!("Bearer {}", rotated.refresh_token)))
+        .insert_header((
+            AUTHORIZATION,
+            format!("Bearer {}", second_session.tokens.refresh_token),
+        ))
         .to_request();
+    let protected_request = |token: &str| {
+        actix_test::TestRequest::get()
+            .uri("/spaces")
+            .insert_header((AUTHORIZATION, format!("Bearer {token}")))
+            .to_request()
+    };
+    assert_eq!(
+        actix_test::call_service(&app, protected_request(&rotated.access_token))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        actix_test::call_service(&app, protected_request(&second_session.tokens.access_token))
+            .await
+            .status(),
+        StatusCode::OK
+    );
     assert_eq!(
         actix_test::call_service(&app, revoke).await.status(),
         StatusCode::NO_CONTENT
     );
+    assert_eq!(
+        actix_test::call_service(&app, protected_request(&second_session.tokens.access_token))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
 
     let refresh_revoked = actix_test::TestRequest::post()
         .uri("/auth/token/refresh")
-        .insert_header((AUTHORIZATION, format!("Bearer {}", rotated.refresh_token)))
+        .insert_header((
+            AUTHORIZATION,
+            format!("Bearer {}", second_session.tokens.refresh_token),
+        ))
         .to_request();
     assert_eq!(
         actix_test::call_service(&app, refresh_revoked)

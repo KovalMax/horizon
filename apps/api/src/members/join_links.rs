@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use crate::auth::{AuthApplication, AuthError, Problem};
 
+use super::{lock_active_space_owner, OwnerAuthorizationError};
+
 #[derive(Clone)]
 pub struct JoinLinksApplication {
     pool: PgPool,
@@ -48,7 +50,12 @@ impl JoinLinksApplication {
         if expires_at.is_some_and(|expires| expires <= Utc::now()) {
             return Err(JoinError::Invalid);
         }
-        require_owner(&self.pool, space_id, actor_id).await?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| JoinError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
         let id = Uuid::new_v4();
         let row = sqlx::query_as::<_, JoinLinkRow>(
             "INSERT INTO space_join_links (id, space_id, created_by, role, expires_at) \
@@ -61,10 +68,14 @@ impl JoinLinksApplication {
         .bind(actor_id)
         .bind(&body.role)
         .bind(expires_at)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .map_err(|_| JoinError::Unavailable)?
         .ok_or(JoinError::NotFound)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|_| JoinError::Unavailable)?;
         Ok(self.map_link(row))
     }
 
@@ -93,18 +104,26 @@ impl JoinLinksApplication {
         actor_id: Uuid,
         link_id: Uuid,
     ) -> Result<(), JoinError> {
-        require_owner(&self.pool, space_id, actor_id).await?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|_| JoinError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
         let result = sqlx::query(
             "UPDATE space_join_links SET revoked_at = now() \
              WHERE id = $1 AND space_id = $2 AND revoked_at IS NULL",
         )
         .bind(link_id)
         .bind(space_id)
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(|_| JoinError::Unavailable)?;
         if result.rows_affected() == 1 {
-            Ok(())
+            transaction
+                .commit()
+                .await
+                .map_err(|_| JoinError::Unavailable)
         } else {
             Err(JoinError::NotFound)
         }
@@ -270,15 +289,15 @@ impl JoinLinksApplication {
         request_id: Uuid,
         decision: &str,
     ) -> Result<JoinRequestResponse, JoinError> {
-        require_owner(&self.pool, space_id, actor_id).await?;
-        if !matches!(decision, "approved" | "declined") {
-            return Err(JoinError::Invalid);
-        }
         let mut transaction = self
             .pool
             .begin()
             .await
             .map_err(|_| JoinError::Unavailable)?;
+        lock_active_space_owner(&mut transaction, space_id, actor_id).await?;
+        if !matches!(decision, "approved" | "declined") {
+            return Err(JoinError::Invalid);
+        }
         let row = sqlx::query_as::<_, JoinRequestRow>(
             "SELECT r.id, r.link_id, r.space_id, s.name AS space_name, r.requester_id, \
                     e.email_normalized AS requester_email, r.requested_role, r.status, \
@@ -477,6 +496,16 @@ enum JoinError {
     RequestPending,
     AlreadyDecided,
     Unavailable,
+}
+
+impl From<OwnerAuthorizationError> for JoinError {
+    fn from(error: OwnerAuthorizationError) -> Self {
+        match error {
+            OwnerAuthorizationError::NotFound => Self::NotFound,
+            OwnerAuthorizationError::NotOwner => Self::NotOwner,
+            OwnerAuthorizationError::Unavailable => Self::Unavailable,
+        }
+    }
 }
 
 async fn auth_account(

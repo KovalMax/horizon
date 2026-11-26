@@ -124,13 +124,9 @@ impl AuthApplication {
     }
 
     pub async fn current_account(&self, token: &str) -> Result<super::models::Account, AuthError> {
-        let claims = self
-            .token_service
-            .verify_access_token(token)
-            .ok_or(AuthError::Unauthorized)?;
-        let user_id = claims.user_id;
+        let claims = self.access_principal(token)?;
         self.repository
-            .find_active_account(user_id)
+            .find_active_account(claims.user_id, claims.session_id)
             .await?
             .ok_or(AuthError::Unauthorized)
     }

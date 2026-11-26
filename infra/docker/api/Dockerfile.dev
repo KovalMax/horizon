@@ -1,4 +1,4 @@
-FROM rust:1.99.1-slim
+FROM rust:1.100.0-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends make perl \
     && rm -rf /var/lib/apt/lists/*

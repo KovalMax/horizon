@@ -1,5 +1,5 @@
 # Production static web runtime; the normal Dockerfile remains the dev server.
-FROM node:26.13.0-trixie-slim AS build
+FROM node:26.13.1-trixie-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

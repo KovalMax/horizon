@@ -314,6 +314,8 @@ test("signs in with the emailed code without opening the magic link", async ({
       return (
         action?.textContent === "Sign in to Horizon" &&
         action.getAttribute("href") === link &&
+        email.querySelector("img")?.getAttribute("src") ===
+          new URL("/horizon-touch-180.png", link).href &&
         email.querySelector("code")?.textContent === code
       );
     },
@@ -321,7 +323,7 @@ test("signs in with the emailed code without opening the magic link", async ({
   );
   expect(
     htmlMatchesPlainText,
-    "HTML and plain-text sign-in details match",
+    "Email uses the app icon and preserves the plain-text sign-in details",
   ).toBe(true);
   await page.reload();
   await input.fill(code).catch(() => {

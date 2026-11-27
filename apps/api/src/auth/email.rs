@@ -168,6 +168,17 @@ impl EmailSender for SmtpEmailSender {
             )
         };
         let html_link = escape_email_html(link);
+        let logo = url::Url::parse(link)
+            .ok()
+            .filter(|url| matches!(url.scheme(), "http" | "https"))
+            .and_then(|url| url.join("/horizon-touch-180.png").ok())
+            .map(|url| {
+                format!(
+                    r#"<td style="padding-right:8px"><img src="{}" width="30" height="30" alt=""></td>"#,
+                    escape_email_html(url.as_str()),
+                )
+            })
+            .unwrap_or_default();
         let html = format!(
             r##"<!doctype html>
             <html lang="en">
@@ -184,8 +195,8 @@ impl EmailSender for SmtpEmailSender {
                       <tr><td style="padding:24px 24px 0">
                         <table role="presentation" cellpadding="0" cellspacing="0">
                           <tr>
-                            <td aria-hidden="true" align="center" width="30" height="30" bgcolor="#365d50" style="color:#ffffff"><strong>H</strong></td>
-                            <td style="padding-left:8px"><strong>Horizon</strong></td>
+                            {logo}
+                            <td><strong>Horizon</strong></td>
                           </tr>
                         </table>
                         <h1 style="font-size:26px">Sign in to Horizon</h1>

@@ -43,9 +43,11 @@ const timeZones = [
 export function SettingsPage({
   state,
   helpers,
+  account,
 }: {
   state: PlannerAppState;
   helpers: PageHelpers;
+  account: { email: string; signOut: () => void } | null;
 }) {
   const {
     reminderTime,
@@ -96,7 +98,7 @@ export function SettingsPage({
     <>
       {pageHeader(
         "Settings",
-        "Manage your time, reminders, and notification preferences.",
+        "Manage your account, time, reminders, and notification preferences.",
       )}
       <section className="list-card settings-time-fields">
         <h2>Time and reminders</h2>
@@ -336,6 +338,18 @@ export function SettingsPage({
       {(import.meta.env.PROD ||
         import.meta.env.VITE_ENABLE_LOCAL_PUSH === "true") &&
         "serviceWorker" in navigator && <AppUpdateSettings />}
+      {account && (
+        <section
+          className="list-card settings-account"
+          aria-labelledby="account-settings-title"
+        >
+          <h2 id="account-settings-title">Account</h2>
+          <p>Signed in as {account.email}</p>
+          <Button variant="outline" onClick={account.signOut}>
+            Sign out
+          </Button>
+        </section>
+      )}
     </>
   );
 }

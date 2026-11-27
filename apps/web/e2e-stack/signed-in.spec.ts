@@ -7,11 +7,11 @@ const fixtureEmail = () => `browser-${randomUUID()}@example.test`;
 
 type Inbox = { messages?: { ID: string; Subject: string }[] };
 
-async function getMailText(
+async function getMail(
   page: Page,
   email: string,
   subject: string,
-): Promise<string> {
+): Promise<{ Text: string; HTML: string }> {
   let messageId = "";
   await expect
     .poll(
@@ -34,8 +34,11 @@ async function getMailText(
     `${mailpit}/api/v1/message/${encodeURIComponent(messageId)}`,
   );
   expect(message.status()).toBe(200);
-  const { Text }: { Text: string } = await message.json();
-  return Text;
+  return message.json();
+}
+
+async function getMailText(page: Page, email: string, subject: string) {
+  return (await getMail(page, email, subject)).Text;
 }
 
 function findMailLink(text: string, path: string): string {
@@ -251,8 +254,17 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "More" })
+    .getByRole("link", { name: "Settings", exact: true })
+    .click();
+  await page
+    .getByRole("region", { name: "Account" })
+    .getByRole("button", { name: "Sign out" })
+    .click();
+  await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByLabel("Email address")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Email address")).toBeVisible();
@@ -280,16 +292,44 @@ test("signs in with the emailed code without opening the magic link", async ({
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   const input = page.getByRole("textbox", { name: "Sign-in code" });
   await expect(input).toBeVisible();
-  const text = await getMailText(page, email, "Your Horizon sign-in link");
+  const { Text: text, HTML: html } = await getMail(
+    page,
+    email,
+    "Your Horizon sign-in link",
+  );
   const code = text.match(/^\s*(\d{8})\s*$/m)?.[1];
   if (!code) throw new Error("The sign-in email did not contain a code");
+  const visualGroups = html.match(
+    /<span style="padding-right:0.45em">(\d{4})<\/span><span>(\d{4})<\/span>/,
+  );
+  expect(
+    visualGroups !== null && visualGroups[1] + visualGroups[2] === code,
+    "HTML displays two adjacent groups with no clipboard separator",
+  ).toBe(true);
+  const link = findMailLink(text, "/auth/complete");
+  const htmlMatchesPlainText = await page.evaluate(
+    ({ html, link, code }) => {
+      const email = new DOMParser().parseFromString(html, "text/html");
+      const action = email.querySelector("a");
+      return (
+        action?.textContent === "Sign in to Horizon" &&
+        action.getAttribute("href") === link &&
+        email.querySelector("code")?.textContent === code
+      );
+    },
+    { html, link, code },
+  );
+  expect(
+    htmlMatchesPlainText,
+    "HTML and plain-text sign-in details match",
+  ).toBe(true);
   await page.reload();
   await input.fill(code).catch(() => {
     throw new Error("Could not enter the sign-in code");
   });
   await page.getByRole("button", { name: "Sign in with code" }).click();
   await expect(page.getByRole("heading", { name: "Your plans" })).toBeVisible();
-  const fragment = new URL(findMailLink(text, "/auth/complete")).hash;
+  const fragment = new URL(link).hash;
   const token = new URLSearchParams(fragment.slice(1)).get("token");
   const replayStatus = await page.evaluate(async (token) => {
     const response = await fetch("/api/auth/magic-links/redeem", {
@@ -395,7 +435,11 @@ test("the installable app serves only a public fallback offline", async ({
     update.click(),
   ]);
   await expect(update).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Account" }).getByRole("button", {
+      name: "Sign out",
+    }),
+  ).toBeVisible();
 });
 
 test("the Space filter border stays inside its scroll area on hover", async ({

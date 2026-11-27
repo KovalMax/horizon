@@ -53,6 +53,9 @@ export function PlannerShell({
       />
     );
   }
+  const signOut = () => {
+    void authState.signOut().then(() => go("/welcome"));
+  };
   const sidebar = (
     <aside className="sidebar">
       <div className="brand-row">
@@ -146,12 +149,7 @@ export function PlannerShell({
           <div className="account-summary">
             <small>Signed in as</small>
             <span>{authState.account.email}</span>
-            <button
-              className="nav-link"
-              onClick={() => {
-                void authState.signOut().then(() => go("/welcome"));
-              }}
-            >
+            <button className="nav-link" onClick={signOut}>
               Sign out
             </button>
           </div>
@@ -175,7 +173,10 @@ export function PlannerShell({
     </aside>
   );
 
-  const content = renderPageContent(appState, activeSpaces);
+  const content = renderPageContent(
+    appState,
+    authState.account ? { email: authState.account.email, signOut } : null,
+  );
 
   const isOverview = path === "/";
   return (

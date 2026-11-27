@@ -1123,6 +1123,10 @@ select:focus-visible {
   font-size: 13px;
   line-height: 1.6;
 }
+.settings-account > p {
+  overflow-wrap: anywhere;
+}
+
 .list-card > .task-row {
   padding-left: 3px;
 }

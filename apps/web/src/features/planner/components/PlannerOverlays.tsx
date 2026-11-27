@@ -243,7 +243,7 @@ export function PlannerOverlays({ appState }: { appState: PlannerAppState }) {
                 <Icon name="settings" /> Space settings
               </AppLink>
               <AppLink to="/settings" onNavigate={go}>
-                <Icon name="settings" /> Notification settings
+                <Icon name="settings" /> Settings
               </AppLink>
             </nav>
           </section>

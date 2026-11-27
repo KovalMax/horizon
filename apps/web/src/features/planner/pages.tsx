@@ -48,14 +48,15 @@ function buildPageHelpers(
 
 export function renderPageContent(
   state: PlannerAppState,
-  activeSpaces = state.activeSpaces,
+  account: { email: string; signOut: () => void } | null,
 ): ReactNode {
+  const { activeSpaces } = state;
   const helpers = buildPageHelpers(state, activeSpaces);
   const { path, isSpacePage, routeSection } = state;
   if (path === "/notifications")
     return <NotificationsPage state={state} helpers={helpers} />;
   if (path === "/settings")
-    return <SettingsPage state={state} helpers={helpers} />;
+    return <SettingsPage state={state} helpers={helpers} account={account} />;
   if (!isSpacePage)
     return (
       <OverviewPage

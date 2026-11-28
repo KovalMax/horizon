@@ -394,6 +394,27 @@ async fn calendar_events_persist_with_membership_scoped_read_and_editor_writes()
     }
 
     let endpoint = format!("https://fcm.googleapis.com/fcm/send/{}", Uuid::new_v4());
+    for (from, space_id, expected) in [
+        ("2026-03-28", space.id, Some("Moved one date")),
+        ("2026-03-29", space.id, Some("School concert")),
+        ("2027-01-01", space.id, None),
+        ("2026-03-28", Uuid::new_v4(), None),
+    ] {
+        let request = actix_test::TestRequest::get()
+            .uri(&format!("/events?next_from={from}&space_ids={space_id}"))
+            .insert_header((AUTHORIZATION, format!("Bearer {access_token}")))
+            .to_request();
+        let response = actix_test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let page: EventPageResponse = actix_test::read_body_json(response).await;
+        assert_eq!(page.items.len(), usize::from(expected.is_some()));
+        assert_eq!(
+            page.items.first().map(|event| event.title.as_str()),
+            expected
+        );
+        assert_eq!(page.next_offset, None);
+    }
+
     sqlx::query(
         "INSERT INTO web_push_subscriptions \
          (endpoint, user_id, p256dh, auth_secret, calendar_reminders, task_reminders) \

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   type Space,
   type EventItem,
@@ -145,6 +145,7 @@ export function usePlannerApp(accessToken: string) {
     "series",
   );
   const [removingEvent, setRemovingEvent] = useState(false);
+  const [calendarRevision, setCalendarRevision] = useState(0);
   const [savingTask, setSavingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [editingList, setEditingList] = useState<ApiTaskList | null>(null);
@@ -288,7 +289,8 @@ export function usePlannerApp(accessToken: string) {
     setEventsNextOffset,
     loadingMoreEvents,
     setLoadingMoreEvents,
-  } = useCalendarCollection(accessToken, showCalendar);
+    overviewPreview,
+  } = useCalendarCollection(accessToken, showCalendar, showOverview);
   const {
     tasks,
     setTasks,
@@ -440,11 +442,6 @@ export function usePlannerApp(accessToken: string) {
       (!isSpacePage || task.space === space.id) &&
       filter !== "events",
   );
-  const days = useMemo(
-    () => Array.from({ length: 14 }, (_, index) => index),
-    [],
-  );
-
   useEffect(() => {
     if (!isSpacePage || !activeSpaces.some(({ id }) => id === currentSpaceId)) {
       return;
@@ -658,6 +655,7 @@ export function usePlannerApp(accessToken: string) {
           if (saved.repeat) setEventsReload((current) => current + 1);
           else setEvents((current) => [saved, ...current]);
         }
+        setCalendarRevision((revision) => revision + 1);
         setEventsStatus("ready");
         closeModal();
         showToast(
@@ -959,6 +957,7 @@ export function usePlannerApp(accessToken: string) {
                   item.occurrenceDate !== occurrenceDate),
             ),
           );
+          setCalendarRevision((revision) => revision + 1);
           setSelected(null);
           showToast(
             occurrenceDate
@@ -1161,7 +1160,12 @@ export function usePlannerApp(accessToken: string) {
       setEvents((current) => [
         ...current,
         ...page.items.filter(
-          (item) => !current.some((existing) => existing.id === item.id),
+          (item) =>
+            !current.some(
+              (existing) =>
+                existing.id === item.id &&
+                existing.occurrenceDate === item.occurrenceDate,
+            ),
         ),
       ]);
       setEventsNextOffset(page.nextOffset);
@@ -1335,8 +1339,9 @@ export function usePlannerApp(accessToken: string) {
     isSpacePage,
     routeSection,
     filteredEvents,
+    calendarRevision,
+    overviewPreview,
     filteredTasks,
-    days,
     go,
     goSpace,
     showToast,

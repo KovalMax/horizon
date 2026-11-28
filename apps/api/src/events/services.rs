@@ -41,12 +41,43 @@ impl EventsApplication {
                 EventPageResponse {
                     items: page.items.into_iter().map(Into::into).collect(),
                     next_offset: page.next_offset,
+                    next_event: None,
                 }
             })
             .map_err(|error| {
                 log::error!(target: "horizon_api::database", "events.list_for_member failed: {error}");
                 EventError::Unavailable
             })
+    }
+
+    pub async fn next_for_member(
+        &self,
+        user_id: Uuid,
+        from: NaiveDate,
+        spaces: &[Uuid],
+    ) -> Result<EventPageResponse, EventError> {
+        let next_event = self
+            .next_occurrence_for_member(user_id, from, Some(spaces))
+            .await?;
+        Ok(EventPageResponse {
+            items: next_event.into_iter().collect(),
+            next_offset: None,
+            next_event: None,
+        })
+    }
+
+    pub async fn next_occurrence_for_member(
+        &self,
+        user_id: Uuid,
+        from: NaiveDate,
+        spaces: Option<&[Uuid]>,
+    ) -> Result<Option<EventResponse>, EventError> {
+        let series = self.repository.future_series(user_id, from, spaces).await?;
+        let overrides = self
+            .repository
+            .future_overrides(user_id, from, spaces)
+            .await?;
+        Ok(recurrence::next_occurrence(series, overrides, from).map(Into::into))
     }
 
     pub async fn list_occurrences_for_member(
@@ -99,6 +130,7 @@ impl EventsApplication {
                 .map(Into::into)
                 .collect(),
             next_offset: (occurrence_count > next_offset as usize).then_some(next_offset),
+            next_event: None,
         };
         if let (Some(start), Some(series), Some(overrides), Some(expansion), Some(timings)) = (
             start_series,

@@ -33,6 +33,8 @@ pub struct EventResponse {
 pub struct EventPageResponse {
     pub items: Vec<EventResponse>,
     pub next_offset: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_event: Option<EventResponse>,
 }
 
 impl From<CalendarEvent> for EventResponse {

@@ -1,6 +1,13 @@
 import type { PlannerAppState, PageHelpers } from "./context";
-import { dateLabel, todayLong, type Space } from "../domain";
+import {
+  dateLabel,
+  todayLong,
+  type EventItem,
+  type TaskItem,
+  type Space,
+} from "../domain";
 import { AppLink, Button, Icon, SpaceGlyph } from "../../../shared/ui";
+import { overviewEventDay, useOverviewRange } from "../useOverviewRange";
 
 export function OverviewPage({
   state,
@@ -17,7 +24,6 @@ export function OverviewPage({
     setHidden,
     filter,
     setFilter,
-    days,
     filteredEvents,
     filteredTasks,
   } = state;
@@ -26,13 +32,38 @@ export function OverviewPage({
     activeSpaces.length > 0 &&
     activeSpaces.every((item) => hidden.includes(item.id));
   const undatedTasks = filteredTasks.filter((task) => task.day === undefined);
-  const timelineDays = days
-    .map((day) => ({
-      day,
-      events: filteredEvents.filter((event) => event.day === day),
-      tasks: filteredTasks.filter((task) => task.day === day),
-    }))
-    .filter(({ events, tasks }) => events.length > 0 || tasks.length > 0);
+  const range = useOverviewRange(
+    state.accessToken,
+    activeSpaces,
+    hidden,
+    filter,
+    filteredEvents,
+    state.eventsStatus === "ready" && state.spacesStatus === "ready",
+    state.calendarRevision,
+    state.overviewPreview,
+  );
+  const groups = new Map<number, { events: EventItem[]; tasks: TaskItem[] }>();
+  const group = (day: number) => {
+    let items = groups.get(day);
+    if (!items) groups.set(day, (items = { events: [], tasks: [] }));
+    return items;
+  };
+  const seen = new Set<string>();
+  for (const event of filter === "tasks"
+    ? []
+    : [...filteredEvents, ...range.events]) {
+    const day = overviewEventDay(event);
+    const id = `${event.id}:${event.repeat ? (event.occurrenceDate ?? event.startDate ?? "") : ""}`;
+    if (day < 0 || day >= range.days || seen.has(id)) continue;
+    seen.add(id);
+    group(day).events.push(event);
+  }
+  for (const task of filteredTasks) {
+    if (task.day !== undefined && task.day >= 0 && task.day < range.days) {
+      group(task.day).tasks.push(task);
+    }
+  }
+  const timelineDays = [...groups.entries()].sort(([a], [b]) => a - b);
   const timelineSources = [
     { status: state.spacesStatus, retry: state.retrySpaces },
     ...(filter !== "tasks"
@@ -62,6 +93,7 @@ export function OverviewPage({
         <h2 id="upcoming-heading" className="overview-heading">
           Today &amp; coming up
         </h2>
+        <p role="status">Showing through {dateLabel(range.days - 1, true)}</p>
         <div className="overview-controls">
           <div
             className="space-filters"
@@ -131,11 +163,11 @@ export function OverviewPage({
             <section className="list-card empty-overview" role="status">
               <Icon name="calendar" />
               <div>
-                <h3>Nothing scheduled in the next two weeks</h3>
+                <h3>Nothing scheduled in the next 60 days</h3>
               </div>
             </section>
           ) : (
-            timelineDays.map(({ day, events, tasks }) => (
+            timelineDays.map(([day, { events, tasks }]) => (
               <section className="day-card" key={day}>
                 <h3>
                   {day === 0 ? (
@@ -157,6 +189,23 @@ export function OverviewPage({
             ))
           )}
         </div>
+        {range.error && (
+          <p role="alert">
+            Later events couldn’t be loaded.{" "}
+            <Button variant="quiet" onClick={range.retry}>
+              Retry
+            </Button>
+          </p>
+        )}
+        {range.more && (
+          <Button
+            variant="outline"
+            disabled={range.loading}
+            onClick={range.expand}
+          >
+            {range.loading ? "Loading…" : "See more"}
+          </Button>
+        )}
         {state.eventError && state.eventsStatus !== "error" && (
           <p role="alert">{state.eventError}</p>
         )}

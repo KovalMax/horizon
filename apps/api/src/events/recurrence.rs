@@ -120,6 +120,88 @@ pub(super) fn occurs_on(event: &CalendarEvent, date: NaiveDate) -> bool {
     occurrence_dates(event, date, date).contains(&date)
 }
 
+pub(super) fn next_occurrence(
+    events: Vec<CalendarEvent>,
+    overrides: Vec<OccurrenceOverride>,
+    from: NaiveDate,
+) -> Option<EventOccurrence> {
+    let by_id: HashMap<_, _> = events.iter().map(|event| (event.id, event)).collect();
+    let mut next = None;
+    let mut consider = |date: NaiveDate, item: EventOccurrence| {
+        let key = (date, item.starts_at, item.event.id, item.occurrence_date);
+        if date >= from && next.as_ref().is_none_or(|(current, _)| key < *current) {
+            next = Some((key, item));
+        }
+    };
+    let by_key: HashMap<_, _> = overrides
+        .iter()
+        .map(|item| ((item.event_id, item.occurrence_date), item))
+        .collect();
+    for item in &overrides {
+        if item.cancelled {
+            continue;
+        }
+        if let (Some(event), Some(title), Some(starts_at), Some(zone), Some(all_day)) = (
+            by_id.get(&item.event_id),
+            &item.title,
+            item.starts_at,
+            &item.time_zone,
+            item.all_day,
+        ) {
+            if let Ok(tz) = zone.parse::<Tz>() {
+                consider(
+                    starts_at.with_timezone(&tz).date_naive(),
+                    EventOccurrence {
+                        event: (**event).clone(),
+                        occurrence_date: item.occurrence_date,
+                        starts_at,
+                        ends_at: item.ends_at,
+                        title: title.clone(),
+                        time_zone: zone.clone(),
+                        all_day,
+                        location: item.location.clone(),
+                        notes: item.notes.clone(),
+                        is_override: true,
+                    },
+                );
+            }
+        }
+    }
+    for event in &events {
+        let Ok(tz) = event.time_zone.parse::<Tz>() else {
+            continue;
+        };
+        let first = event.starts_at.with_timezone(&tz).date_naive();
+        let mut start = from.max(first);
+        loop {
+            // Every supported recurrence has a matching date within 62 days.
+            let end = start
+                .checked_add_signed(Duration::days(62))
+                .unwrap_or(NaiveDate::MAX);
+            let dates = occurrence_dates(event, start, end);
+            let Some(last) = dates.last().copied() else {
+                break;
+            };
+            if let Some(item) = dates.into_iter().find_map(|date| {
+                if by_key.contains_key(&(event.id, date)) {
+                    None
+                } else {
+                    occurrence(event, date)
+                }
+            }) {
+                consider(item.starts_at.with_timezone(&tz).date_naive(), item);
+                break;
+            }
+            if event.recurrence.is_none() {
+                break;
+            }
+            let Some(after) = last.succ_opt() else { break };
+            start = after;
+        }
+    }
+    next.map(|(_, item)| item)
+}
+
 fn occurrence_dates(event: &CalendarEvent, start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
     let Ok(tz) = event.time_zone.parse::<Tz>() else {
         return Vec::new();

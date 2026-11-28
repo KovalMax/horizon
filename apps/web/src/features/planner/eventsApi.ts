@@ -43,6 +43,7 @@ export class CalendarEventsApiError extends Error {
 type ApiEventPage = {
   items: ApiCalendarEvent[];
   next_offset: number | null;
+  next_event?: ApiCalendarEvent;
 };
 
 function zonedParts(instant: Date, timeZone: string) {
@@ -131,12 +132,19 @@ export async function listCalendarEvents(
   offset = 0,
   startDate?: string,
   endDate?: string,
-): Promise<{ items: EventItem[]; nextOffset: number | null }> {
+  signal?: AbortSignal,
+  previewNextFrom?: string,
+): Promise<{
+  items: EventItem[];
+  nextOffset: number | null;
+  nextEvent?: EventItem;
+}> {
   const range =
     startDate && endDate ? `&start_date=${startDate}&end_date=${endDate}` : "";
   const response = await authenticatedFetch(
-    `/api/events?offset=${offset}${range}`,
+    `/api/events?offset=${offset}${range}${previewNextFrom ? `&preview_next_from=${previewNextFrom}` : ""}`,
     {
+      signal,
       headers: { Authorization: `Bearer ${accessToken}` },
     },
   );
@@ -145,7 +153,27 @@ export async function listCalendarEvents(
   return {
     items: page.items.map(toEvent),
     nextOffset: page.next_offset,
+    nextEvent: page.next_event ? toEvent(page.next_event) : undefined,
   };
+}
+
+export async function nextCalendarEvent(
+  accessToken: string,
+  from: string,
+  spaceIds: string[],
+  signal: AbortSignal,
+): Promise<EventItem | undefined> {
+  const query = new URLSearchParams({
+    next_from: from,
+    space_ids: spaceIds.join(","),
+  });
+  const response = await authenticatedFetch(`/api/events?${query}`, {
+    signal,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new CalendarEventsApiError(response.status);
+  const { items } = (await response.json()) as ApiEventPage;
+  return items[0] ? toEvent(items[0]) : undefined;
 }
 
 export async function updateCalendarOccurrence(

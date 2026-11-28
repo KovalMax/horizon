@@ -58,6 +58,61 @@ impl PostgresEventsRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    pub(super) async fn future_series(
+        &self,
+        user_id: Uuid,
+        from: NaiveDate,
+        spaces: Option<&[Uuid]>,
+    ) -> Result<Vec<CalendarEvent>, EventError> {
+        sqlx::query_as::<_, EventRow>(
+            "SELECT e.id, e.space_id, e.title, e.starts_at, e.ends_at, e.time_zone, \
+             e.all_day, e.location, e.notes, e.recurrence, e.recurrence_ends_on, \
+             s.name AS space_name, s.kind AS space_kind, \
+             COALESCE(p.offsets_minutes, '{}') AS my_reminder_offsets_minutes \
+             FROM calendar_events e JOIN spaces s ON s.id = e.space_id \
+             JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+             LEFT JOIN calendar_reminder_preferences p ON p.event_id = e.id AND p.user_id = m.user_id \
+             WHERE ($3::uuid[] IS NULL OR e.space_id = ANY($3)) AND ( \
+               (e.starts_at AT TIME ZONE e.time_zone)::date >= $2 \
+               OR (e.recurrence IS NOT NULL AND \
+                   (e.recurrence_ends_on IS NULL OR e.recurrence_ends_on >= $2)) \
+               OR EXISTS (SELECT 1 FROM calendar_event_occurrence_overrides o \
+                          WHERE o.event_id = e.id AND NOT o.cancelled \
+                          AND (o.starts_at AT TIME ZONE o.time_zone)::date >= $2))",
+        )
+        .bind(user_id)
+        .bind(from)
+        .bind(spaces)
+        .fetch_all(&self.pool)
+        .await
+        .map(|rows| rows.into_iter().map(Into::into).collect())
+        .map_err(|_| EventError::Unavailable)
+    }
+
+    pub(super) async fn future_overrides(
+        &self,
+        user_id: Uuid,
+        from: NaiveDate,
+        spaces: Option<&[Uuid]>,
+    ) -> Result<Vec<OccurrenceOverride>, EventError> {
+        sqlx::query_as::<_, OverrideRow>(
+            "SELECT o.event_id, o.occurrence_date, o.cancelled, o.title, o.starts_at, \
+                    o.ends_at, o.time_zone, o.all_day, o.location, o.notes \
+             FROM calendar_event_occurrence_overrides o \
+             JOIN calendar_events e ON e.id = o.event_id \
+             JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
+             WHERE ($3::uuid[] IS NULL OR e.space_id = ANY($3)) AND (o.occurrence_date >= $2 \
+                   OR (o.starts_at AT TIME ZONE o.time_zone)::date >= $2)",
+        )
+        .bind(user_id)
+        .bind(from)
+        .bind(spaces)
+        .fetch_all(&self.pool)
+        .await
+        .map(|rows| rows.into_iter().map(Into::into).collect())
+        .map_err(|_| EventError::Unavailable)
+    }
+
     pub(super) async fn list_series_for_member(
         &self,
         user_id: Uuid,
@@ -72,11 +127,14 @@ impl PostgresEventsRepository {
              FROM calendar_events e JOIN spaces s ON s.id = e.space_id \
               JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
               LEFT JOIN calendar_reminder_preferences p ON p.event_id = e.id AND p.user_id = m.user_id \
-             WHERE e.starts_at < (($3::date + 1)::timestamp AT TIME ZONE e.time_zone) \
-               AND ((e.recurrence IS NOT NULL AND \
-                     (e.recurrence_ends_on IS NULL OR e.recurrence_ends_on >= $2)) \
-                 OR (e.recurrence IS NULL AND \
-                     COALESCE(e.ends_at, e.starts_at) >= ($2::date::timestamp AT TIME ZONE e.time_zone))) \
+              WHERE (e.starts_at < (($3::date + 1)::timestamp AT TIME ZONE e.time_zone) \
+                AND ((e.recurrence IS NOT NULL AND \
+                      (e.recurrence_ends_on IS NULL OR e.recurrence_ends_on >= $2)) \
+                  OR (e.recurrence IS NULL AND \
+                      COALESCE(e.ends_at, e.starts_at) >= ($2::date::timestamp AT TIME ZONE e.time_zone)))) \
+                OR EXISTS (SELECT 1 FROM calendar_event_occurrence_overrides o \
+                           WHERE o.event_id = e.id AND NOT o.cancelled \
+                             AND (o.starts_at AT TIME ZONE o.time_zone)::date BETWEEN $2 AND $3) \
              ORDER BY e.starts_at, e.id",
         )
         .bind(user_id)
@@ -106,7 +164,8 @@ impl PostgresEventsRepository {
              JOIN calendar_events e ON e.id = o.event_id \
              JOIN space_memberships m ON m.space_id = e.space_id AND m.user_id = $1 \
              WHERE o.occurrence_date BETWEEN $2 AND $3 \
-                OR (o.starts_at >= $4 AND o.starts_at < $5)",
+                 OR (o.starts_at >= $4 AND o.starts_at < $5) \
+                 OR (o.starts_at AT TIME ZONE o.time_zone)::date BETWEEN $2 AND $3",
         )
         .bind(user_id)
         .bind(start_date)

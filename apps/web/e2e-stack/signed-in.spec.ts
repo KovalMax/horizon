@@ -133,7 +133,7 @@ test("signs in from Mailpit, persists a mobile Task, and signs out", async ({
   await signIn(page, fixtureEmail());
   const upcoming = page.getByRole("region", { name: "Today & coming up" });
   const emptyTimeline = upcoming.getByRole("heading", {
-    name: "Nothing scheduled in the next two weeks",
+    name: "Nothing scheduled in the next 60 days",
   });
   const undated = page.getByRole("region", { name: "No due date" });
   const spaces = page.getByRole("region", { name: "Your Spaces" });
@@ -467,6 +467,51 @@ test("the Space filter border stays inside its scroll area on hover", async ({
   }
 });
 
+test("All Spaces shows 60 days and reveals later matching events", async ({
+  page,
+}) => {
+  await signIn(page, fixtureEmail());
+  await createSpace(page, "Future plans");
+  for (const [offset, title] of [
+    [25, "Within 60 days"],
+    [125, "Far future event"],
+  ] as const) {
+    const date = await page.evaluate((days) => {
+      const value = new Date();
+      value.setDate(value.getDate() + days);
+      return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+    }, offset);
+    await page.getByRole("button", { name: "New event", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "New event" });
+    await editor.getByRole("textbox", { name: "Title" }).fill(title);
+    await editor.getByLabel("Date", { exact: true }).fill(date);
+    await editor.getByRole("button", { name: "Add event" }).click();
+    await expect(editor).toBeHidden();
+  }
+  await page.getByRole("link", { name: "All Spaces", exact: true }).click();
+  const timeline = page.getByRole("region", { name: "Today & coming up" });
+  const more = timeline.getByRole("button", { name: "See more" });
+  await expect(
+    timeline.getByRole("button", { name: "Within 60 days" }),
+  ).toBeVisible();
+  await expect(
+    timeline.getByRole("button", { name: "Far future event" }),
+  ).toHaveCount(0);
+  await expect(more).toBeVisible();
+  await timeline
+    .getByRole("button", { name: "Future plans", exact: true })
+    .click();
+  await expect(more).toHaveCount(0);
+  await timeline
+    .getByRole("button", { name: "Future plans", exact: true })
+    .click();
+  await more.click();
+  await expect(
+    timeline.getByRole("button", { name: "Far future event" }),
+  ).toBeVisible();
+  await expect(more).toHaveCount(0);
+});
+
 test("confirms whether to cancel one occurrence or delete a Calendar series", async ({
   page,
 }) => {
@@ -549,7 +594,7 @@ test("confirms whether to cancel one occurrence or delete a Calendar series", as
   ).toBeVisible();
   await expect(
     upcoming.getByRole("heading", {
-      name: "Nothing scheduled in the next two weeks",
+      name: "Nothing scheduled in the next 60 days",
     }),
   ).toHaveCount(0);
   await page.goBack();

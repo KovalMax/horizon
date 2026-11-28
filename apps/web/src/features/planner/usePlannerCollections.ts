@@ -9,7 +9,11 @@ function dateForOffset(offset: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function useCalendarCollection(accessToken: string, enabled: boolean) {
+export function useCalendarCollection(
+  accessToken: string,
+  enabled: boolean,
+  overview: boolean,
+) {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventsStatus, setEventsStatus] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -18,6 +22,9 @@ export function useCalendarCollection(accessToken: string, enabled: boolean) {
   const [eventError, setEventError] = useState("");
   const [eventsNextOffset, setEventsNextOffset] = useState<number | null>(null);
   const [loadingMoreEvents, setLoadingMoreEvents] = useState(false);
+  const [overviewPreview, setOverviewPreview] = useState<{
+    event?: EventItem;
+  }>();
 
   useEffect(() => {
     if (!enabled) {
@@ -27,13 +34,22 @@ export function useCalendarCollection(accessToken: string, enabled: boolean) {
     let active = true;
     setEvents([]);
     setEventsNextOffset(null);
+    setOverviewPreview(undefined);
     setEventsStatus("loading");
     setEventError("");
-    listCalendarEvents(accessToken, 0, dateForOffset(0), dateForOffset(90))
+    listCalendarEvents(
+      accessToken,
+      0,
+      dateForOffset(0),
+      dateForOffset(90),
+      undefined,
+      overview ? dateForOffset(60) : undefined,
+    )
       .then((result) => {
         if (!active) return;
         setEvents(result.items);
         setEventsNextOffset(result.nextOffset);
+        if (overview) setOverviewPreview({ event: result.nextEvent });
         setEventsStatus("ready");
       })
       .catch(() => {
@@ -46,7 +62,7 @@ export function useCalendarCollection(accessToken: string, enabled: boolean) {
     return () => {
       active = false;
     };
-  }, [accessToken, enabled, eventsReload]);
+  }, [accessToken, enabled, eventsReload, overview]);
 
   return {
     events,
@@ -61,6 +77,7 @@ export function useCalendarCollection(accessToken: string, enabled: boolean) {
     setEventsNextOffset,
     loadingMoreEvents,
     setLoadingMoreEvents,
+    overviewPreview,
   };
 }
 

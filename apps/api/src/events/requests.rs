@@ -37,6 +37,12 @@ pub struct EventRangeQuery {
 pub struct EventListQuery {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    /// With space_ids, return only the first occurrence on or after this local date.
+    pub next_from: Option<String>,
+    /// Comma-separated Space IDs for next_from.
+    pub space_ids: Option<String>,
+    /// With a date range, also preview the next occurrence from this date.
+    pub preview_next_from: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

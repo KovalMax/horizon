@@ -216,19 +216,55 @@ pub async fn list_events(
             "invalid_page_offset",
         );
     };
-    let result = match (&query.start_date, &query.end_date) {
-        (Some(start), Some(end)) => {
+    let result = match (
+        &query.start_date,
+        &query.end_date,
+        &query.next_from,
+        &query.space_ids,
+        &query.preview_next_from,
+    ) {
+        (None, None, Some(from), Some(spaces), None) => {
+            let date = NaiveDate::parse_from_str(from, "%Y-%m-%d");
+            let ids = spaces
+                .split(',')
+                .map(Uuid::parse_str)
+                .collect::<Result<Vec<_>, _>>();
+            match (date, ids) {
+                (Ok(date), Ok(ids)) => events.next_for_member(user_id, date, &ids).await,
+                _ => return event_error(EventError::Invalid),
+            }
+        }
+        (Some(start), Some(end), None, None, preview) => {
             let (Ok(start), Ok(end)) = (
                 NaiveDate::parse_from_str(start, "%Y-%m-%d"),
                 NaiveDate::parse_from_str(end, "%Y-%m-%d"),
             ) else {
                 return event_error(EventError::Invalid);
             };
-            events
+            let preview = match preview {
+                Some(from) => match NaiveDate::parse_from_str(from, "%Y-%m-%d") {
+                    Ok(from) if (start..=end).contains(&from) => Some(from),
+                    _ => return event_error(EventError::Invalid),
+                },
+                None => None,
+            };
+            match events
                 .list_occurrences_for_member(user_id, start, end, page)
                 .await
+            {
+                Ok(mut result) => {
+                    if let Some(from) = preview {
+                        match events.next_occurrence_for_member(user_id, from, None).await {
+                            Ok(next) => result.next_event = next,
+                            Err(error) => return event_error(error),
+                        }
+                    }
+                    Ok(result)
+                }
+                Err(error) => Err(error),
+            }
         }
-        (None, None) => events.list_for_member(user_id, page).await,
+        (None, None, None, None, None) => events.list_for_member(user_id, page).await,
         _ => return event_error(EventError::Invalid),
     };
     match result {
